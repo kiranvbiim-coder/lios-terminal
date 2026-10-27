@@ -9,6 +9,7 @@ import {
   homeAttentionEntries, homeAttentionReasons, type AttentionFilter, type HomeAttentionEntry,
 } from "@/lib/homeIntelligenceDiscovery";
 import type { ActionInboxItem, IntelligenceCard } from "@shared/waveDContracts";
+import { homeAttentionReadPresentation } from "@/lib/homeAttentionReadPresentation";
 
 interface HomeAttention {
   asOf?: string;
@@ -66,7 +67,14 @@ function HomeAttentionContents() {
   const filtered = useMemo(() => filterHomeAttention(entries, filter, search), [entries, filter, search]);
   const page = filtered.slice(0, visibleCount);
   const asOf = pulseStoryTimestamp(query.data?.asOf);
-  const disableWrite = mutation.isPending || query.isError || query.isPending;
+  const readState = homeAttentionReadPresentation({
+    hasData: Boolean(query.data),
+    pending: query.isPending,
+    fetching: query.isFetching,
+    failed: query.isError,
+    matchingCount: filtered.length,
+  });
+  const disableWrite = mutation.isPending || !readState.mayReview;
 
   const changeFilter = (next: AttentionFilter) => { setFilter(next); setVisibleCount(9); };
   const changeSearch = (next: string) => { setSearch(next); setVisibleCount(9); };
@@ -82,7 +90,7 @@ function HomeAttentionContents() {
     <div className="space-y-4 border-t border-border/60 p-3 sm:p-4" data-testid="home-intelligence-discovery">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="min-w-0">
-          <h3 className="font-ui text-base font-semibold text-foreground">What deserves your attention</h3>
+          <h3 className="font-ui text-base font-semibold text-foreground">{readState.heading}</h3>
           {asOf && <p className="mt-1 flex items-center gap-1.5 font-ui text-xs text-muted-foreground">
             <Clock3 aria-hidden="true" className="h-3.5 w-3.5" />
             Source snapshot <time dateTime={asOf}>{new Date(asOf).toLocaleString()}</time>
@@ -92,16 +100,16 @@ function HomeAttentionContents() {
           type="button"
           onClick={() => void query.refetch()}
           disabled={query.isFetching}
-          className="min-h-10 rounded-lg border border-border/65 px-3 py-2 font-ui text-sm font-medium text-foreground hover:bg-white/[0.05] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-300/70 disabled:opacity-50"
+          className="min-h-11 rounded-lg border border-border/65 px-3 py-2 font-ui text-sm font-medium text-foreground hover:bg-white/[0.05] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-300/70 disabled:opacity-50"
         >
           {query.isFetching ? "Refreshing…" : "Refresh"}
         </button>
       </div>
 
-      {query.isPending && <p role="status" className="rounded-lg border border-border/50 px-3 py-4 font-ui text-sm text-muted-foreground">Reading recorded Home intelligence…</p>}
+      {query.isPending && <p role="status" className="rounded-lg border border-border/50 px-3 py-4 font-ui text-sm text-muted-foreground">{readState.availabilityText}</p>}
       {query.isError && <p role="alert" className="flex items-start gap-2 rounded-lg border border-amber-300/30 bg-amber-300/[0.05] p-3 font-ui text-sm leading-6 text-amber-100">
         <ShieldAlert aria-hidden="true" className="mt-0.5 h-4 w-4 shrink-0" />
-        Home intelligence could not be refreshed. Any retained results may be stale; changes are disabled until the source responds.
+        {readState.availabilityText}
       </p>}
       {mutation.isError && <p role="alert" className="rounded-lg border border-rose-300/25 p-3 font-ui text-sm text-rose-200">{mutation.error instanceof Error ? mutation.error.message : "The review update could not be saved."}</p>}
       {mutation.isPending && <p role="status" className="font-ui text-sm text-muted-foreground">Saving review status…</p>}
@@ -109,6 +117,7 @@ function HomeAttentionContents() {
 
       {query.data && (
         <>
+          {query.isError && <p role="status" className="font-ui text-sm text-muted-foreground">Source snapshot is historical. Review controls remain disabled until a verified refresh.</p>}
           <div className="flex flex-wrap items-center gap-2" role="group" aria-label="Filter Home intelligence">
             {ATTENTION_FILTERS.map(item => (
               <button
@@ -117,7 +126,7 @@ function HomeAttentionContents() {
                 data-testid={`home-attention-filter-${item.key}`}
                 aria-pressed={filter === item.key}
                 onClick={() => changeFilter(item.key)}
-                className={`inline-flex min-h-10 items-center gap-2 rounded-lg border px-3 py-2 font-ui text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-300/70 ${filter === item.key ? "border-amber-300/40 bg-amber-300/[0.075] text-foreground" : "border-border/60 text-muted-foreground hover:bg-white/[0.045] hover:text-foreground"}`}
+                className={`inline-flex min-h-11 items-center gap-2 rounded-lg border px-3 py-2 font-ui text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-300/70 ${filter === item.key ? "border-amber-300/40 bg-amber-300/[0.075] text-foreground" : "border-border/60 text-muted-foreground hover:bg-white/[0.045] hover:text-foreground"}`}
               >
                 {item.label}
                 <span className="font-ui text-xs tabular-nums opacity-75">{counts[item.key]}</span>
@@ -139,11 +148,11 @@ function HomeAttentionContents() {
             />
           </div>
           <div role="status" className="font-ui text-xs tabular-nums text-muted-foreground">
-            Showing {page.length} of {filtered.length} matching items
+            Showing {page.length} of {readState.countText ?? "unverified items"}
           </div>
 
           {!filtered.length && <div className="rounded-xl border border-dashed border-border/65 px-4 py-8 text-center font-ui text-sm text-muted-foreground">
-            {entries.length === 0 ? "No material intelligence currently needs attention." : "No matching recorded items. Try another filter or search."}
+            {query.isError ? readState.emptyText : entries.length === 0 ? readState.emptyText : "No matching recorded items. Try another filter or search."}
           </div>}
 
           <div className="grid min-w-0 gap-3 lg:grid-cols-2" aria-label="Home intelligence items">
@@ -161,7 +170,7 @@ function HomeAttentionContents() {
           {page.length < filtered.length && <button
             type="button"
             onClick={() => setVisibleCount(count => count + 9)}
-            className="min-h-10 rounded-lg border border-border/65 px-4 py-2 font-ui text-sm font-medium text-foreground hover:bg-white/[0.05] focus-visible:ring-2 focus-visible:ring-amber-300/70"
+            className="min-h-11 rounded-lg border border-border/65 px-4 py-2 font-ui text-sm font-medium text-foreground hover:bg-white/[0.05] focus-visible:ring-2 focus-visible:ring-amber-300/70"
           >Show more ({filtered.length - page.length} remaining)</button>}
         </>
       )}
