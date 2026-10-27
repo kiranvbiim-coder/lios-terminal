@@ -200,6 +200,15 @@ html[data-lios-palette]:not([data-lios-palette="lios-classic"]) .terminal-root .
   border-color: var(--lios-border-strong);
 }
 
+/* Streaming uses the same quiet assistant material as the saved response.
+ * The existing markdown streaming/cancellation semantics remain untouched. */
+html[data-lios-palette]:not([data-lios-palette="lios-classic"]) .terminal-root
+  .lios-conversation-stream[data-lios-message="assistant"] {
+  background: var(--lios-theme-assistant-bg) !important;
+  border-color: transparent !important;
+  box-shadow: none !important;
+}
+
 /* Tables/copy/code stay keyboard reachable and contrast-safe on light themes. */
 html[data-lios-palette]:not([data-lios-palette="lios-classic"]) .terminal-root [data-chat-code-block] {
   background: var(--lios-theme-code-bg);
