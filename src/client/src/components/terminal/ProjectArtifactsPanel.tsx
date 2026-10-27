@@ -19,6 +19,8 @@ import { ArtifactPane } from "./ArtifactPane";
 import { ObjectActionMenu } from "./ObjectActionMenu";
 import { ProjectArtifactGalleryCard } from "./ProjectArtifactGalleryCard";
 import { ProjectArtifactGalleryPreview } from "./ProjectArtifactGalleryPreview";
+import { ProjectBriefingStudio } from "./ProjectBriefingStudio";
+import { buildProjectBriefingReport, type BriefingSource } from "@/lib/projectBriefingStoryboard";
 
 function starter(kind: ArtifactContent["kind"]): ArtifactContent {
   if (kind === "spreadsheet") return { kind, sheets: [{ id: "sheet-1", name: "Model", cells: {}, names: {}, rowCount: 60, columnCount: 15 }], activeSheetId: "sheet-1", rendererPreference: "builtin", calculationMode: "automatic" };
@@ -78,6 +80,7 @@ export function ProjectArtifactsPanel({
   const [error, setError] = useState<string | null>(null);
   const [importSummary, setImportSummary] = useState<string | null>(null);
   const [importingSpreadsheet, setImportingSpreadsheet] = useState(false);
+  const [briefingOpen, setBriefingOpen] = useState(false);
   const [galleryQuery, setGalleryQuery] = useState("");
   const [galleryKind, setGalleryKind] = useState<"all" | ArtifactContent["kind"]>("all");
   const [visibleGalleryCount, setVisibleGalleryCount] = useState(18);
@@ -115,6 +118,26 @@ export function ProjectArtifactsPanel({
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "Unable to update this Artifact.");
     }
+  };
+
+  const handleSaveBriefing = async (sources: readonly BriefingSource[], title: string, introduction: string) => {
+    // Recheck exact saved versions after user review; never silently substitute a
+    // changed, archived, inaccessible, or cross-Project source.
+    const refreshed = await artifacts.refetch();
+    if (refreshed.isError || !refreshed.data) throw new Error("Saved Project sources could not be rechecked. Nothing was created.");
+    for (const source of sources) {
+      const current = refreshed.data.find(item => item.id === source.id && item.projectId === projectId);
+      if (!current || current.status !== "active" || current.headVersion !== source.headVersion
+        || current.kind !== source.kind || current.title !== source.title) {
+        throw new Error("A selected source changed since review. Reopen the briefing and review its exact saved version.");
+      }
+    }
+    const draft = buildProjectBriefingReport({ projectId, sources, title, introduction });
+    const created = await createArtifact(projectId, draft);
+    invalidate(projectId, created.artifact.id);
+    setBriefingOpen(false);
+    setVersionView(null);
+    setSelected(created.artifact.id);
   };
 
   const handleSpreadsheetImport = async (file: File) => {
@@ -188,7 +211,13 @@ export function ProjectArtifactsPanel({
           </div>
           <div className="mt-1 font-ui text-[8px] text-muted-foreground">Explore and preview your saved work. Every card opens the same versioned Artifact shared with Chat and Workbench.</div>
         </div>
-        <div className="flex gap-2">
+        <div className="flex flex-wrap gap-2">
+          <button type="button" onClick={() => setBriefingOpen(value => !value)}
+            aria-expanded={briefingOpen} aria-controls="project-briefing-studio"
+            className="inline-flex min-h-10 items-center gap-2 rounded-lg border border-cyan-300/30 px-3 font-ui text-sm text-cyan-200 hover:bg-cyan-300/[0.045] focus-visible:outline focus-visible:outline-2 focus-visible:outline-amber-300">
+            <FileBarChart className="h-4 w-4" aria-hidden="true" />
+            Briefing Studio
+          </button>
           <select value={newKind} onChange={(event) => setNewKind(event.target.value as ArtifactContent["kind"])} className="rounded border border-border/60 bg-[#090909] px-2 py-1.5 font-terminal text-[7px]" aria-label="New Artifact type">
             {["spreadsheet", "research", "thesis", "report", "decision", "timeline", "strategy", "backtest", "chart", "table", "data", "valuation", "portfolio", "screen"].map((kind) => <option key={kind}>{kind}</option>)}
           </select>
@@ -219,6 +248,10 @@ export function ProjectArtifactsPanel({
           </label>
         </div>
       </div>
+      {briefingOpen && <div id="project-briefing-studio">
+        <ProjectBriefingStudio projectId={projectId} artifacts={rows}
+          onSave={handleSaveBriefing} onClose={() => setBriefingOpen(false)} />
+      </div>}
       {!!rows.length && (
         <div className="mt-5 flex flex-wrap items-center gap-3 border-t border-border/50 pt-4" aria-label="Find saved Artifacts">
           <div className="min-w-0 flex-1">
