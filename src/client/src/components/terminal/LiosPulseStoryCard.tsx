@@ -50,17 +50,15 @@ export default function LiosPulseStoryCard({ card, featured = false, onAsk, onOp
         onClick={() => setExpanded((value) => !value)}
         className="w-full min-w-0 p-4 text-left outline-none transition-colors hover:bg-white/[0.035] focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-amber-300/70 sm:p-5"
       >
-        {featured && card.media && <LicensedEditorialImage
-          media={card.media} sourceIds={evidence.map(source => source.id)}
-          className="mb-4" />}
-        {featured && !card.media && (
-          <div aria-hidden="true" className="relative mb-4 flex h-28 items-center justify-between overflow-hidden rounded-lg border border-amber-200/10 bg-gradient-to-br from-amber-200/[0.09] via-zinc-500/[0.035] to-cyan-300/[0.045] px-6">
+        {featured && <LicensedEditorialImage media={card.media}
+          sourceIds={evidence.map(source => source.id)}
+          className="mb-4"
+          fallback={<div aria-hidden="true" className="relative mb-4 flex h-28 items-center justify-between overflow-hidden rounded-lg border border-amber-200/10 bg-gradient-to-br from-amber-200/[0.09] via-zinc-500/[0.035] to-cyan-300/[0.045] px-6">
             <div className="absolute -right-10 top-[-90px] h-52 w-52 rounded-full border border-amber-200/15" />
             <div className="absolute -right-3 top-[-63px] h-44 w-44 rounded-full border border-amber-200/10" />
             <Radar className="relative h-10 w-10 text-amber-200/65" strokeWidth={1} />
             <span className="relative font-ui text-xs font-medium tracking-[0.19em] text-foreground/50">LIOS INTELLIGENCE</span>
-          </div>
-        )}
+          </div>} />}
         <div className="flex flex-wrap items-center gap-2 text-xs">
           <span className="rounded-md border border-border/65 px-2 py-1 font-medium text-muted-foreground">{focusLabel}</span>
           <span className={`rounded-md border px-2 py-1 text-xs font-medium capitalize ${priorityTone[card.priority]}`}>{card.priority === "fyi" ? "For review" : card.priority}</span>
