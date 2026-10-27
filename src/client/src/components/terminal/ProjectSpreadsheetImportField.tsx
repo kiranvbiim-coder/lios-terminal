@@ -99,11 +99,11 @@ export function ProjectSpreadsheetImportField({ onImport, busy = false }: {
         <FileUp aria-hidden="true" className="mx-auto h-7 w-7 text-cyan-200" />
         <p className="mt-2 text-sm font-semibold text-foreground">{dragging ? "Release to review this spreadsheet" : "Drag a spreadsheet here"}</p>
         <p className="mt-1 text-xs text-muted-foreground">Or choose a file from your device</p>
-        <input id={id} type="file" accept={SPREADSHEET_IMPORT_ACCEPT} disabled={blocked}
-          className="sr-only" aria-label="Choose a spreadsheet file" onChange={onChange}/>
         <label htmlFor={id} aria-disabled={blocked}
           className={["mt-3 inline-flex min-h-11 items-center justify-center rounded-lg border border-cyan-300/35 px-4 text-sm font-semibold text-cyan-100",
             "focus-within:outline focus-within:outline-2 focus-within:outline-amber-300", blocked ? "pointer-events-none opacity-50" : "cursor-pointer hover:bg-cyan-300/[0.075]"].join(" ")}>
+          <input id={id} type="file" accept={SPREADSHEET_IMPORT_ACCEPT} disabled={blocked}
+            className="sr-only" aria-label="Choose a spreadsheet file" onChange={onChange} />
           Choose spreadsheet
         </label>
       </div>
