@@ -180,7 +180,7 @@ export default function VisualIntelligenceSearch({ query, onAsk }: {
                         <th scope="row" className="min-w-[180px] max-w-[340px] break-words p-2 font-medium text-foreground">{card.title}</th>
                         <td className="p-2 capitalize text-muted-foreground">{card.kind.replaceAll("_", " ")}</td>
                         <td className="whitespace-nowrap p-2 text-muted-foreground">{recordedAt ? <time dateTime={recordedAt}>{new Date(recordedAt).toLocaleString()}</time> : "Not recorded"}</td>
-                        <td className="p-2 text-muted-foreground">{card.evidence?.length ?? 0}</td>
+                        <td className="p-2 text-muted-foreground"><VisualIntelligenceSourceDisclosure card={card} /></td>
                         <td className="p-2"><button type="button" disabled={stagingId !== null} onClick={() => void stage(card)}
                           aria-label={`Ask LiOS about ${card.title}`}
                           className="min-h-10 rounded-lg border border-border/60 px-3 text-foreground focus-visible:ring-2 focus-visible:ring-amber-300/70 disabled:opacity-40">Ask LiOS</button></td>
@@ -198,7 +198,7 @@ export default function VisualIntelligenceSearch({ query, onAsk }: {
                       <h3 className="mt-1 font-ui text-sm font-semibold text-foreground">{card.title}</h3>
                       <p className="mt-1 line-clamp-2 font-ui text-xs leading-5 text-muted-foreground">{card.whatHappened}</p>
                       <div className="mt-2 flex flex-wrap items-center gap-2 font-ui text-xs text-muted-foreground">
-                        <span>{card.evidence?.length ?? 0} source references</span>
+                        <VisualIntelligenceSourceDisclosure card={card} />
                         <button type="button" disabled={stagingId !== null} onClick={() => void stage(card)}
                           aria-label={`Ask LiOS about ${card.title}`}
                           className="min-h-10 rounded-lg border border-border/60 px-3 text-foreground focus-visible:ring-2 focus-visible:ring-amber-300/70 disabled:opacity-40">Ask LiOS</button>
@@ -214,6 +214,34 @@ export default function VisualIntelligenceSearch({ query, onAsk }: {
       )}
     </section>
   );
+}
+
+/**
+ * Compact publisher evidence used by Table and recorded chronology. Every
+ * outbound URL passes the same credential-safe public-source gate as Cards.
+ * Never infer supporting references from a news title or provider label.
+ */
+export function VisualIntelligenceSourceDisclosure({ card }: { card: IntelligenceCard }) {
+  const sources = card.evidence ?? [];
+  return <details className="min-w-[90px] font-ui text-xs">
+    <summary className="min-h-10 cursor-pointer rounded-md px-1 py-2 text-foreground focus-visible:outline focus-visible:outline-2 focus-visible:outline-amber-300">
+      {sources.length} source{sources.length === 1 ? "" : "s"}
+    </summary>
+    <ul className="max-w-[250px] space-y-1.5 border-t border-border/50 pt-2">
+      {sources.slice(0, 6).map((source, index) => {
+        const safeUrl = safePulseSourceUrl(source.url);
+        return <li key={`${source.id}:${index}`} className="min-w-0 break-words leading-5 text-muted-foreground">
+          {safeUrl ? <a href={safeUrl} target="_blank" rel="noopener noreferrer" referrerPolicy="no-referrer"
+            className="underline-offset-2 hover:underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-amber-300">
+            {source.source}
+          </a> : <span>{source.source}</span>}
+          {source.provider && <span> · {source.provider}</span>}
+        </li>;
+      })}
+      {sources.length > 6 && <li>{sources.length - 6} more source references in Cards view</li>}
+      {!sources.length && <li>No recorded evidence attached.</li>}
+    </ul>
+  </details>;
 }
 
 export function VisualIntelligenceResultCard({ card, disabled, onAsk }: {

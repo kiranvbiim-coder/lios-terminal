@@ -4,7 +4,7 @@ import { createElement } from "react";
 import { readFileSync } from "node:fs";
 import { renderToStaticMarkup } from "react-dom/server";
 import type { IntelligenceCard } from "@shared/waveDContracts";
-import VisualIntelligenceSearch, { VisualIntelligenceResultCard } from "./VisualIntelligenceSearch";
+import VisualIntelligenceSearch, { VisualIntelligenceResultCard, VisualIntelligenceSourceDisclosure } from "./VisualIntelligenceSearch";
 
 const card: IntelligenceCard = {
   id: "evidence-case", kind: "research", priority: "important", title: "Water source publication",
@@ -105,4 +105,17 @@ test("A07 search can present exact source results as cards, tabular rows and rec
   assert.match(source, /Ordered by the source card's recorded timestamp/);
   assert.ok(source.includes("<time dateTime={at}"), "timeline uses the source recorded time");
   assert.doesNotMatch(source, /syntheticChart|inferredCoordinates|fetch\("https?:/);
+});
+
+test("A07 tabular and chronological source disclosure uses gated source URLs", () => {
+  const available = renderToStaticMarkup(createElement(VisualIntelligenceSourceDisclosure, { card }));
+  assert.match(available, /<details/);
+  assert.match(available, /3 sources/);
+  assert.match(available, /https:\/\/example.org\/public-report/);
+  assert.doesNotMatch(available, /href="javascript:|api_key=PRIVATE|PRIVATE/);
+  assert.match(available, /&lt;unsafe&gt;/);
+  const missing = renderToStaticMarkup(createElement(VisualIntelligenceSourceDisclosure, {
+    card: { ...card, evidence: [] },
+  }));
+  assert.match(missing, /No recorded evidence attached/);
 });
