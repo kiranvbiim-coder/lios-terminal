@@ -1,4 +1,4 @@
-import { useMemo, useState, type CSSProperties } from "react";
+import React, { useMemo, useState, type CSSProperties } from "react";
 import {
   Area,
   AreaChart,

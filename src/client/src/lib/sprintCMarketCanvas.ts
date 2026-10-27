@@ -36,7 +36,8 @@ function percentages(advances: number, declines: number, unchanged: number, netA
 /** A chart row is displayed only when a recorded, finite observation is usable. */
 export function recordedBreadthRows(points: readonly BreadthPoint[], limit: number): RecordedBreadthRow[] {
   const bound = Number.isFinite(limit) ? Math.max(0, Math.min(90, Math.trunc(limit))) : 0;
-  return points.slice(-bound || points.length).filter((point): point is BreadthPoint => Boolean(point))
+  if (bound === 0) return [];
+  return points.slice(-bound).filter((point): point is BreadthPoint => Boolean(point))
     .flatMap(point => {
       const values = percentages(point.advances, point.declines, point.unchanged, point.netAdvances);
       if (!values || values.net === null || typeof point.date !== "string" || !actualIsoDate(point.date)) return [];

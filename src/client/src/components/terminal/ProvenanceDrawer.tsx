@@ -1,9 +1,10 @@
-import { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { AlertTriangle, CheckCircle2, Database, FileCheck2, RefreshCw, X } from "lucide-react";
 import {
   FRESHNESS_LABELS, getEvidenceSnapshot, subscribeEvidence,
   type CalculationReceipt, type EvidenceSnapshot, type ProvenanceRecord,
 } from "@/lib/terminalEvidence";
+import { useManagedOverlayFocus } from "@/hooks/useManagedOverlayFocus";
 import { filterPublishedSources, safePublishedSourceUrl, summarizePublishedSources, type SourceReviewFilter } from "@/lib/sprintBSourceReview";
 import { useManagedOverlayFocus } from "@/hooks/useManagedOverlayFocus";
 

@@ -44,6 +44,7 @@ import {
 import type { TerminalUxPreferences } from "@/lib/terminalUxPreferences";
 import { describeSnapshotPair } from "@/lib/sprintBComparisonContext";
 import { comparisonReviewKey, resolveRecordedReceiptPair } from "@/lib/sprintDComparisonGuard";
+import { useManagedOverlayFocus } from "@/hooks/useManagedOverlayFocus";
 
 
 const TABS = ["flow", "compare", "thesis", "canvas", "packages", "composer", "replay", "ai-preview", "meeting"] as const;
