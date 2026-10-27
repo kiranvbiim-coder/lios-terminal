@@ -194,7 +194,10 @@ export const connectedProviderPreviewChatTool: ConversationToolDefinition = {
   planningHint: "First call lios.provider.connected_sources. Provide connectionId from that result, capability and an explicit entityRef; never invent IDs or tickers. This tool requires exact-step user approval, source rights reviewed for AI release, and owner Project scope. Never use it to execute MCP tools or arbitrary database SQL.",
   kind: "retrieve",
   permissionClass: "user_confirm",
-  access: "read",
+  // A configured private API may use POST and external I/O. Conservatively
+  // declare write access so the canonical approval ledger treats it as an
+  // external side effect, never as a safe read-only shortcut.
+  access: "write",
   sideEffect: "external",
   replaySafe: false,
   allowProjectApproval: false,
