@@ -45,6 +45,7 @@ import { buildStreamingLifecycle } from "./streamingCoordinator";
 import { executeBrowserConnector } from "./browserConnectorRuntime";
 import { createPlaywrightBrowserAdapter } from "./playwrightBrowserAdapter";
 import { authorizeCanonicalDataRequests } from "./canonicalDataRequestGate";
+import { getProject } from "./projectStore";
 
 function ctx(req: Request){ return tenantContext(req.user!); }
 function fail(res: Response,error:unknown){
