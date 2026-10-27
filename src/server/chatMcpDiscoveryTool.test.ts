@@ -68,6 +68,8 @@ test("P3 configured MCP allowlist can be read by its owning Project in Chat with
   const result = await invokeConversationTool("lios.external-mcp.allowed_tools", input, new AbortController().signal, call);
   const output = result.output as { allowedToolIds: string[]; remoteDiscoveryPerformed: boolean; sourceStatus: string; requiresExactUserApproval: boolean };
   assert.deepEqual(output.allowedToolIds, ["lookup.record", "review.search"]);
+  assert.ok(result.summary.includes('"lookup.record"'));
+  assert.ok(result.summary.includes('"review.search"'));
   assert.equal(output.remoteDiscoveryPerformed, false);
   assert.equal(output.requiresExactUserApproval, true);
   assert.equal(output.sourceStatus, "configured");

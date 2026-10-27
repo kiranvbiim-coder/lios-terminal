@@ -4,7 +4,7 @@
  * events without fabricating a progress percentage or an outcome.
  */
 export function observedRunActivity(
-  events: readonly { type: string; stepId?: string }[],
+  events: readonly { type: string; stepId?: string | null }[],
   plannedSteps: number,
   working: boolean,
   awaitingApproval: boolean,

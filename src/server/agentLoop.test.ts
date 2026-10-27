@@ -113,6 +113,19 @@ test("the review prompt carries tool summaries only, never the model's raw tool 
   assert.match(h.prompts[1]!.user, /result of a/);
 });
 
+test("governed connected observations remain available beyond the generic status-summary cutoff", async () => {
+  const tools = ["lios.provider.connected_sources", "lios.provider.connected_preview", "lios.external-mcp.allowed_tools"].map(id => tool(id));
+  for (const descriptor of tools) {
+    const h = harness([plan([step("inspect", descriptor.id)]), complete()], {
+      tools,
+      invoke: async () => ({ kind: "ok", summary: "Bounded observation ".repeat(35) + '{"period":"Q2","amount":14,"toolId":"lookup.record"}', deterministic: true, sourceRefs: [] }),
+    });
+    await runAgentLoop(h.deps);
+    assert.ok(h.prompts[1].user.includes('"amount":14'));
+    assert.ok(h.prompts[1].user.includes('"toolId":"lookup.record"'));
+  }
+});
+
 test("each review repair resolves fresh ephemeral observations from completed steps only", async () => {
   const h = harness([
     plan([step("read"), step("failed", "t.calc", { dependsOn: ["read"] })]),

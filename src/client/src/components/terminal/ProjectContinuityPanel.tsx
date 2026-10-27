@@ -33,22 +33,6 @@ export function ProjectContinuityPanel({
   const message = visibleProjectRefreshNotice(notice, projectId);
   const snapshot = !continuity.isError ? continuity.data : undefined;
 
-  const openExactWorkflow = (workflowId: string) => {
-    // P9 remains the only execution authority; this is navigation, not approval.
-    const panel = document.querySelector<HTMLElement>("[data-p9-continuous-intelligence]");
-    const target = Array.from(panel?.querySelectorAll<HTMLElement>("[data-p9-workflow-id]") ?? [])
-      .find(element => element.dataset.p9WorkflowId === workflowId);
-    if (!target) {
-      setMessage("This exact workflow is not visible in this Project's current Automations. Refresh the Project and review the workflow list before acting.");
-      return;
-    }
-    setMessage(null);
-    target.focus();
-    target.scrollIntoView({
-      behavior: window.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches ? "auto" : "smooth",
-      block: "center",
-    });
-  };
 
 
   const refresh = async () => {
