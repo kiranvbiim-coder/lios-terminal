@@ -13,7 +13,7 @@ const sources: BriefingSource[] = [
 
 test("Briefing Studio renders a readable source chooser, review lane and explicit save without copied content", () => {
   const html = renderToStaticMarkup(React.createElement(ProjectBriefingStudio, {
-    projectId: 11, artifacts: sources, onClose: () => {}, onSave: async () => {},
+    projectId: 11, artifacts: sources, onClose: () => {}, onOpenSource: () => {}, onSave: async () => {},
   }));
   assert.match(html, /aria-label="Project Briefing Studio"/);
   assert.match(html, /Saved Project sources/);
@@ -23,13 +23,14 @@ test("Briefing Studio renders a readable source chooser, review lane and explici
   assert.match(html, /Save as Project Report/);
   assert.match(html, /disabled/);
   assert.match(html, /Close Briefing Studio/);
+  assert.doesNotMatch(html, /project-artifact-exact-preview/); // Lazy until explicit Inspect selection.
   assert.match(html, /No content has been copied|never generated or copied automatically/i);
   assert.doesNotMatch(html, /Cross project secret|Archived chart/);
 });
 
 test("empty authorized source collection has honest state and no enabled save", () => {
   const html = renderToStaticMarkup(React.createElement(ProjectBriefingStudio, {
-    projectId: 11, artifacts: [], onClose: () => {}, onSave: async () => {},
+    projectId: 11, artifacts: [], onClose: () => {}, onOpenSource: () => {}, onSave: async () => {},
   }));
   assert.match(html, /No saved Project sources match/);
   assert.match(html, /Nothing is created until you choose Save/);
