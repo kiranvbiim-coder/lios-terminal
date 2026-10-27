@@ -330,6 +330,24 @@
       "repository": "shadcnblocks/kibo",
       "commitSha": "3d63cdb15b79d972e3dc38a10997987672f9b263",
       "license": "MIT"
+    },
+    {
+      "id": "beui-pulse-tabs",
+      "repository": "starc007/ui-components",
+      "commitSha": "41a330ba66684696c445d58ca5d77c0133d4059a",
+      "license": "MIT"
+    },
+    {
+      "id": "watermelon-p6-activities",
+      "repository": "WatermelonCorp/watermellon-registry",
+      "commitSha": "86052b8fd12bc19bf3bac07625a7f93736c42b17",
+      "license": "MIT"
+    },
+    {
+      "id": "opensourceui-spreadsheet-review",
+      "repository": "bidyut10/opensourceui",
+      "commitSha": "892f486fdf0d46a44b21ddf3fa32a41a3a71173a",
+      "license": "MIT"
     }
   ]
 }
