@@ -35,7 +35,7 @@ export function focusProjectWorkflowRow(
 ): boolean {
   const row = findProjectWorkflowRow(root, projectId, workflowId);
   if (!row) return false;
-  row.scrollIntoView({ behavior: reducedMotion ? "instant" : "smooth", block: "center" });
+  row.scrollIntoView({ behavior: reducedMotion ? "auto" : "smooth", block: "center" });
   row.focus({ preventScroll: true });
   return true;
 }
