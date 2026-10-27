@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import * as React from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { readFileSync } from "node:fs";
+import * as ts from "typescript";
 import { NewsStoryEvolution } from "./NewsStoryEvolution";
 import { observeNewsFeed } from "@/lib/newsStoryEvolution";
 
@@ -77,4 +78,29 @@ test("multiple related source headlines can offer a distinct chronology without 
   assert.match(adapter, /date: item.publishedAt/);
   assert.match(adapter, /Separate publisher feed item/);
   assert.match(adapter, /may describe different events/);
+});
+
+test("pinned MIT donor timeline preserves exact registered source and parses as TSX", () => {
+  const upstream = source("../vendor/beui/BeuiTimeline.tsx");
+  const registry = JSON.parse(source("../../../../../third_party/components.json"));
+  const lock = JSON.parse(source("../../../../../third_party/upstream-lock.json"));
+  const component = registry.components.find((entry: { id: string }) => entry.id === "beui-news-observation-timeline");
+  const pin = lock.locks.find((entry: { id: string }) => entry.id === "beui-news-observation-timeline");
+  assert.ok(component);
+  assert.ok(pin);
+  assert.equal(component.repository, "starc007/ui-components");
+  assert.equal(component.commitSha, "601fa21a2b68cfa5f6c1f0b6dcb29528c32472a1");
+  assert.equal(component.commitSha, pin.commitSha);
+  assert.equal(component.license, "MIT");
+  assert.equal(component.bundled, true);
+  assert.equal(pin.license, "MIT");
+  assert.match(upstream, /49eac72ab9237b48c4eaa7fc106f7e162137657a/);
+  assert.doesNotMatch(upstream, /from "motion\/react"|import.+@\/lib\/touch/);
+  const result = ts.transpileModule(upstream, {
+    fileName: "BeuiTimeline.tsx",
+    reportDiagnostics: true,
+    compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.ESNext, jsx: ts.JsxEmit.ReactJSX },
+  });
+  const problems = (result.diagnostics ?? []).filter(x => x.category === ts.DiagnosticCategory.Error);
+  assert.deepEqual(problems.map(p => ts.flattenDiagnosticMessageText(p.messageText, " ")), []);
 });
