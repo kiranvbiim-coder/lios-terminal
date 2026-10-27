@@ -70,3 +70,19 @@ test("read-only statuses are differentiated and actions respect the server state
   assert.doesNotMatch(html, /Mark reviewed/);
   assert.match(html, /disabled/);
 });
+
+test("Home offers the same user-confirmed source-to-Chat handoff and never auto-submits", () => {
+  const [entry] = homeAttentionEntries([card], [inbox]);
+  const html = renderToStaticMarkup(createElement(HomeIntelligenceCard, {
+    entry, disabled: false, saving: false, staging: false, onUpdate: () => undefined, onAsk: () => undefined,
+  }));
+  assert.match(html, /Ask LiOS about Sourced water policy update/);
+  assert.match(html, /Ask LiOS/);
+  assert.match(html, /<button/);
+  assert.doesNotMatch(html, /runConversation|automatic send|<form/);
+  const staging = renderToStaticMarkup(createElement(HomeIntelligenceCard, {
+    entry, disabled: false, saving: false, staging: true, onUpdate: () => undefined, onAsk: () => undefined,
+  }));
+  assert.match(staging, /Staging/);
+  assert.match(staging, /disabled/);
+});

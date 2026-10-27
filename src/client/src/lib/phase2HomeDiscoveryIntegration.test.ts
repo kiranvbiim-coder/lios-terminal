@@ -7,7 +7,7 @@ const source = (file: string) => readFileSync(new URL(file, import.meta.url), "u
 test("Home discovery is mounted only for non-temporary empty conversations", () => {
   const composer = source("../components/terminal/ProjectExperienceShell.tsx");
   assert.match(composer, /import \{ HomeAttentionPanel \} from "\.\/HomeAttentionPanel"/);
-  assert.match(composer, /chatMode !== "temporary" && !displayMessages\.length && !streaming && <HomeAttentionPanel \/>/);
+  assert.match(composer, /chatMode !== "temporary" && !displayMessages\.length && !streaming && <HomeAttentionPanel onAsk=\{stageRecordedIntelligenceToChat\} \/>/);
   assert.match(composer, /<ChatTerminalControl audience=\{audience\}/);
 });
 

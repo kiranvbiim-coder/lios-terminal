@@ -137,6 +137,19 @@ jobs:
           npm run test:phase-closure
           npm run beta:manifest:test
           npm run beta:acceptance:test
+          npm run media:verify:test
+          npm run media:verify
+          npm run test:website-a3
+          npm run test:website-a4
+          npm run test:website-b1
+          npm run test:website-b2
+          npm run test:website-b3
+          npm run test:website-c1
+          npm run test:website-c2
+          npm run test:website-c3
+          npm run test:website-d1
+          npm run test:website-d2
+          npm run test:website-closure
           npm run release:preflight:ci
 
       - name: Installed UX evidence negative controls (source only)

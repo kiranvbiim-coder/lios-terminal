@@ -35,6 +35,7 @@ import { ProjectHome, relativeTime } from "./ProjectHome";
 import { ProjectPersonalFinancePanel } from "./ProjectPersonalFinancePanel";
 import { HomeAttentionPanel } from "./HomeAttentionPanel";
 import { pulseStoryQuestion } from "@/lib/pulseStoryPresentation";
+import type { IntelligenceCard } from "@shared/waveDContracts";
 import { AuthenticatedNavigation, type NavigationSection } from "./AuthenticatedNavigation";
 import WorkSearchDialog from "./WorkSearchDialog";
 import type { WorkSearchResult } from "@shared/workSearch";
@@ -950,6 +951,20 @@ export default function ProjectExperienceShell({
     temporaryWorkingContextRef.current = null;
     return true;
   };
+  // The one existing source -> reviewed Chat handoff, shared by Search and Home.
+  // No new session, Project selection, model run or loss of unsent drafts.
+  const stageRecordedIntelligenceToChat = (card: IntelligenceCard): boolean => {
+    if (chatMode === "temporary" || busy || busyRef.current || sendInFlightRef.current ||
+      chatCreationInFlightRef.current || projectCreationInFlightRef.current || artifactDraftDirtyRef.current) return false;
+    setInput(current => stageUniversalChatQuestion(current, pulseStoryQuestion(card)));
+    setSection("conversation");
+    setProjectHomeRequested(false);
+    setShowLifecycleCenter(false);
+    setContextOpen(false);
+    requestAnimationFrame(() => composerRef.current?.focus());
+    return true;
+  };
+
   const openWorkSearchResult = async (result: WorkSearchResult): Promise<boolean> => {
     if (busy || busyRef.current || sendInFlightRef.current || chatCreationInFlightRef.current) return false;
     const before = currentDraftRef.current;
@@ -2069,19 +2084,7 @@ export default function ProjectExperienceShell({
         onClose={() => setWorkSearchOpen(false)}
         onSelect={openWorkSearchResult}
         intelligenceEnabled={chatMode !== "temporary"}
-        onAskIntelligence={(card) => {
-          // A search discovery never runs a model or changes Project scope.
-          // Existing unsent Chat work is preserved and the user must press Send.
-          if (chatMode === "temporary" || busy || busyRef.current || sendInFlightRef.current ||
-            chatCreationInFlightRef.current || projectCreationInFlightRef.current || artifactDraftDirtyRef.current) return false;
-          setInput(current => stageUniversalChatQuestion(current, pulseStoryQuestion(card)));
-          setSection("conversation");
-          setProjectHomeRequested(false);
-          setShowLifecycleCenter(false);
-          setContextOpen(false);
-          requestAnimationFrame(() => composerRef.current?.focus());
-          return true;
-        }}
+        onAskIntelligence={stageRecordedIntelligenceToChat}
       />
       <AuthenticatedNavigation section={section} activeSection={section === "conversation" && entrySurface === "project-home" ? "projects" : section} account={account} busy={busy}
         onSection={(next) => {
@@ -2396,7 +2399,7 @@ export default function ProjectExperienceShell({
                     </div>
                   </section>
                 )}
-                {chatMode !== "temporary" && !displayMessages.length && !streaming && <HomeAttentionPanel />}
+                {chatMode !== "temporary" && !displayMessages.length && !streaming && <HomeAttentionPanel key={account.email ?? "active-account"} ownerScope={account.email ?? "active-account"} onAsk={stageRecordedIntelligenceToChat} />}
                 {hiddenMessageCount > 0 && (
                   <div className="flex justify-center" role="group" aria-label="Earlier messages">
                     <button type="button" data-testid="chat-load-earlier" className="lios-section-action" onClick={() => {

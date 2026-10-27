@@ -1,7 +1,7 @@
 import * as React from "react";
 import { useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { BookOpenText, CheckCircle2, Clock3, ExternalLink, Radar, Search, ShieldAlert } from "lucide-react";
+import { BookOpenText, CheckCircle2, Clock3, ExternalLink, Radar, Search, ShieldAlert, Sparkles } from "lucide-react";
 import { apiRequest } from "@/lib/queryClient";
 import { pulseStoryTimestamp, safePulseSourceUrl } from "@/lib/pulseStoryPresentation";
 import {
@@ -15,10 +15,17 @@ interface HomeAttention {
   asOf?: string;
   cards: IntelligenceCard[];
   actionInbox: ActionInboxItem[];
+  discoveryChanges?: {
+    status: "not_reviewed" | "compared";
+    reviewedAt: string | null;
+    newCardIds: string[];
+    newCount: number;
+    sourceBackedCount: number;
+  };
 }
 
 /** One Home view over the existing Wave D Pulse and Action Inbox, not another feed or scheduler. */
-export function HomeAttentionPanel() {
+export function HomeAttentionPanel({ onAsk, ownerScope = "active-account" }: { onAsk?: (card: IntelligenceCard) => boolean | Promise<boolean>; ownerScope?: string }) {
   const [open, setOpen] = useState(false);
   return (
     <details
@@ -30,21 +37,26 @@ export function HomeAttentionPanel() {
         <Radar aria-hidden="true" className="h-4 w-4 shrink-0 text-amber-200" />
         Home intelligence
       </summary>
-      {open && <HomeAttentionContents />}
+      {open && <HomeAttentionContents onAsk={onAsk} ownerScope={ownerScope} />}
     </details>
   );
 }
 
-function HomeAttentionContents() {
+function HomeAttentionContents({ onAsk, ownerScope }: { onAsk?: (card: IntelligenceCard) => boolean | Promise<boolean>; ownerScope: string }) {
   const queryClient = useQueryClient();
   const [filter, setFilter] = useState<AttentionFilter>("all");
   const [search, setSearch] = useState("");
   const [visibleCount, setVisibleCount] = useState(9);
+  const [onlyNew, setOnlyNew] = useState(false);
+  const [stagingId, setStagingId] = useState<string | null>(null);
+  const [askError, setAskError] = useState<string | null>(null);
 
   const query = useQuery<HomeAttention>({
-    queryKey: ["/api/wave-d/pulse"],
+    queryKey: ["/api/wave-d/pulse", "Home", ownerScope],
     queryFn: async () => (await apiRequest("GET", "/api/wave-d/pulse")).json(),
-    staleTime: 30_000,
+    staleTime: 0,
+    gcTime: 0,
+    refetchOnMount: "always",
     refetchOnWindowFocus: false,
   });
   const mutation = useMutation({
@@ -59,12 +71,36 @@ function HomeAttentionContents() {
     },
   });
 
+  const reviewMutation = useMutation({
+    mutationFn: async () => {
+      const response = await apiRequest("POST", "/api/wave-d/pulse/review", {});
+      const payload: unknown = await response.json();
+      const data = payload as { status?: string; persisted?: boolean } | null;
+      if (!data || data.status !== "saved" || data.persisted !== true)
+        throw new Error("Home did not confirm a persisted source review.");
+    },
+    onSuccess: async () => {
+      setOnlyNew(false);
+      await queryClient.invalidateQueries({ queryKey: ["/api/wave-d/pulse"] });
+    },
+  });
+
   const entries = useMemo(
     () => homeAttentionEntries(query.data?.cards ?? [], query.data?.actionInbox ?? []),
     [query.data],
   );
   const counts = useMemo(() => homeAttentionCounts(entries), [entries]);
-  const filtered = useMemo(() => filterHomeAttention(entries, filter, search), [entries, filter, search]);
+  const discoveryChanges = query.data?.discoveryChanges;
+  const hasBaseline = discoveryChanges?.status === "compared" && Array.isArray(discoveryChanges.newCardIds);
+  const newlyRecorded = useMemo(
+    () => new Set(hasBaseline ? (discoveryChanges?.newCardIds ?? []) : []),
+    [hasBaseline, discoveryChanges?.newCardIds],
+  );
+  const filtered = useMemo(
+    () => filterHomeAttention(entries, filter, search).filter(entry =>
+      !onlyNew || !hasBaseline || newlyRecorded.has(entry.card.id)),
+    [entries, filter, search, onlyNew, hasBaseline, newlyRecorded],
+  );
   const page = filtered.slice(0, visibleCount);
   const asOf = pulseStoryTimestamp(query.data?.asOf);
   const readState = homeAttentionReadPresentation({
@@ -75,9 +111,24 @@ function HomeAttentionContents() {
     matchingCount: filtered.length,
   });
   const disableWrite = mutation.isPending || !readState.mayReview;
+  const disableReview = reviewMutation.isPending || query.isFetching || query.isPending || query.isError;
 
   const changeFilter = (next: AttentionFilter) => { setFilter(next); setVisibleCount(9); };
   const changeSearch = (next: string) => { setSearch(next); setVisibleCount(9); };
+
+  const stageInChat = async (card: IntelligenceCard) => {
+    if (!onAsk || stagingId) return;
+    setAskError(null);
+    setStagingId(card.id);
+    try {
+      const accepted = await onAsk(card);
+      if (!accepted) setAskError("Chat is busy or has unsaved Artifact work. Your Home view is preserved; review the open work before asking.");
+    } catch {
+      setAskError("Could not stage this source into Chat. No question was submitted.");
+    } finally {
+      setStagingId(null);
+    }
+  };
 
   const update = (entry: HomeAttentionEntry, status: ActionInboxItem["status"]) => {
     // Never invent an Inbox ID from an unrelated story. Only server-issued Inbox
@@ -111,13 +162,41 @@ function HomeAttentionContents() {
         <ShieldAlert aria-hidden="true" className="mt-0.5 h-4 w-4 shrink-0" />
         {readState.availabilityText}
       </p>}
+      {askError && <p role="alert" className="rounded-lg border border-amber-300/30 px-3 py-2 font-ui text-sm text-amber-100">{askError}</p>}
       {mutation.isError && <p role="alert" className="rounded-lg border border-rose-300/25 p-3 font-ui text-sm text-rose-200">{mutation.error instanceof Error ? mutation.error.message : "The review update could not be saved."}</p>}
+      {reviewMutation.isError && <p role="alert" className="rounded-lg border border-rose-300/30 px-3 py-2 font-ui text-sm text-rose-200">Could not save this review checkpoint. The previous reviewed snapshot is unchanged.</p>}
+      {reviewMutation.isPending && <p role="status" className="font-ui text-sm text-muted-foreground">Saving current recorded source snapshot…</p>}
+      {reviewMutation.isSuccess && !reviewMutation.isPending && !query.isFetching && <p role="status" className="font-ui text-sm text-emerald-200">Reviewed source snapshot saved.</p>}
       {mutation.isPending && <p role="status" className="font-ui text-sm text-muted-foreground">Saving review status…</p>}
       {mutation.isSuccess && !mutation.isPending && <p role="status" className="flex items-center gap-1.5 font-ui text-sm text-emerald-200"><CheckCircle2 aria-hidden="true" className="h-4 w-4" />Review status saved.</p>}
 
       {query.data && (
         <>
           {query.isError && <p role="status" className="font-ui text-sm text-muted-foreground">Source snapshot is historical. Review controls remain disabled until a verified refresh.</p>}
+          <section aria-label="Changes since last source review" data-testid="home-reviewed-continuity" className="rounded-lg border border-border/55 px-3 py-3">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div className="min-w-0 font-ui text-sm text-foreground">
+                {hasBaseline ? (
+                  <><strong>{discoveryChanges?.newCount ?? 0}</strong> recorded source-backed item(s) new or revised since your last review
+                    {discoveryChanges?.reviewedAt && <span className="mt-1 block text-xs text-muted-foreground">
+                      Reviewed <time dateTime={discoveryChanges.reviewedAt}>{new Date(discoveryChanges.reviewedAt).toLocaleString()}</time>
+                    </span>}</>
+                ) : "No source review checkpoint saved yet."}
+              </div>
+              <button type="button" disabled={disableReview} onClick={() => reviewMutation.mutate()}
+                className="min-h-10 rounded-lg border border-amber-300/30 px-3 py-2 font-ui text-sm font-medium text-foreground hover:bg-amber-300/[0.07] focus-visible:ring-2 focus-visible:ring-amber-300/70 disabled:opacity-50">
+                {reviewMutation.isPending ? "Saving…" : "Mark current source snapshot reviewed"}
+              </button>
+            </div>
+            <p className="mt-2 font-ui text-xs leading-5 text-muted-foreground">
+              Comparison uses retained card and source-reference revisions, not an inferred explanation of what happened. Monitoring and Inbox review statuses are not changed.
+            </p>
+            {hasBaseline && <label className="mt-3 flex min-h-10 cursor-pointer items-center gap-2 font-ui text-sm text-foreground">
+              <input type="checkbox" checked={onlyNew} onChange={event => { setOnlyNew(event.target.checked); setVisibleCount(9); }}
+                className="h-4 w-4 accent-amber-300 focus-visible:ring-2 focus-visible:ring-amber-300/70" />
+              Show only new or revised source-backed items
+            </label>}
+          </section>
           <div className="flex flex-wrap items-center gap-2" role="group" aria-label="Filter Home intelligence">
             {ATTENTION_FILTERS.map(item => (
               <button
@@ -163,6 +242,8 @@ function HomeAttentionContents() {
                 disabled={disableWrite}
                 saving={mutation.isPending && mutation.variables?.id === entry.inbox?.id}
                 onUpdate={status => update(entry, status)}
+                onAsk={onAsk ? () => void stageInChat(entry.card) : undefined}
+                staging={stagingId === entry.card.id}
               />
             ))}
           </div>
@@ -178,11 +259,13 @@ function HomeAttentionContents() {
   );
 }
 
-export function HomeIntelligenceCard({ entry, onUpdate, disabled, saving }: {
+export function HomeIntelligenceCard({ entry, onUpdate, disabled, saving, onAsk, staging = false }: {
   entry: HomeAttentionEntry;
   onUpdate: (status: ActionInboxItem["status"]) => void;
   disabled: boolean;
   saving: boolean;
+  onAsk?: () => void;
+  staging?: boolean;
 }) {
   const { card, inbox, reviewStatus } = entry;
   const timestamp = pulseStoryTimestamp(card.createdAt);
@@ -228,6 +311,14 @@ export function HomeIntelligenceCard({ entry, onUpdate, disabled, saving }: {
         </ul> : <p className="mt-2 border-t border-border/50 pt-3 text-sm leading-6">No attributed sources attached. Verify independently before acting.</p>}
       </details>
 
+      {onAsk && <div className="flex flex-wrap gap-2 border-t border-border/55 pt-3">
+        <button type="button" onClick={onAsk} disabled={staging}
+          aria-label={`Ask LiOS about ${card.title}`}
+          className="inline-flex min-h-10 items-center gap-2 rounded-lg border border-amber-300/35 bg-amber-300/[0.07] px-3 py-2 font-ui text-sm font-medium text-foreground hover:bg-amber-300/[0.13] focus-visible:ring-2 focus-visible:ring-amber-300/70 disabled:opacity-50">
+          <Sparkles aria-hidden="true" className="h-4 w-4 text-amber-200" />
+          {staging ? "Staging…" : "Ask LiOS"}
+        </button>
+      </div>}
       {inbox && <div className="flex flex-wrap gap-2 border-t border-border/55 pt-3">
         {reviewStatus === "open" ? <>
           <button type="button" disabled={disabled} onClick={() => onUpdate("resolved")} className="min-h-10 rounded-lg border border-amber-300/35 bg-amber-300/[0.09] px-3 py-2 font-ui text-sm font-medium text-foreground hover:bg-amber-300/[0.14] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-300/70 disabled:opacity-50">{saving ? "Saving…" : "Mark reviewed"}</button>

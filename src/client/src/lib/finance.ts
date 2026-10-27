@@ -4,6 +4,7 @@
 // Re-exported for backward compat -- canonical definitions moved to
 // shared/dataStatus.ts.
 import type { DataStatus } from "@shared/dataStatus";
+import type { EditorialMedia } from "@shared/editorialMedia";
 export type { DataFreshness, DataStatus } from "@shared/dataStatus";
 
 export interface Quote {
@@ -50,6 +51,8 @@ export interface OHLCVSeries {
 export interface NewsItem {
   title: string;
   summary: string;
+  /** Only eligible, locally bundled, rights-verified assets may render. */
+  media?: EditorialMedia;
   url: string;
   source: string;
   feedProvider: string;

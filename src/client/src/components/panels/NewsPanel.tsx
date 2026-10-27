@@ -153,6 +153,8 @@ export default function NewsPanel({ symbol }: Props) {
                   ageLabel={relativeTime(item.publishedAt)}
                   sentiment={item.sentiment}
                   statusBadge={<DataStatusBadge status={item.status} compact />}
+                  media={item.media}
+                  sourceEvidenceId={item.url}
                   active={item.url === selectedUrl}
                   lead={index === 0}
                   onSelect={() => setSelectedUrl(item.url)}

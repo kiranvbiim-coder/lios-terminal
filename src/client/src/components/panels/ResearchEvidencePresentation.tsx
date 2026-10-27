@@ -161,6 +161,44 @@ export function ResearchEvidenceCard({
   );
 }
 
+export interface RecordedEvidenceMetadataDifference {
+  key: "evidenceType" | "evidenceKind" | "sourceName" | "provider" | "publishedAt" | "effectiveAt" | "retrievedAt";
+  label: string;
+  first: string;
+  second: string;
+  status: "same" | "different" | "missing";
+}
+
+/** Literal recorded metadata only. Different fields are not claims of
+ * contradicting research conclusions; missing is never an implied value. */
+export function compareRecordedEvidenceMetadata(
+  first: ResearchEvidenceRecord,
+  second: ResearchEvidenceRecord,
+): RecordedEvidenceMetadataDifference[] {
+  const columns: Array<{ key: RecordedEvidenceMetadataDifference["key"]; label: string }> = [
+    { key: "evidenceType", label: "Evidence type" },
+    { key: "evidenceKind", label: "Evidence kind" },
+    { key: "sourceName", label: "Recorded source" },
+    { key: "provider", label: "Provider" },
+    { key: "publishedAt", label: "Published at" },
+    { key: "effectiveAt", label: "Effective at" },
+    { key: "retrievedAt", label: "Retrieved at" },
+  ];
+  return columns.map(({ key, label }) => {
+    const left = first[key];
+    const right = second[key];
+    const isDate = key === "publishedAt" || key === "effectiveAt" || key === "retrievedAt";
+    const normalize = (value: string | null): string =>
+      !value?.trim() ? "Not recorded"
+        : isDate ? (Number.isFinite(Date.parse(value)) ? new Date(value).toISOString() : "Not recorded")
+        : value;
+    const a = normalize(left), b = normalize(right);
+    const missing = a === "Not recorded" || b === "Not recorded";
+    return { key, label, first: a, second: b,
+      status: missing ? "missing" : a === b ? "same" : "different" };
+  });
+}
+
 export function ResearchEvidenceComparison({ first, second, onClear }: {
   first: ResearchEvidenceRecord;
   second: ResearchEvidenceRecord;
@@ -176,6 +214,26 @@ export function ResearchEvidenceComparison({ first, second, onClear }: {
         <button type="button" onClick={onClear} className="min-h-10 rounded border border-border/70 px-3 font-ui text-xs text-foreground hover:bg-white/[0.05]">Clear selection</button>
       </div>
       <p className="mt-2 font-ui text-xs text-muted-foreground">Side-by-side source facts only; no inferred agreement, contradiction or verification.</p>
+      <div className="mt-3 overflow-x-auto rounded-lg border border-border/55" role="region" aria-label="Aligned recorded evidence metadata" tabIndex={0}>
+        <table className="w-full min-w-[460px] table-fixed text-left font-ui text-xs">
+          <caption className="sr-only">Literal recorded metadata comparison; different fields do not establish conflicting claims.</caption>
+          <thead className="bg-background/80">
+            <tr><th scope="col" className="w-[29%] p-2">Recorded field</th>
+              <th scope="col" className="w-[28%] p-2">E{first.id}</th>
+              <th scope="col" className="w-[28%] p-2">E{second.id}</th>
+              <th scope="col" className="w-[15%] p-2">Match</th></tr>
+          </thead>
+          <tbody>{compareRecordedEvidenceMetadata(first, second).map(row =>
+            <tr key={row.key} data-metadata-comparison={row.status} className="border-t border-border/40">
+              <th scope="row" className="break-words p-2 font-medium text-muted-foreground">{row.label}</th>
+              <td className="break-words p-2 text-foreground">{row.first}</td>
+              <td className="break-words p-2 text-foreground">{row.second}</td>
+              <td className="p-2 text-muted-foreground">{row.status === "different" ? "Differs" : row.status === "missing" ? "Missing" : "Same"}</td>
+            </tr>)}
+          </tbody>
+        </table>
+      </div>
+      <p className="mt-2 font-ui text-xs leading-5 text-muted-foreground">Matches compare exact recorded metadata, not research conclusions. Different dates, providers or evidence kinds do not imply contradiction or independent confirmation.</p>
       <div className="mt-3 grid gap-3 lg:grid-cols-2">
         {[first, second].map(item => {
           const href = recordedEvidenceHttpUrl(item.sourceUrl);

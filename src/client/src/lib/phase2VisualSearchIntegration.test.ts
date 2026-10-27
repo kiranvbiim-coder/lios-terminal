@@ -26,7 +26,7 @@ test("intelligence is read only on user-selected tab and unavailable in Temporar
 });
 
 test("search -> Ask stages a user-reviewed prompt without auto-submitting or changing owner", () => {
-  assert.match(shell, /onAskIntelligence=\{\(card\) => \{/);
+  assert.match(shell, /onAskIntelligence=\{stageRecordedIntelligenceToChat\}/);
   assert.match(shell, /artifactDraftDirtyRef\.current\) return false/);
   assert.match(shell, /stageUniversalChatQuestion\(current, pulseStoryQuestion\(card\)\)/);
   assert.match(shell, /setProjectHomeRequested\(false\)/);

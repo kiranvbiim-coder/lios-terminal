@@ -551,6 +551,22 @@ export function compileDeterministicInsights(input: {
   });
 }
 
+/**
+ * Current P7 read surfaces cannot reuse snapshot-only insight titles after a
+ * resource, Chat or Artifact is excluded or archived. A compiled delta can
+ * still name a revoked source even when current indexed documents are filtered.
+ * Keep only findings whose recorded refs remain accessible in this Project.
+ */
+export function retainPermittedProjectInsights(
+  lens: P7InsightLens, currentSourceRefs: ReadonlySet<string>,
+): P7InsightLens {
+  const insights = lens.insights.filter(insight =>
+    insight.sourceRefs.length > 0 && insight.sourceRefs.every(ref => currentSourceRefs.has(ref)));
+  const counts: Record<string, number> = {};
+  for (const insight of insights) counts[insight.kind] = (counts[insight.kind] ?? 0) + 1;
+  return p7InsightLensSchema.parse({ ...lens, insights, counts });
+}
+
 export function buildUnifiedTimeline(documents: P7ProjectDocument[]): P7TimelineEvent[] {
   const typeFor = (doc: P7ProjectDocument): P7TimelineEvent["type"] => {
     if (doc.sourceType === "chat" || doc.sourceType === "chat_message") return "chat";

@@ -5,6 +5,7 @@ import {
   Link2, Search, ShieldAlert, ShieldCheck, SplitSquareHorizontal,
 } from "lucide-react";
 import { safeHref } from "@/lib/chatMarkdown";
+import { RecordedEvidenceFlowPanel } from "./RecordedEvidenceFlowPanel";
 import {
   buildPerspectiveModel, filterPerspectiveLinks, filterUnlinkedEvidence,
   perspectivePublishedDate, type PerspectiveEvidence, type PerspectiveGroup,
@@ -159,6 +160,8 @@ export function RecordedPerspectivesBoard({ title, question, thesis, evidence, r
         </select>
       </label>
     </div>
+
+    {model.evidenceCount > 0 && <RecordedEvidenceFlowPanel links={filtered} selectedId={selected?.id ?? null} onSelect={setFocusedId} />}
 
     {!model.evidenceCount ? <div role="status" className="rounded-xl border border-dashed border-border/65 p-8 text-center">
       <ShieldAlert className="mx-auto h-6 w-6 text-muted-foreground" aria-hidden="true"/>
