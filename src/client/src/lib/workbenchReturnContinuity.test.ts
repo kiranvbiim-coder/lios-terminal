@@ -18,7 +18,7 @@ test("general Workbench return reviews an identity change instead of silently di
   assert.match(shell, /reviewingChatReturn\.current === request/);
   assert.match(shell, /if \(!\(await confirmConversationSwitch\(\)\)\) \{\s*handledChatReturn\.current = request/);
   assert.match(shell, /if \(selection\.projectId !== origin\.projectId \|\| selection\.chatId !== origin\.chatId\) \{\s*selection\.setProjectId\(origin\.projectId\);\s*selection\.setChatId\(origin\.chatId\);\s*\} else \{\s*setChatMode\(origin\.mode\);/);
-  assert.match(shell, /Your unsent work remains in this Chat\. Return to Work to try switching again/);
+  assert.match(shell, /Your unsent work remains in this Chat\. You can reopen the originating conversation from History/);
 });
 
 test("Artifact return retains the saved exact version and reviews cross-conversation switches", () => {
