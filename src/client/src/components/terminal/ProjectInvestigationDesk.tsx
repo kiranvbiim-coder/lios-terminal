@@ -92,7 +92,7 @@ export function ProjectInvestigationDesk({ projectId, graph, lens, onInvestigate
           <p className="font-ui text-xs text-muted-foreground">{trail.matchedNodes.length} directly identified graph object{trail.matchedNodes.length === 1 ? "" : "s"} · {trail.totalLinks} stored adjacency link{trail.totalLinks === 1 ? "" : "s"}. Adjacency does not prove consequence or exposure.</p>
           <ProjectEvidenceGraph key={projectId + ":" + selected.id} projectId={projectId} graph={validGraph} insight={selected} />
         </section>}
-        {view === "geography" && <section aria-label="Verified geographic coordinates" className="space-y-2 rounded-lg border border-border/50 p-3">
+        {view === "geography" && <section aria-label="Recorded geographic coordinates" className="space-y-2 rounded-lg border border-border/50 p-3">
           <h4 className="inline-flex items-center gap-2 font-ui text-sm font-semibold text-foreground"><MapPinned aria-hidden="true" className="h-4 w-4"/>Geographic evidence</h4>
           <p className="font-ui text-xs leading-5 text-muted-foreground">Only current Project geography nodes with explicit numeric latitude/longitude are shown on a bundled public-domain Natural Earth world atlas. No name geocoding, device location, external map tiles or inferred coordinates.</p>
           <OfflineProjectWorldMap key={projectId + ":" + selected.id} points={localGeographic} />
