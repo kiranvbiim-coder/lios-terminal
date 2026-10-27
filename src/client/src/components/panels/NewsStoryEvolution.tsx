@@ -7,6 +7,8 @@ import { safePulseSourceUrl } from "@/lib/pulseStoryPresentation";
 import type { NewsStoryObservation } from "@/lib/newsStoryEvolution";
 
 const NewsObservedRevisionTimeline = React.lazy(() => import("./NewsObservedRevisionTimeline"));
+const RelatedPublisherTimeline = React.lazy(() => import("./NewsObservedRevisionTimeline")
+  .then(module => ({ default: module.RelatedPublisherTimeline })));
 
 function utcDateTime(value: string): string {
   const time = Date.parse(value);
@@ -25,6 +27,11 @@ export function NewsStoryEvolution({
   onSelectRelated?: (url: string) => void;
 }) {
   const [timelineVisible, setTimelineVisible] = React.useState(false);
+  const [relatedTimelineVisible, setRelatedTimelineVisible] = React.useState(false);
+  React.useEffect(() => {
+    setTimelineVisible(false);
+    setRelatedTimelineVisible(false);
+  }, [exactUrl]);
   const versions = newsStoryRevisions(history, exactUrl);
   const anchor = coverage.find(item => item.url === exactUrl);
   const related = anchor ? relatedNewsCoverage(anchor, coverage) : [];
@@ -86,6 +93,16 @@ export function NewsStoryEvolution({
         <p className="mt-1 font-ui text-xs leading-5 text-muted-foreground">
           Shared headline terms within 72 hours suggest further reading, not proof that they report the same event or corroborate its claims.
         </p>
+        {related.length > 1 && <>
+          <button type="button" aria-expanded={relatedTimelineVisible}
+            onClick={() => setRelatedTimelineVisible(visible => !visible)}
+            className="mt-3 min-h-10 rounded-md border border-border/60 px-3 py-2 font-ui text-xs text-amber-100 focus-visible:outline-2 focus-visible:outline-amber-300">
+            {relatedTimelineVisible ? "Hide publication timeline" : "Explore publication timeline"}
+          </button>
+          {relatedTimelineVisible && <React.Suspense fallback={<p role="status" className="font-ui text-xs text-muted-foreground">Loading publisher chronology…</p>}>
+            <RelatedPublisherTimeline headlines={related} />
+          </React.Suspense>}
+        </>}
         <ul className="mt-3 space-y-2">{related.map(item => (
           <li key={item.url} className="rounded-lg border border-border/60 p-2">
             <p className="font-ui text-[11px] text-amber-200">{item.source} · <time dateTime={item.publishedAt}>{utcDateTime(item.publishedAt)}</time></p>
