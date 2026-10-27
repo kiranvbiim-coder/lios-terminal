@@ -181,7 +181,7 @@ function CompareTab({ activeView, activeSymbol }: { activeView: ViewMode; active
         {showAllChanges ? "Show fewer fields" : `Show all ${slotChanges.length} changed fields`}
       </button>}
     </section>
-    <section className="rounded-2xl border border-border/55 p-4"><div className="flex flex-wrap items-center justify-between gap-3"><div><div className="font-ui text-[10px] font-semibold text-foreground">Calculation Receipt Diff</div><p className="font-ui mt-1 text-[8px] text-muted-foreground">Git-style model comparison using published inputs, parameters, outputs and warnings.</p></div>{evidence.receipts.length >= 2 && <div className="flex gap-2"><ReceiptSelect receipts={evidence.receipts} value={receiptA} onChange={setReceiptA} label="A" /><ReceiptSelect receipts={evidence.receipts} value={receiptB} onChange={setReceiptB} label="B" /></div>}</div>{receiptDiff ? <>
+    <section className="rounded-2xl border border-border/55 p-4"><div className="flex flex-wrap items-center justify-between gap-3"><div><div className="font-ui text-[10px] font-semibold text-foreground">Calculation Receipt Diff</div><p className="font-ui mt-1 text-[8px] text-muted-foreground">Git-style model comparison using published inputs, parameters, outputs and warnings.</p></div>{(evidence.receipts.length > 0 || receiptA !== null || receiptB !== null) && <div className="flex flex-wrap gap-2"><ReceiptSelect receipts={evidence.receipts} value={receiptA} onChange={setReceiptA} label="A" /><ReceiptSelect receipts={evidence.receipts} value={receiptB} onChange={setReceiptB} label="B" /></div>}</div>{receiptDiff ? <>
       <div className="mt-3 flex flex-wrap gap-3 font-ui text-xs text-muted-foreground">
         <span>{[...receiptDiff.inputs, ...receiptDiff.parameters, ...receiptDiff.outputs].filter(item => item.changed).length} changed fields</span>
         <span>{receiptDiff.warningsAdded.length} warnings added</span>
@@ -198,7 +198,7 @@ function CompareTab({ activeView, activeSymbol }: { activeView: ViewMode; active
   </div>;
 }
 
-function ReceiptSelect({ receipts, value, onChange, label }: { receipts: CalculationReceipt[]; value: string | null; onChange: (value: string | null) => void; label: string }) {
+export function ReceiptSelect({ receipts, value, onChange, label }: { receipts: CalculationReceipt[]; value: string | null; onChange: (value: string | null) => void; label: string }) {
   const missing = value !== null && !receipts.some(item => item.id === value);
   return <label className="font-ui flex items-center gap-2 text-xs text-muted-foreground">
     Receipt {label}
