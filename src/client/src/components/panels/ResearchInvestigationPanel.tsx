@@ -476,44 +476,66 @@ export default function ResearchIntelligencePanel({ symbol, role, starterQuestio
                 <span className="ml-auto self-center pr-2 font-mono text-[8px] text-muted-foreground">{detail.evidence.length} evidence / {detail.relationships.length} links</span>
               </nav>
 
-              {view === "evidence" && <section>
+              {view === "evidence" && <section className="space-y-4 p-4" aria-label="Investigation evidence library">
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                  <div><h3 className="font-ui text-lg font-semibold">Recorded evidence</h3>
+                    <p className="mt-1 font-ui text-xs text-muted-foreground">Inspect recorded sources and compare two entries without changing the ledger.</p>
+                  </div>
+                  <span className="font-ui text-xs text-muted-foreground">{visibleEvidence.length} of {detail.evidence.length} saved</span>
+                </div>
+                {!!detail.evidence.length && <div className="grid gap-2 sm:grid-cols-[1fr_180px]">
+                  <input type="search" value={evidenceQuery} onChange={e => setEvidenceQuery(e.target.value)}
+                    aria-label="Search recorded investigation evidence" placeholder="Find a claim, headline, publisher or excerpt…"
+                    className="min-h-10 min-w-0 rounded-lg border border-border/60 bg-background px-3 font-ui text-sm text-foreground" />
+                  <select aria-label="Filter recorded evidence by source type" value={evidenceClass} onChange={e => setEvidenceClass(e.target.value)}
+                    className="min-h-10 rounded-lg border border-border/60 bg-background px-3 font-ui text-sm text-foreground">
+                    <option value="all">All sources</option>
+                    {evidenceClasses.map(kind => <option key={kind} value={kind}>{kind.replaceAll("_", " ")}</option>)}
+                  </select>
+                </div>}
+                {!!compareIds.length && <div role="status" className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-amber-300/25 px-3 py-2 font-ui text-xs">
+                  <span>{compareIds.length === 1 ? "One recorded item selected. Choose another to compare." : "Two recorded items selected for comparison."}</span>
+                  <button type="button" onClick={() => setCompareIds([])} className="min-h-9 rounded border border-border/60 px-3 text-amber-200">Clear comparison</button>
+                </div>}
+                {compareIds.length === 2 && selectedComparison.length === 2 &&
+                  <ResearchEvidenceComparison first={selectedComparison[0]} second={selectedComparison[1]} onClear={() => setCompareIds([])} />}
+
                 {detail.evidence.length === 0 ? (
                   <div className="p-8 text-center font-terminal text-[9px] text-muted-foreground">No evidence attached. Run a source search or add an internal note.</div>
-                ) : detail.evidence.map((item) => {
+                ) : visibleEvidence.length === 0 ? (
+                  <p role="status" className="rounded-lg border border-border/50 p-5 font-ui text-sm text-muted-foreground">No recorded evidence matches your filters.</p>
+                ) : visibleEvidence.map((item) => {
                   const score = qualityScore(item.sourceQuality);
                   return (
-                    <article key={item.id} className="grid grid-cols-[28px_minmax(0,1fr)] gap-3 p-4 border-b border-border/70">
-                      <div className="w-7 h-7 border border-border flex items-center justify-center text-amber-300 bg-white/[0.02]">
-                        {item.evidenceType === "filing" ? <FileText className="w-3.5 h-3.5" /> : item.evidenceType === "news" ? <Newspaper className="w-3.5 h-3.5" /> : <StickyNote className="w-3.5 h-3.5" />}
-                      </div>
-                      <div className="min-w-0">
-                        <div className="flex flex-wrap items-center gap-2">
-                          <span className="font-terminal text-[8px] text-muted-foreground uppercase">{item.evidenceType.replace("_", " ")} / {item.evidenceKind}</span>
-                          <span className={`font-mono text-[8px] ${score >= 80 ? "text-emerald-300" : score >= 60 ? "text-amber-300" : "text-muted-foreground"}`}>SOURCE {score}/100</span>
-                          <span className="ml-auto font-terminal text-[8px] text-muted-foreground">{formatDate(item.publishedAt || item.createdAt)}</span>
-                        </div>
-                        <h3 className="mt-1 font-terminal text-[11px] leading-snug">{item.title}</h3>
-                        {item.excerpt && <p className="mt-2 text-[11px] text-muted-foreground leading-relaxed line-clamp-4">{item.excerpt}</p>}
-                        {item.annotation && <p className="mt-2 border-l-2 border-amber-400/50 pl-2 text-[10px] leading-relaxed">{item.annotation}</p>}
-                        <div className="mt-2 flex flex-wrap items-center gap-3 font-terminal text-[8px] text-muted-foreground">
-                          <span>{item.sourceName}</span><span>{item.provider}</span><span>Published {formatDate(item.publishedAt)}</span><span>Effective {formatDate(item.effectiveAt)}</span><span>Retrieved {formatDate(item.retrievedAt)}</span>
-                          {item.sourceUrl && <a href={item.sourceUrl} target="_blank" rel="noreferrer" className="text-amber-300 flex items-center gap-1 hover:underline">Open source <ExternalLink className="w-3 h-3" /></a>}
-                          {canAuthor && <button onClick={() => { setAnnotationId(item.id); setAnnotation(item.annotation || ""); }} className="text-amber-300 hover:underline">Annotate</button>}
-                        </div>
-                        {annotationId === item.id && typeof previousDraft === "string" && previousDraft && <details className="text-xs"><summary>Earlier shared annotation draft · evidence assignment was not recorded</summary><pre className="whitespace-pre-wrap">{previousDraft}</pre><button type="button" onClick={() => setAnnotation(previousDraft)}>Use this reviewed draft for this evidence</button></details>}
-                        {annotationId === item.id && <form onSubmit={(event) => { event.preventDefault(); updateAnnotation.mutate(); }} className="mt-2 flex gap-2">
-                          <input autoFocus value={annotation} onChange={(event) => setAnnotation(event.target.value)} maxLength={10000} placeholder="ANALYST ANNOTATION" className="h-8 min-w-0 flex-1 bg-black border border-border px-2 text-[10px] outline-none focus:border-amber-400/50" />
-                          <button disabled={updateAnnotation.isPending} title="Save annotation" className="w-8 h-8 border border-amber-400/40 text-amber-300 flex items-center justify-center"><Save className="w-3.5 h-3.5" /></button>
+                    <ResearchEvidenceCard key={item.id} item={item} score={score}
+                      selectedForCompare={compareIds.includes(item.id)} onCompare={() => toggleEvidenceCompare(item.id)}
+                      annotationControls={canAuthor ? <div className="mt-2 space-y-2">
+                        <button type="button" onClick={() => { setAnnotationId(item.id); setAnnotation(item.annotation || ""); }}
+                          className="min-h-10 rounded-lg px-3 font-ui text-xs text-amber-200 hover:bg-amber-300/[0.05]">Annotate this evidence</button>
+                        {annotationId === item.id && typeof previousDraft === "string" && previousDraft &&
+                          <details className="rounded-lg border border-border/50 p-2 font-ui text-xs">
+                            <summary>Earlier shared annotation draft · evidence assignment was not recorded</summary>
+                            <pre className="mt-2 whitespace-pre-wrap break-words">{previousDraft}</pre>
+                            <button type="button" className="mt-2 min-h-10 text-amber-200" onClick={() => setAnnotation(previousDraft)}>Use this reviewed draft for this evidence</button>
+                          </details>}
+                        {annotationId === item.id && <form onSubmit={event => { event.preventDefault(); updateAnnotation.mutate(); }} className="flex min-w-0 gap-2">
+                          <input autoFocus value={annotation} onChange={event => setAnnotation(event.target.value)}
+                            maxLength={10000} placeholder="Your analyst annotation" aria-label={`Analyst annotation for evidence E${item.id}`}
+                            className="min-h-10 min-w-0 flex-1 rounded-lg border border-border/70 bg-background px-3 font-ui text-sm text-foreground" />
+                          <button type="submit" disabled={updateAnnotation.isPending} title="Save annotation" aria-label="Save annotation"
+                            className="flex min-h-10 min-w-10 items-center justify-center rounded-lg border border-amber-300/40 text-amber-200 disabled:opacity-50">
+                            <Save className="h-4 w-4" aria-hidden="true" />
+                          </button>
                         </form>}
-                      </div>
-                    </article>
+                      </div> : undefined}
+                    />
                   );
                 })}
-                {detail.relationships.length > 0 && <div className="border-t border-border">
+                {detail.relationships.length > 0 && <div className="mt-5 space-y-2 border-t border-border/50 pt-4" aria-label="Recorded evidence relationships">
                   <div className="px-4 py-2 font-terminal text-[8px] uppercase text-muted-foreground">Evidence graph</div>
-                  {detail.relationships.map((relationship) => <div key={relationship.id} className="px-4 py-2 border-t border-border/60 font-terminal text-[9px] flex items-center gap-2">
-                    <span>E{relationship.fromEvidenceId}</span><GitCompareArrows className="w-3 h-3 text-amber-300" /><span className="text-amber-300 uppercase">{relationship.relationshipType.replace("_", " ")}</span><span>E{relationship.toEvidenceId}</span>
-                  </div>)}
+                  {detail.relationships.map((relationship) => { const from = detail.evidence.find(item => item.id === relationship.fromEvidenceId); const to = detail.evidence.find(item => item.id === relationship.toEvidenceId); return <div key={relationship.id} className="flex flex-wrap items-center gap-2 rounded-lg border border-border/55 bg-white/[0.025] p-3 font-ui text-xs">
+                    <span className="min-w-0 break-words text-foreground">{from?.title ?? `E${relationship.fromEvidenceId} (unavailable)`}</span><GitCompareArrows className="h-4 w-4 shrink-0 text-amber-300" aria-hidden="true" /><span className="rounded border border-border/50 px-2 py-1 font-semibold text-amber-200">{relationship.relationshipType.replaceAll("_", " ")}</span><span className="min-w-0 break-words text-foreground">{to?.title ?? `E${relationship.toEvidenceId} (unavailable)`}</span>{relationship.note && <p className="w-full text-muted-foreground">{relationship.note}</p>}
+                  </div>; })}
                 </div>}
               </section>}
 
