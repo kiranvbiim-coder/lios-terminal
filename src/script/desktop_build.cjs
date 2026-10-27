@@ -81,6 +81,23 @@ try {
   process.exit(1);
 }
 
+// Do not silently package the public source snapshot without its private,
+// independently verified instrument reference catalog. This performs no network
+// access or credential loading during the build. Recover explicitly first.
+const instrumentGate = spawnSync(process.execPath, ["script/recover_instrument_catalogs.cjs", "--verify"], {
+  cwd: path.join(__dirname, ".."),
+  env,
+  stdio: "inherit",
+});
+if (instrumentGate.error) {
+  console.error(instrumentGate.error.message);
+  process.exit(1);
+}
+if (instrumentGate.status !== 0) {
+  console.error("Instrument reference catalogs are missing/invalid. Run: node script/recover_instrument_catalogs.cjs --restore --github");
+  process.exit(instrumentGate.status ?? 1);
+}
+
 // Never package an absent/stale dist tree from a previous source revision.
 // The same build owner produces the renderer, Home server and restore worker.
 const sourceBuild = spawnSync(process.execPath, ["--import", "tsx", "script/build.ts"], {
