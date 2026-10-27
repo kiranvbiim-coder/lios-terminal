@@ -116,7 +116,7 @@ test("SI07 release CLI refuses duplicate flags and has no implicit trust anchor"
   assert.deepEqual(options(["--version", version, "--commit", commit]), { version, commit });
   assert.throws(() => options(["--version", version, "--version", version]), /Duplicate flag/);
   assert.throws(() => options(["--private-key", "--out"]), /Invalid beta release flag/);
-  const source = fs.readFileSync(new URL("./script/beta_release_manifest.cjs", "file://" + __filename), "utf8");
+  const source = fs.readFileSync(path.join(__dirname, "script", "beta_release_manifest.cjs"), "utf8");
   assert.match(source, /trusted-public-key/);
   assert.match(source, /outside the public repository/);
   assert.doesNotMatch(source, /autoDownload\s*=\s*true|quitAndInstall\(/);
