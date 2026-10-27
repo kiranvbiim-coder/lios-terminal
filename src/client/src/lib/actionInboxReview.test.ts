@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { parseActionInboxReview, safeInboxEvidenceUrl, buildActionInboxChatDraft, assessActionInboxSnapshotFreshness, ACTION_INBOX_MAX_SNAPSHOT_AGE_MS, ACTION_INBOX_FUTURE_CLOCK_TOLERANCE_MS } from "./actionInboxReview";
+import { parseActionInboxReview, safeInboxEvidenceUrl, buildActionInboxChatDraft, assessActionInboxSnapshotFreshness, ACTION_INBOX_MAX_SNAPSHOT_AGE_MS, ACTION_INBOX_FUTURE_CLOCK_TOLERANCE_MS, confirmActionInboxHandoff } from "./actionInboxReview";
 import type { ActionInboxItem } from "@shared/waveDContracts";
 
 const asOf = "2026-10-27T10:00:00.000Z";
@@ -135,4 +135,39 @@ test("Phase 3 alert age does not become snapshot freshness or permission proof",
   assert.equal(review.status, "ready");
   assert.equal(assessActionInboxSnapshotFreshness(review.asOf, Date.parse(asOf)), "current");
   assert.equal(review.items[0].createdAt, "2020-01-01T00:00:00.000Z");
+});
+
+test("Phase 3 a Chat draft requires the SAME server-authorized alert and evidence on a fresh second read", () => {
+  const alert = item("exact", { reason: "Original source report", status: "open" });
+  const displayed = parseActionInboxReview(envelope([alert]));
+  const rechecked = parseActionInboxReview(envelope([alert]));
+  assert.equal(confirmActionInboxHandoff(displayed, rechecked, alert.id, Date.parse(asOf))?.reason, alert.reason);
+  assert.equal(confirmActionInboxHandoff(displayed, rechecked, "missing", Date.parse(asOf)), null);
+  assert.equal(confirmActionInboxHandoff(displayed, parseActionInboxReview(envelope([])), alert.id, Date.parse(asOf)), null);
+  assert.equal(confirmActionInboxHandoff(displayed, { ...rechecked, status: "unavailable" }, alert.id, Date.parse(asOf)), null);
+});
+
+test("Phase 3 revalidation detects revocation, changed metadata, changed status and rotated evidence", () => {
+  const alert = item("same");
+  const shown = parseActionInboxReview(envelope([alert]));
+  const mutations: Array<Partial<ActionInboxItem>> = [
+    { title: "Rewritten" }, { sourceCardId: "card:different" },
+    { reason: "New underlying claim" }, { priority: "critical" },
+    { status: "snoozed" }, { createdAt: "2026-10-20T09:00:00.000Z" },
+    { evidence: [] }, { evidence: [{ id: "changed", source: "Other source" }] },
+    { suggestedActions: ["update"] },
+  ];
+  for (const change of mutations) {
+    const updated = parseActionInboxReview(envelope([item("same", change)]));
+    assert.equal(confirmActionInboxHandoff(shown, updated, "same", Date.parse(asOf)), null);
+  }
+});
+
+test("Phase 3 handoff cannot use stale or future-dated first or second server snapshot", () => {
+  const shown = parseActionInboxReview(envelope([item("a")]));
+  const updated = parseActionInboxReview(envelope([item("a")]));
+  const late = Date.parse(asOf) + ACTION_INBOX_MAX_SNAPSHOT_AGE_MS + 1;
+  assert.equal(confirmActionInboxHandoff(shown, updated, "a", late), null);
+  assert.equal(confirmActionInboxHandoff(shown, { ...updated, asOf: "2026-11-27T00:00:00.000Z" }, "a", Date.parse(asOf)), null);
+  assert.equal(confirmActionInboxHandoff({ ...shown, asOf: null }, updated, "a", Date.parse(asOf)), null);
 });
