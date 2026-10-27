@@ -126,6 +126,7 @@ export function ProjectHome({
   const [projectDepthOpen, setProjectDepthOpen] = useState(false);
   const [watchroomsOpen, setWatchroomsOpen] = useState(false);
   const [continuityOpen, setContinuityOpen] = useState(false);
+  const [investigationOpen, setInvestigationOpen] = useState(false);
   const [nameDraft, setNameDraft] = useState(project.name);
   const renameInFlight = useRef(false);
   const [renameBusy, setRenameBusy] = useState(false);
@@ -160,6 +161,7 @@ export function ProjectHome({
     setProjectDepthOpen(false);
     setWatchroomsOpen(false);
     setContinuityOpen(false);
+    setInvestigationOpen(false);
     setEnvironmentId(getProjectVisualEnvironmentPin(project.id) ?? "");
     setRenameBusy(false);
     setRenameError(null);
@@ -303,6 +305,18 @@ export function ProjectHome({
           </div>}
         </section>
 
+        <section className="mt-3 rounded-xl border border-border/60 bg-white/[0.015] p-3" data-testid="project-investigation-entry">
+          <button type="button" aria-expanded={investigationOpen}
+            aria-controls={`project-investigation-${project.id}`}
+            onClick={() => setInvestigationOpen(value => !value)}
+            className="flex min-h-11 w-full items-center justify-between gap-3 px-2 text-left font-ui text-sm font-semibold text-foreground focus-visible:ring-2 focus-visible:ring-amber-300/70">
+            <span>Investigation</span><span className="text-sm font-normal text-muted-foreground">{investigationOpen ? "Hide" : "Open"}</span>
+          </button>
+          {investigationOpen && <div id={`project-investigation-${project.id}`} className="border-t border-border/55 px-1 pb-1 pt-3">
+            <ProjectIntelligencePanel projectId={project.id} onInvestigate={prompt => onNewChat(prompt)} />
+          </div>}
+        </section>
+
         {collectionsFailed && <p role="alert" className="mt-5 rounded-lg border border-amber-300/30 p-3 text-sm text-amber-200">Some saved Project items could not be loaded. Results may be incomplete. <button type="button" className="underline" onClick={() => { void chatsQuery.refetch(); void resourcesQuery.refetch(); void sessionsQuery.refetch(); }}>Retry</button></p>}
         <details className="mt-6 rounded-xl border border-border/55" data-testid="project-saved-work">
           <summary className="cursor-pointer select-none px-4 py-3 font-ui text-[14px] font-semibold text-foreground">Saved work</summary>
@@ -436,7 +450,6 @@ export function ProjectHome({
           {projectDepthOpen && (
             <div className="mt-3 space-y-3">
               <ProjectPersonalFinancePanel projectId={project.id} onAnalyze={onAnalyzePersonalFinance} />
-              <ProjectIntelligencePanel projectId={project.id} />
               <ProjectArtifactsPanel
                 projectId={project.id}
                 sessions={sessions}
