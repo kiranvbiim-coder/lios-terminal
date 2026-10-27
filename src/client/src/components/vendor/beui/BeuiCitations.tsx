@@ -1,3 +1,4 @@
+import * as React from "react";
 /**
  * Adapted from beUI (starc007/ui-components), components/agents/citations.tsx.
  * MIT source @601fa21a2b68cfa5f6c1f0b6dcb29528c32472a1
