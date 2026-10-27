@@ -27,7 +27,11 @@ test("file drop is readable, keyboard browseable and does not import without exp
   assert.match(html, /Import reviewed spreadsheet/);
   assert.match(html, /Selecting a file never uploads it automatically/);
   assert.match(html, /disabled/);
-  assert.doesNotMatch(html, /<img|previewUrl|createObjectURL|http:|https:/i);
+  // Lucide inline SVG uses the standard xmlns="http://www.w3.org/2000/svg";
+  // this namespace is not a network request, image, or uploaded file.
+  assert.doesNotMatch(html, /<img\\b|<iframe\\b|previewUrl|createObjectURL/i);
+  const source = readFileSync(new URL("./ProjectSpreadsheetImportField.tsx", import.meta.url), "utf8");
+  assert.doesNotMatch(source, /\\bfetch\\s*\\(|XMLHttpRequest|URL\\.createObjectURL/);
 });
 
 test("existing Project Library has one canonical upload route instead of a duplicate uploader", () => {
