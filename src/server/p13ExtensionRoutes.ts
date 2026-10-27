@@ -42,11 +42,19 @@ export function registerP13ExtensionRoutes(app: Express): void {
     try {
       const user = req.user!;
       const connections = await listSourceConnections(user.id);
+      let managementAvailable = false;
+      try {
+        getP13ExtensionService().catalog(await currentOwner(req));
+        managementAvailable = true;
+      } catch (error) {
+        if (!(error instanceof ExtensionAdmissionError)) throw error;
+      }
       res.json(chatExtensionCatalog({
         plugins: getP13PluginRuntimeHost().plugins.list(),
         connections,
         userId: user.id,
         organizationId: user.organizationId ?? null,
+        managementAvailable,
       }));
     } catch (error) { next(error); }
   });
