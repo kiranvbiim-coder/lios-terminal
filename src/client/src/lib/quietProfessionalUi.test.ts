@@ -48,7 +48,7 @@ test("Chat's default surface has one concise question and optional first-use act
   assert.match(empty, /aria-label=\{\`Use example: \$\{starter\.label\}\`\}/);
   assert.match(empty, /data-first-use-primary="ask"/);
   assert.match(empty, /<details className="lios-first-use-options/);
-  assert.match(empty, /<summary[^>]*>More options<\/summary>/);
+  assert.match(empty, /<summary[^>]*>More options \(optional\)<\/summary>/);
   assert.match(empty, /data-first-use-connect="optional"/);
   assert.match(empty, /LIOS_FIRST_USE_CONTRACT\.shellHint/);
 });
