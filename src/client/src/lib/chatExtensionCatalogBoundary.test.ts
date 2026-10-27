@@ -7,6 +7,10 @@ test("Phase 3 plugin browser lives in Chat and never replaces P13 installer or M
   const shell = readFileSync(new URL("../components/terminal/ProjectExperienceShell.tsx", import.meta.url), "utf8");
   assert.match(ui, /\/api\/extensions\/chat-catalog/);
   assert.match(ui, /GovernedExtensionsPanel/);
+  assert.match(ui, /queryClient\.invalidateQueries/);
+  assert.match(ui, /onCatalogChanged=/);
+  const manager = readFileSync(new URL("../components/GovernedExtensionsPanel.tsx", import.meta.url), "utf8");
+  assert.match(manager, /onCatalogChanged\?\.\(\)/);
   assert.match(ui, /MCP tool calls remain Project-scoped/);
   assert.match(ui, /not automatically callable in Chat/);
   assert.match(shell, /<ChatExtensionsDialog/);
