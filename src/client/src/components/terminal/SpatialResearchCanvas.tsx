@@ -9,6 +9,7 @@ import { getTerminalCapability } from "@/lib/terminalCatalog";
 import type { TerminalUxPreferences } from "@/lib/terminalUxPreferences";
 import { isSoftwareRendered } from "@/lib/desktopRendering";
 import { resolveSpatialMotionBudget } from "@/lib/spatialMotionPolicy";
+import { resolveSpatialPresentation } from "@/lib/spatialPresentationPolicy";
 import { reconcileSpatialCanvasReturnState, type SpatialCanvasReturnState } from "@/lib/spatialStudioContinuity";
 
 interface Props {
@@ -17,7 +18,7 @@ interface Props {
   initialReturnState?: SpatialCanvasReturnState;
   onReturnStateChange?: (state: SpatialCanvasReturnState) => void;
 }
-interface DragState { id: string; pointerId: number; kind: "node" | "companion" }
+interface DragState { id: string; pointerId: number; kind: "node" | "companion"; startPoint?: SpatialPoint }
 const MOVE_KEYS = { ArrowLeft: "left", ArrowRight: "right", ArrowUp: "up", ArrowDown: "down" } as const;
 
 /**
@@ -27,6 +28,7 @@ const MOVE_KEYS = { ArrowLeft: "left", ArrowRight: "right", ArrowUp: "up", Arrow
 export default function SpatialResearchCanvas({ onOpen, initialReturnState, onReturnStateChange, preferences }: Props) {
   const [items, setItems] = useState<ResearchTrayItem[]>(() => loadResearchTray());
   const [version, setVersion] = useState(0);
+  const [contentWidth, setContentWidth] = useState<number | null>(null);
   const [mode, setMode] = useState<SpatialLayoutMode>(initialReturnState?.mode ?? "map");
   const [kindFilter, setKindFilter] = useState<"all" | ResearchTrayItem["kind"]>(initialReturnState?.kindFilter ?? "all");
   const [searchQuery, setSearchQuery] = useState("");
@@ -39,9 +41,11 @@ export default function SpatialResearchCanvas({ onOpen, initialReturnState, onRe
   const [dragPreview, setDragPreview] = useState<{ id: string; point: SpatialPoint } | null>(null);
   const dragPreviewRef = useRef<{ id: string; point: SpatialPoint } | null>(null);
   const boardRef = useRef<HTMLDivElement>(null);
-  const companionHeading = useRef<HTMLButtonElement>(null);
+  const sectionRef = useRef<HTMLElement>(null);
+  const companionRegion = useRef<HTMLElement>(null);
   const dragRef = useRef<DragState | null>(null);
   const positions = useMemo(() => loadResearchCanvasPositions(), [version]);
+  const presentation = useMemo(() => resolveSpatialPresentation(mode, contentWidth), [mode, contentWidth]);
   const kindItems = useMemo(() => kindFilter === "all" ? items : items.filter(item => item.kind === kindFilter), [items, kindFilter]);
   const visibleItems = useMemo(() => findSpatialResearchPins(kindItems, searchQuery), [kindItems, searchQuery]);
   const quickHits = useMemo(() => searchQuery.trim() ? visibleItems.slice(0, 5) : [], [visibleItems, searchQuery]);
@@ -56,6 +60,30 @@ export default function SpatialResearchCanvas({ onOpen, initialReturnState, onRe
   ] as const)), [model, dragPreview]);
   const selected = model.nodes.find(node => node.item.id === inspectedId)?.item ?? null;
 
+  useEffect(() => {
+    // Match the actual CSS container size within docked panes and at zoom.
+    // Unknown size defaults to a safe stacked reading layout.
+    const container = sectionRef.current;
+    if (!container) return;
+    const measure = () => {
+      const next = container.getBoundingClientRect().width;
+      setContentWidth(previous => previous === next ? previous : next);
+    };
+    measure();
+    if (typeof ResizeObserver !== "undefined") {
+      const observer = new ResizeObserver(measure);
+      observer.observe(container);
+      return () => observer.disconnect();
+    }
+    window.addEventListener("resize", measure);
+    return () => window.removeEventListener("resize", measure);
+  }, []);
+  useEffect(() => {
+    if (!presentation.stacked) return;
+    dragRef.current = null;
+    dragPreviewRef.current = null;
+    setDragPreview(null);
+  }, [presentation.stacked]);
   useEffect(() => subscribeResearchTray(setItems), []);
   useEffect(() => subscribeResearchCanvas(() => setVersion(value => value + 1)), []);
   useEffect(() => { if (inspectedId && !selected) setInspectedId(null); }, [inspectedId, selected]);
@@ -93,21 +121,23 @@ export default function SpatialResearchCanvas({ onOpen, initialReturnState, onRe
     catch { setAnnouncement("Could not save the new position to this device."); }
   };
   const startDrag = (event: ReactPointerEvent<HTMLButtonElement>, kind: DragState["kind"], id: string) => {
-    if (mode === "timeline" && kind === "node") return;
+    if (kind === "node" ? !presentation.canMoveNodes : !presentation.canMoveCompanion) return;
     if (event.button !== 0) return;
     event.preventDefault();
     dragPreviewRef.current = null;
     setDragPreview(null);
-    dragRef.current = { kind, id, pointerId: event.pointerId };
+    dragRef.current = { kind, id, pointerId: event.pointerId, startPoint: kind === "companion" ? companionPoint : undefined };
     event.currentTarget.setPointerCapture(event.pointerId);
   };
   const continueDrag = (event: ReactPointerEvent<HTMLButtonElement>) => {
     if (dragRef.current?.pointerId !== event.pointerId) return;
+    if (presentation.stacked) return;
     const point = fromPointer(event.clientX, event.clientY);
     if (point) move(dragRef.current.kind, dragRef.current.id, point, false);
   };
   const stopDrag = (event: ReactPointerEvent<HTMLButtonElement>) => {
     if (dragRef.current?.pointerId !== event.pointerId) return;
+    if (presentation.stacked) { cancelDrag(event); return; }
     const drag = dragRef.current;
     dragRef.current = null;
     const preview = dragPreviewRef.current;
@@ -119,14 +149,16 @@ export default function SpatialResearchCanvas({ onOpen, initialReturnState, onRe
   // A canceled pointer gesture (system gesture, lost touch capture) never saves.
   const cancelDrag = (event: ReactPointerEvent<HTMLButtonElement>) => {
     if (dragRef.current?.pointerId !== event.pointerId) return;
+    const canceled = dragRef.current;
     dragRef.current = null;
     dragPreviewRef.current = null;
     setDragPreview(null);
+    if (canceled?.kind === "companion" && canceled.startPoint) setCompanionPoint(canceled.startPoint);
     if (event.currentTarget.hasPointerCapture(event.pointerId)) event.currentTarget.releasePointerCapture(event.pointerId);
-    setAnnouncement("Move canceled. The prior saved pin position is unchanged.");
+    setAnnouncement("Move canceled. The previous position is unchanged.");
   };
   const keyboardMove = (event: ReactKeyboardEvent<HTMLButtonElement>, kind: DragState["kind"], id: string) => {
-    if (!(event.key in MOVE_KEYS) || (mode === "timeline" && kind === "node")) return;
+    if (!(event.key in MOVE_KEYS) || (kind === "node" ? !presentation.canMoveNodes : !presentation.canMoveCompanion)) return;
     event.preventDefault();
     const direction = MOVE_KEYS[event.key as keyof typeof MOVE_KEYS];
     const point = kind === "companion" ? companionPoint : points.get(id);
@@ -136,7 +168,7 @@ export default function SpatialResearchCanvas({ onOpen, initialReturnState, onRe
   };
   const openInspection = (id: string) => {
     setInspectedId(id);
-    requestAnimationFrame(() => companionHeading.current?.focus());
+    requestAnimationFrame(() => companionRegion.current?.focus());
   };
   const navigateTrail = (direction: "previous" | "next") => {
     if (!selectedTrail) return;
@@ -144,7 +176,7 @@ export default function SpatialResearchCanvas({ onOpen, initialReturnState, onRe
     if (id) openInspection(id);
   };
   return (
-    <section className="lios-spatial-research space-y-3" aria-label="Spatial Research Canvas"
+    <section ref={sectionRef} className="lios-spatial-research space-y-3" aria-label="Spatial Research Canvas"
       data-motion-budget={resolveSpatialMotionBudget({ ...preferences, softwareRendered: isSoftwareRendered() })}>
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
@@ -301,7 +333,7 @@ export default function SpatialResearchCanvas({ onOpen, initialReturnState, onRe
           <span>{mode === "timeline" ? "Earlier pins" : "Evidence & context"}</span>
           <span>{mode === "timeline" ? "Later pins" : "Outputs & decisions"}</span>
         </div>
-        {model.edges.length > 0 && (
+        {presentation.showDecorativeEdges && model.edges.length > 0 && (
           <svg className="lios-spatial-links" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">
             {model.edges.map(edge => {
               const from = points.get(edge.fromId);
@@ -336,7 +368,7 @@ export default function SpatialResearchCanvas({ onOpen, initialReturnState, onRe
                   <strong className="block truncate text-sm">{item.title}</strong>
                   <small className="block truncate text-xs text-muted-foreground">{capability.label} · {item.kind}</small>
                 </span>
-                {mode === "map" && <button
+                {presentation.canMoveNodes && <button
                   type="button"
                   className="lios-spatial-drag"
                   title={`Move ${item.title}; use arrow keys or drag`}
@@ -360,11 +392,11 @@ export default function SpatialResearchCanvas({ onOpen, initialReturnState, onRe
             </article>
           );
         })}
-        {selected && <aside className="lios-spatial-companion" aria-label="Insight companion" style={{ left: `${companionPoint.x}%`, top: `${companionPoint.y}%` }}>
+        {selected && <aside ref={companionRegion} tabIndex={-1} className="lios-spatial-companion" aria-label="Insight companion" style={{ left: `${companionPoint.x}%`, top: `${companionPoint.y}%` }}>
           <div className="lios-spatial-companion-head">
-            <button ref={companionHeading} type="button" className="lios-spatial-companion-grip" title="Move companion; use arrow keys or drag" aria-label="Move insight companion with arrow keys or pointer" onPointerDown={event => startDrag(event, "companion", selected.id)} onPointerMove={continueDrag} onPointerUp={stopDrag} onPointerCancel={cancelDrag} onKeyDown={event => keyboardMove(event, "companion", selected.id)}>
+            {presentation.canMoveCompanion ? <button type="button" className="lios-spatial-companion-grip" title="Move companion; use arrow keys or drag" aria-label="Move insight companion with arrow keys or pointer" onPointerDown={event => startDrag(event, "companion", selected.id)} onPointerMove={continueDrag} onPointerUp={stopDrag} onPointerCancel={cancelDrag} onKeyDown={event => keyboardMove(event, "companion", selected.id)}>
               <Grip size={16} aria-hidden="true" /> Insight companion
-            </button>
+            </button> : <span className="lios-spatial-companion-grip">Insight companion</span>}
             <button type="button" onClick={() => setInspectedId(null)} aria-label="Close insight companion"><X size={16} /></button>
           </div>
           <div className="lios-spatial-companion-body">
@@ -378,7 +410,7 @@ export default function SpatialResearchCanvas({ onOpen, initialReturnState, onRe
         </aside>}
       </div>
       <p className="font-ui text-xs leading-5 text-muted-foreground" role="status" aria-live="polite">
-        {announcement || (mode === "map" ? "Drag a pin's handle or use its arrow keys to arrange. Inspect opens one movable companion." : "Timeline orders pins by when they were saved locally; positions are read-only here.")}
+        {announcement || presentation.layoutHint}
         {model.hiddenCount > 0 ? ` Showing the first ${model.nodes.length} of ${visibleItems.length} matching pins; filter by kind to narrow this view.` : ""}
         {kindFilter !== "all" || searchQuery.trim() ? ` Displaying ${visibleItems.length} of ${items.length} saved pins after active filters.` : ""}
       </p>
