@@ -220,11 +220,11 @@ main[data-visual-host="true"]:has(.lios-visual-canvas[data-render-policy="low-re
 /* Phase 2 — an opt-in spatial research lens inside the EXISTING analytical
  * studio, never a second full-screen terminal or new artifact authority.
  * Motion and depth are cosmetic: keyboard, touch and low-resource remain usable. */
-.lios-spatial-research { min-width: 0; color: var(--lios-text-primary, #eee); }
+.lios-spatial-research { min-width: 0; container-type: inline-size; color: var(--lios-text-primary, #eee); }
 .lios-spatial-control {
   display: inline-flex; min-height: 40px; align-items: center; justify-content: center;
   gap: 7px; border: 1px solid var(--lios-border-default, rgb(255 255 255 / .2));
-  border-radius: 10px; padding: 7px 13px; font: 500 13px/1.4 inherit;
+  border-radius: 10px; padding: 7px 13px; font-family: inherit; font-size: 13px; font-weight: 500; line-height: 1.4;
   color: var(--lios-text-secondary, #bbb);
   background: var(--lios-bg-panel, rgb(22 24 28 / .95));
 }
@@ -329,7 +329,7 @@ main[data-visual-host="true"]:has(.lios-visual-canvas[data-render-policy="low-re
     border-color: var(--lios-border-strong, #8790a2);
   }
 }
-@media (max-width: 760px) {
+@container (max-width: 760px) {
   .lios-spatial-board, .lios-spatial-board[data-expanded="true"] {
     height: min(70dvh, 650px); min-height: 340px; overflow-y: auto;
     display: flex; flex-direction: column; gap: 10px; padding: 14px;
@@ -378,7 +378,7 @@ main[data-visual-host="true"]:has(.lios-visual-canvas[data-render-policy="low-re
 .lios-spatial-board[data-layout="list"] .lios-spatial-companion { order: 0; }
 .lios-spatial-board[data-layout="list"] .lios-spatial-empty { position: relative; min-height: 220px; }
 .lios-spatial-board[data-layout="list"] .lios-spatial-companion { max-height: none; }
-@media (max-width: 760px) {
+@container (max-width: 760px) {
   /* On phones layout changes to a scrollable list instead of decorative overlapping nodes. */
   .lios-spatial-drag { display: none; }
 }
