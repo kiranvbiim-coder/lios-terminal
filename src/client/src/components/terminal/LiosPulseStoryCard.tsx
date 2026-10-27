@@ -13,6 +13,7 @@ import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 import { ArrowUpRight, BookOpenText, ChevronDown, ExternalLink, Radar, Sparkles } from "lucide-react";
 import { pulseStoryQuestion, pulseStoryTimestamp, safePulseSourceUrl, pulseStoryMediaSourceIds, type PulseStoryView } from "@/lib/pulseStoryPresentation";
 import { LicensedEditorialImage } from "./LicensedEditorialImage";
+import { eligibleEditorialMedia } from "@shared/editorialMedia";
 
 interface Props {
   card: PulseStoryView;
@@ -33,6 +34,7 @@ export default function LiosPulseStoryCard({ card, featured = false, onAsk, onOp
   const reduceMotion = useReducedMotion();
   const evidence = card.evidence ?? [];
   const timestamp = pulseStoryTimestamp(card.createdAt);
+  const approvedMedia = eligibleEditorialMedia(card.media, pulseStoryMediaSourceIds(evidence), new Date().toISOString());
   const focusLabel = card.kind === "news" ? "News" : card.kind === "research" ? "Research" : card.kind === "alert" ? "Signal" : card.kind === "market_move" ? "Market" : "Intelligence";
 
   return (
@@ -94,6 +96,12 @@ export default function LiosPulseStoryCard({ card, featured = false, onAsk, onOp
                   <h4 className="font-ui text-xs font-semibold uppercase tracking-wider text-amber-200">Why it matters</h4>
                   <p className="mt-1.5 font-ui text-sm leading-6 text-foreground/85">{card.whyItMattersToUser || card.whyItMatters}</p>
                 </div>
+              )}
+              {approvedMedia?.mediaSourcePage && (
+                <a href={approvedMedia.mediaSourcePage} target="_blank" rel="noopener noreferrer" referrerPolicy="no-referrer"
+                  className="inline-block font-ui text-sm text-amber-200 underline underline-offset-2 focus-visible:ring-2 focus-visible:ring-amber-300/70">
+                  Image source and license
+                </a>
               )}
               <section aria-label="Recorded evidence">
                 <div className="mb-2 flex items-center gap-2 font-ui text-xs font-semibold text-foreground">
