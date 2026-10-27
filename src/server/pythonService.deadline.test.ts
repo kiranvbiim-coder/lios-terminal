@@ -29,6 +29,10 @@ test("Python request deadline and cancellation cover streamed result and error b
       res.writeHead(400, { "content-type": "application/json" });
       res.end('{"detail":"Singular matrix"}'); return;
     }
+    if (route === "/backend-failure") {
+      res.writeHead(502, { "content-type": "application/json" });
+      res.end('{"detail":"PRIVATE_CUSTOMER_SOURCE_AND_TRACEBACK_NEVER_ECHO"}'); return;
+    }
     res.writeHead(route === "/stall-error" ? 400 : 200, { "content-type": "application/json" });
     res.write('{"unfinished":');
     // The connection deliberately never completes: only client abort should release it.
@@ -65,6 +69,17 @@ test("Python request deadline and cancellation cover streamed result and error b
     await assert.rejects(result, error => error instanceof Error && error.name === "AbortError"
       && !error.message.includes("PRIVATE_ABORT_SENTINEL"));
     headersArrived = undefined;
+  });
+  await t.test("real HTTP 502 retains its status but cannot echo a private backend body", async () => {
+    await assert.rejects(
+      callPythonService("/backend-failure", {}, { timeoutMs: 500 }),
+      error => {
+        assert.ok(error instanceof Error);
+        assert.match(error.message, /HTTP 502/);
+        assert.doesNotMatch(error.message, /PRIVATE_CUSTOMER_SOURCE_AND_TRACEBACK_NEVER_ECHO/);
+        return true;
+      },
+    );
   });
   await t.test("complete result and model input rejection retain their semantics", async () => {
     assert.deepEqual(await callPythonService("/complete", {}, { timeoutMs: 500 }), { mean: 2 });

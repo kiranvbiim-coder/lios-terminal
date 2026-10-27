@@ -321,8 +321,11 @@ export function startPythonService(): Promise<boolean> {
         [SIDECAR_TOKEN_ENV]: SIDECAR_TOKEN,
       }),
       captureOutput: false,
-      onStdout: (chunk) => log(chunk.trim(), "python-service"),
-      onStderr: (chunk) => log(chunk.trim(), "python-service"),
+      // Worker stdout/stderr may contain customer values, filesystem paths or
+      // provider credentials. The process supervisor drains both streams;
+      // never forward their untrusted contents into user-visible runtime logs.
+      onStdout: () => {},
+      onStderr: () => {},
     });
     if (generation !== launchGeneration) {
       run.cancel();
@@ -340,7 +343,8 @@ export function startPythonService(): Promise<boolean> {
         environmentPromise = null;
       }
     }, (error: unknown) => {
-      console.error("Python sidecar failed:", error instanceof Error ? error.message : "process failure");
+      // Spawn errors can contain private executable paths or process environment.
+      console.error("Python sidecar launch failed; inspect the local runtime setup.");
       if (child === run) {
         child = null;
         readyPromise = null;
@@ -500,6 +504,11 @@ export async function callPythonService<T>(
       signal: controller.signal,
     });
     if (!res.ok) {
+      // 5xx bodies can contain private tracebacks, model inputs or host paths.
+      // Preserve the actual HTTP status without reading or echoing that body.
+      if (res.status >= 500) {
+        throw new Error(`Python sidecar ${routePath} failed with HTTP ${res.status}.`);
+      }
       const text = await res.text().catch((error: unknown) => {
         if (controller.signal.aborted) throw controller.signal.reason;
         return "";
@@ -514,7 +523,7 @@ export async function callPythonService<T>(
         }
         throw new PythonServiceDataError(detail || "Invalid input for this model.");
       }
-      throw new Error(`Python sidecar ${routePath} returned ${res.status}: ${text}`);
+      throw new Error(`Python sidecar ${routePath} returned HTTP ${res.status}.`);
     }
     return await res.json() as T;
   } catch (error) {

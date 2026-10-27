@@ -1,7 +1,11 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { createElement } from "react";
+import React, { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
+
+// The project source TSX uses Vite JSX, but the offline tsx test loader emits
+// classic React.createElement. Provide that runtime only in this test process.
+Object.assign(globalThis, { React });
 import { ReceiptSelect } from "./AnalyticalStudio";
 import {
   clearEvidence, getEvidenceSnapshot, publishCalculationReceipt, type CalculationReceipt,
