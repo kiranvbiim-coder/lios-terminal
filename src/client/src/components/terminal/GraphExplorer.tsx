@@ -1,8 +1,8 @@
 import * as React from "react";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
 import { ArrowDownLeft, ArrowUpRight, Focus, Minus, Move, Network, Plus, Search, X } from "lucide-react";
 import { buildCrossDomainGraph, crossDomainBridges, type CrossDomainNodeDomain, type CrossDomainEdge } from "@/lib/terminalCrossDomainGraph";
-import { graphNodeConnections, presentCrossDomainGraph, summarizeRecordedGraphLinks } from "@/lib/graphExplorerPresentation";
+import { graphNodeConnections, presentCrossDomainGraph, selectRecordedCrossDomainGraphObjects, summarizeRecordedGraphLinks } from "@/lib/graphExplorerPresentation";
 import { GraphExplorerCompactList } from "./GraphExplorerCompactList";
 import { loadIntelligenceObjects, subscribeIntelligenceObjects, type IntelligenceObject } from "@/lib/terminalIntelligenceObjects";
 import { actionsForIntelligenceObject, requestIntelligenceObjectAction } from "@/lib/terminalObjectActions";
@@ -111,13 +111,18 @@ export default function GraphExplorer({ activeSymbol, onClose }: Props) {
     symbolOnly && activeSymbol
       ? objects.filter(object => !object.symbol || object.symbol === activeSymbol)
       : objects, [activeSymbol, objects, symbolOnly]);
-  const graphObjects = useMemo(() => contextualObjects.slice(0, 120), [contextualObjects]);
+  // The 120-object cap applies after selecting actual matching saved objects.
+  const deferredQuery = useDeferredValue(query);
+  const graphObjects = useMemo(
+    () => selectRecordedCrossDomainGraphObjects(contextualObjects, deferredQuery, selectedId, 120),
+    [contextualObjects, deferredQuery, selectedId],
+  );
   const graph = useMemo(() => buildCrossDomainGraph(graphObjects), [graphObjects]);
   const bridges = useMemo(() => crossDomainBridges(graph), [graph]);
   const relations = useMemo(() => Array.from(new Set(graph.edges.map(edge => edge.relation))).sort(), [graph]);
   const presentation = useMemo(() => presentCrossDomainGraph(graph, {
-    query, selectedId, neighborsOnly, bridgesOnly, relation: relation || undefined, maxNodes: 48,
-  }), [graph, query, selectedId, neighborsOnly, bridgesOnly, relation]);
+    query: deferredQuery, selectedId, neighborsOnly, bridgesOnly, relation: relation || undefined, maxNodes: 48,
+  }), [graph, deferredQuery, selectedId, neighborsOnly, bridgesOnly, relation]);
   const selected = graphObjects.find(object => object.id === selectedId) ?? null;
   const selectedVisible = presentation.nodes.some(node => node.objectId === selectedId);
   const selectedConnections = useMemo(() => selected ? graphNodeConnections(graph, selected.id).filter(link =>
@@ -222,7 +227,7 @@ export default function GraphExplorer({ activeSymbol, onClose }: Props) {
             <span>{presentation.edges.length} recorded links shown{relation ? ` · ${relation.replaceAll("-", " ")} only` : ""}</span>
             {query && <span>{presentation.matchingCount} direct search matches</span>}
             {presentation.omittedCount > 0 && <span>{presentation.omittedCount} not drawn — refine search</span>}
-            {contextualObjects.length > graphObjects.length && <span>Only the 120 most recent objects loaded — additional records not shown</span>}
+            {contextualObjects.length > graphObjects.length && <span>Bounded view of {graphObjects.length} / {contextualObjects.length} saved objects. Search prioritizes exact saved matches before the 120-object cap; other records remain out of view.</span>}
           </div>
                     <details className="rounded-lg border border-border/60 px-3 py-2" data-testid="recorded-graph-relationship-distribution">
             <summary className="min-h-9 cursor-pointer font-ui text-xs font-medium text-foreground focus-visible:outline focus-visible:outline-2 focus-visible:outline-amber-300">
