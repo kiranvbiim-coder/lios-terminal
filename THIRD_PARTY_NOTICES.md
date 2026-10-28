@@ -5,6 +5,14 @@
 
 LiOS uses open-source software aggressively, but code licenses, external API/data rights, model-weight licenses, assets, trademarks and service terms are tracked as separate concerns.
 
+## MapLibre GL JS — BSD-3-Clause (offline recorded geography)
+
+LiOS consumes exact `maplibre-gl@5.24.0`, source commit `fd31bd85967c19446d836236e93021fb10ffe30d`, as an unmodified renderer behind its existing P7/P4 map owner. Full upstream license, inherited Mapbox BSD grant and VT-PBF notice are retained at `third_party/licenses/maplibre-gl-js-BSD-3-Clause.txt`. The same-origin CSP worker renders only bundled geometry and source-authorized recorded coordinates. No remote tiles, sprites, fonts, geocoding, tracking or paid service is used. Missing WebGL retains the exact keyboard-accessible location list.
+
+## Natural Earth — public-domain generalized world geography
+
+Offline geometry derives from `nvkelso/natural-earth-vector@ca96624a56bd078437bca8184e78163e5039ad19`, `geojson/ne_110m_admin_0_countries.geojson`; 177 geometries are preserved while unused properties are removed. The full commercial-use public-domain statement and accuracy limitations are retained at `third_party/licenses/natural-earth-PUBLIC-DOMAIN.txt`. Generalized borders, including disputed boundaries, are not navigation-grade or an endorsement.
+
 
 ## beUI — MIT (Workspace Composer motion action)
 
