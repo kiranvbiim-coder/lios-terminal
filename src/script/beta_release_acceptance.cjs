@@ -16,12 +16,15 @@
 const fs = require("node:fs");
 const path = require("node:path");
 const crypto = require("node:crypto");
-const { verifyBetaManifest } = require("../betaReleaseManifest.cjs");
+const { verifyBetaManifest, MAX_RELEASE_ASSET_BYTES } = require("../betaReleaseManifest.cjs");
+const { verifyInstallerParts } = require("../betaReleaseParts.cjs");
+const { evaluateP14PackagedPerformance } = require("../p14PerformanceBudget.cjs");
 
-const FIELDS = Object.freeze([
+const REQUIRED_FIELDS = Object.freeze([
   "manifest", "asset-dir", "trusted-key", "commit",
   "mac-self-test", "win-self-test", "mac-ux", "win-ux",
 ]);
+const FIELDS = Object.freeze([...REQUIRED_FIELDS, "multipart-dir"]);
 const UX_CHECKS = Object.freeze([
   "signedIn", "sourceAccess", "briefingSavedAndReopened",
   "artifactVersionReopened", "offlineAndReconnect", "keyboardOnly",
@@ -34,6 +37,14 @@ const UX_CHECKS = Object.freeze([
   "briefingP4ChartAndTableEditable", "pptxChartAndTableRoundtrip",
   "sourceRevocationBlocksBriefingSave", "projectSwitchKeepsSourcesIsolated",
   "narrow390NoClippedControls",
+  // New C06–C08 and D04–D06 paths on the consolidated product must be
+  // exercised on the actual installed beta; source CI cannot supply proof.
+  "c06ExactRunSavedArtifactVersionReopened",
+  "c06SaveAcknowledgementAndP4ReceiptVerified",
+  "c07DraftInactiveUntilExplicitActivation",
+  "c08PartialActionReviewWithoutAutoRetry",
+  "d04BriefingFocusAndNativePreview",
+  "d05SystemDoctorReadOnlyPermissions",
 ]);
 function assert(condition, message) {
   if (!condition) throw new Error("LiOS beta gate BLOCKED: " + message);
@@ -42,8 +53,17 @@ function keysExactly(value, keys, label) {
   assert(value && typeof value === "object" && !Array.isArray(value), label + " is not an object.");
   assert(JSON.stringify(Object.keys(value).sort()) === JSON.stringify(keys.slice().sort()), label + " has missing or unexpected fields.");
 }
-function checkNativeSelfTest(value, platform, arch) {
+function checkNativeSelfTest(value, platform, arch, expectedVersion, expectedCommit) {
   assert(value && typeof value === "object", platform + " packaged self-test missing.");
+  // This is populated by the actual packaged Electron app.getVersion().
+  // A previous beta's valid self-test must never qualify another manifest.
+  assert(typeof expectedVersion === "string" &&
+    /^[0-9]+[.][0-9]+[.][0-9]+-beta[.][1-9][0-9]*$/.test(expectedVersion) &&
+    value.packageVersion === expectedVersion,
+    platform + " native self-test version does not match the signed beta manifest.");
+  assert(typeof expectedCommit === "string" && /^[a-f0-9]{40}$/.test(expectedCommit) &&
+    value.sourceCommit === expectedCommit,
+    platform + " native self-test source commit does not match the signed beta manifest.");
   assert(value.status === "verified" && value.platform === platform && value.arch === arch, platform + " packaged self-test is not from this target.");
   assert(value.nativeSecretCustody?.mode === "native_protected" &&
     value.nativeSecretCustody?.protectedAtRest === true &&
@@ -60,8 +80,12 @@ function checkNativeSelfTest(value, platform, arch) {
     value.packagedResourceImmutability?.forbiddenPythonBytecodeAfter === 0,
     platform + " packaged Python resources were modified.");
   assert(value.updaterMetadataPresent === true, platform + " beta package updater metadata not checked.");
-  assert(Number.isFinite(value.performance?.desktopSelfTestElapsedMs) &&
-    value.performance.desktopSelfTestElapsedMs >= 0, platform + " self-test timing missing.");
+  // Reuse the already qualified native safety ceilings; a finite but
+  // multi-minute cold start or excessive RSS must not pass the $0 beta gate.
+  // This does not imply the separate P14 signed-production qualification.
+  const budget = evaluateP14PackagedPerformance(value.performance);
+  assert(budget.ok, platform + " packaged performance violates existing P14 safety limits: " +
+    budget.errors.join(" "));
   return { platform, arch, nativeSelfTest: true };
 }
 function checkNativeUX(value, target, expectedHash) {
@@ -86,6 +110,45 @@ function checkNativeUX(value, target, expectedHash) {
     target + " repeated evidence filenames cannot prove distinct native captures.");
   return { target, checks: UX_CHECKS.length, evidenceEntries: value.evidencePaths.length };
 }
+/** Read the same inode whose local-file identity was checked. A prior lstat
+ * followed by readFileSync(path) could consume a substituted symlink; this
+ * follows the existing WS-65 fd-pinned acceptance pattern. Even on Windows,
+ * where O_NOFOLLOW may be unavailable, both pre-open and post-open identities
+ * must remain a nonlinked regular file. This is local proof inspection only.
+ */
+function readPinnedLocalEvidenceFile(file, maxBytes, label) {
+  const initial = fs.lstatSync(file);
+  assert(initial.isFile() && !initial.isSymbolicLink() &&
+    initial.size > 0 && initial.size <= maxBytes,
+    label + " must be a nonempty, bounded, nonlinked regular file.");
+  let fd;
+  try {
+    fd = fs.openSync(file, fs.constants.O_RDONLY | (fs.constants.O_NOFOLLOW ?? 0));
+  } catch {
+    throw new Error("LiOS beta gate BLOCKED: " + label + " changed or cannot be opened safely.");
+  }
+  try {
+    const opened = fs.fstatSync(fd);
+    assert(opened.isFile() && opened.size > 0 && opened.size <= maxBytes &&
+      initial.dev === opened.dev && initial.ino === opened.ino,
+      label + " changed between file check and open.");
+    const bytes = fs.readFileSync(fd);
+    const after = fs.fstatSync(fd);
+    const current = fs.lstatSync(file);
+    assert(bytes.length === opened.size &&
+      opened.dev === after.dev && opened.ino === after.ino &&
+      opened.size === after.size && opened.mtimeMs === after.mtimeMs &&
+      opened.ctimeMs === after.ctimeMs &&
+      current.isFile() && !current.isSymbolicLink() &&
+      current.dev === opened.dev && current.ino === opened.ino &&
+      current.size === opened.size,
+      label + " changed while it was being inspected.");
+    return bytes;
+  } finally {
+    fs.closeSync(fd);
+  }
+}
+
 /** Verify real captured files, not mere user-typed path claims. Non-symlink files
  * must be inside the report's own directory and under the 30 MB evidence cap.
  * Hashes are returned for review, never treated as cryptographic attestations. */
@@ -105,11 +168,7 @@ function inspectNativeEvidence(uxFile, evidencePaths) {
       const dir = fs.lstatSync(folder);
       assert(dir.isDirectory() && !dir.isSymbolicLink(), "native evidence parent must be an actual local directory.");
     }
-    const stat = fs.lstatSync(full);
-    assert(stat.isFile() && !stat.isSymbolicLink() && stat.size > 0 && stat.size <= 30_000_000,
-      "native evidence file missing, empty, symlinked or oversized.");
-    const bytes = fs.readFileSync(full);
-    assert(bytes.length === stat.size, "native evidence changed during inspection.");
+    const bytes = readPinnedLocalEvidenceFile(full, 30_000_000, "native evidence");
     const extension = path.extname(name).toLowerCase();
     const png = bytes.subarray(0, 8).equals(Buffer.from("89504e470d0a1a0a", "hex"));
     const jpg = bytes.length >= 3 && bytes[0] === 0xff && bytes[1] === 0xd8 && bytes[2] === 0xff;
@@ -129,7 +188,9 @@ function inspectNativeEvidence(uxFile, evidencePaths) {
   return evidence;
 }
 function parseFlags(argv) {
-  assert(argv.length === FIELDS.length * 2, "all eight evidence paths and source commit are required.");
+  assert(argv.length === REQUIRED_FIELDS.length * 2 ||
+    argv.length === FIELDS.length * 2,
+    "all eight release inputs and optional multipart directory are required.");
   const out = {};
   for (let i = 0; i < argv.length; i += 2) {
     const key = argv[i], value = argv[i + 1];
@@ -138,22 +199,74 @@ function parseFlags(argv) {
     assert(FIELDS.includes(name) && !(name in out), "unknown or duplicate flag.");
     out[name] = value;
   }
-  assert(FIELDS.every(key => out[key]), "required evidence missing.");
+  assert(REQUIRED_FIELDS.every(key => out[key]), "required evidence missing.");
   return out;
 }
 function readJson(file) {
   const absolute = path.resolve(file);
-  const stat = fs.lstatSync(absolute);
-  assert(stat.isFile() && !stat.isSymbolicLink() && stat.size > 0 && stat.size < 2_000_000,
-    "evidence file must be a small regular non-symlink file.");
-  return JSON.parse(fs.readFileSync(absolute, "utf8"));
+  return JSON.parse(readPinnedLocalEvidenceFile(absolute, 1_999_999, "evidence JSON").toString("utf8"));
 }
+/**
+ * One release gate for the signed root manifest AND physically present
+ * numbered parts. The source test passes a smaller mock per-asset ceiling
+ * to exercise the same integration without creating multi-GB fixtures.
+ * The actual CLI never overrides MAX_RELEASE_ASSET_BYTES.
+ */
+async function verifyBetaMultipartTransport({
+  verified, multipartDir = null, trustedPublicKey,
+  maxDirectBytes = MAX_RELEASE_ASSET_BYTES,
+}) {
+  assert(verified?.verified === true &&
+    verified?.qualification === "release_asset_integrity_only" &&
+    Array.isArray(verified.assetHashes) &&
+    maxDirectBytes > 0 && maxDirectBytes <= MAX_RELEASE_ASSET_BYTES,
+    "only an authenticated beta root manifest can authorize multipart transport.");
+  // The full assembled installer stays in owner staging for exact root hashing.
+  // Free hosting distributes signed numbered parts, each <=2 GB.
+  const oversized = verified.assetHashes.filter(asset => asset.bytes > maxDirectBytes);
+  assert(Boolean(multipartDir) === (oversized.length > 0),
+    "multipart directory is required exactly when local installers exceed the free per-asset limit.");
+  const multiparts = [];
+  const allowedStagingNames = new Set();
+  for (const item of oversized) {
+    assert(item.target === "mac-arm64-dmg" || item.target === "mac-arm64-zip",
+      "only Mac assembled installers may use the approved multipart path.");
+    const directory = path.resolve(multipartDir);
+    const indexName = item.name + ".parts.json";
+    const index = readJson(path.join(directory, indexName));
+    const checked = await verifyInstallerParts({
+      manifest: index, partsDir: directory, trustedPublicKey,
+    });
+    assert(checked.name === item.name && checked.bytes === item.bytes &&
+      checked.sha256 === item.sha256 && checked.partCount >= 2 &&
+      checked.qualification === "authenticated_transport_only",
+      "signed multipart transport does not match the exact reviewed installer manifest.");
+    allowedStagingNames.add(indexName);
+    for (const part of index.body.parts) allowedStagingNames.add(part.name);
+    multiparts.push({target:item.target, partCount:checked.partCount, bytes:checked.bytes,
+      sha256:checked.sha256, verified:true});
+  }
+  if (oversized.length) {
+    // This directory is the intended public upload set, not a general scratch
+    // folder. Refuse stray files (including .env, prior part sets or symlinks).
+    // The signed verifier above already authenticated every allowed part.
+    const entries = fs.readdirSync(path.resolve(multipartDir), { withFileTypes: true });
+    assert(entries.length === allowedStagingNames.size &&
+      entries.every(entry => entry.isFile() && !entry.isSymbolicLink() &&
+        allowedStagingNames.has(entry.name)),
+      "multipart staging directory contains extra, missing or unreviewed files.");
+  }
+  return multiparts;
+}
+
 async function auditBetaRelease(args) {
   const fields = parseFlags(args);
+  const independentKey = readPinnedLocalEvidenceFile(path.resolve(fields["trusted-key"]),
+    64_000, "independent public key").toString("utf8");
   const verified = await verifyBetaManifest({
     manifest: readJson(fields.manifest),
     assetDir: fields["asset-dir"],
-    trustedPublicKeyPem: fs.readFileSync(fields["trusted-key"], "utf8"),
+    trustedPublicKeyPem: independentKey,
     expectedCommit: fields.commit,
   });
   assert(verified.verified === true && verified.qualification === "release_asset_integrity_only" &&
@@ -163,22 +276,30 @@ async function auditBetaRelease(args) {
   const mac = verified.assetHashes.find(row => row.name.includes("-mac-arm64-beta.dmg"));
   const win = verified.assetHashes.find(row => row.name.includes("-win-x64-beta.exe"));
   assert(mac && win && byName.size === 3, "canonical DMG, ZIP and NSIS installers are required.");
+  const multiparts = await verifyBetaMultipartTransport({
+    verified, multipartDir: fields["multipart-dir"] || null, trustedPublicKey: independentKey,
+  });
   const selfTests = [
-    checkNativeSelfTest(readJson(fields["mac-self-test"]), "darwin", "arm64"),
-    checkNativeSelfTest(readJson(fields["win-self-test"]), "win32", "x64"),
+    checkNativeSelfTest(readJson(fields["mac-self-test"]), "darwin", "arm64", verified.version, verified.commit),
+    checkNativeSelfTest(readJson(fields["win-self-test"]), "win32", "x64", verified.version, verified.commit),
   ];
+  // Pin each report to one validated local snapshot. A second pathname read
+  // must never choose a different evidence file list after rights/shape review.
+  const macReport = readJson(fields["mac-ux"]);
+  const winReport = readJson(fields["win-ux"]);
   const ux = [
-    checkNativeUX(readJson(fields["mac-ux"]), "mac-arm64-dmg", mac.sha256),
-    checkNativeUX(readJson(fields["win-ux"]), "win-x64-nsis", win.sha256),
+    checkNativeUX(macReport, "mac-arm64-dmg", mac.sha256),
+    checkNativeUX(winReport, "win-x64-nsis", win.sha256),
   ];
-  ux[0].actualEvidence = inspectNativeEvidence(fields["mac-ux"], readJson(fields["mac-ux"]).evidencePaths);
-  ux[1].actualEvidence = inspectNativeEvidence(fields["win-ux"], readJson(fields["win-ux"]).evidencePaths);
+  ux[0].actualEvidence = inspectNativeEvidence(fields["mac-ux"], macReport.evidencePaths);
+  ux[1].actualEvidence = inspectNativeEvidence(fields["win-ux"], winReport.evidencePaths);
   return {
     evidenceChecksPassed: true,
     releasePublished: false,
     productionQualified: false,
     independentHumanAcceptanceStillRequired: true,
     channel: "beta", sourceCommit: verified.commit, checkedAssets: verified.assetCount,
+    multipartTransportChecked: multiparts,
     nativeSelfTests: selfTests, ux,
     qualification: "local_beta_evidence_gate_only",
   };
@@ -193,4 +314,4 @@ if (require.main === module) {
     process.exitCode = 1;
   });
 }
-module.exports = { checkNativeSelfTest, checkNativeUX, inspectNativeEvidence, parseFlags, auditBetaRelease };
+module.exports = { checkNativeSelfTest, checkNativeUX, inspectNativeEvidence, parseFlags, auditBetaRelease, verifyBetaMultipartTransport };

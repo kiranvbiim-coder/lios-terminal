@@ -445,6 +445,7 @@ export default function ProjectExperienceShell({
   const [runtimeRequestId, setRuntimeRequestId] = useState<string | null>(null);
   const runtimeHandoffRequestIdRef = useRef<string | null>(null);
   runtimeHandoffRequestIdRef.current = runtimeRequestId ?? runtimeEvents.at(-1)?.requestId ?? null;
+
   const [declinedRunAction, setDeclinedRunAction] = useState<{ requestId: string; action: ConversationActionName } | null>(null);
   const [claimReviewDraft, setClaimReviewDraft] = useState<{ prompt: string; binding: RecordedClaimReview; chatId: number | null } | null>(null);
   const submittedClaimReview = useRef<typeof claimReviewDraft>(null);

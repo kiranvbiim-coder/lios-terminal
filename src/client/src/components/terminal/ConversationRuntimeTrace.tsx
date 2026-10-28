@@ -65,6 +65,10 @@ interface Props {
   /** Opens existing inactive P9 review; never activates a workflow. */
   onPrepareAutomation?: () => void;
   onInspectRun?: () => void;
+  /** C06: exact recorded P4 saved-revision navigation, not authorization. */
+  onOpenSavedArtifact?: (artifactId: string, version: number, projectId: number | null, requestId: string) => void;
+  /** C07: open existing, inactive-by-default P9 workflow review only. */
+  onPrepareAutomation?: () => void;
   onRecoveryAction?: (action: string) => void;
   /** Prefills the composer with a suggested next request; never sends it. */
   onFollowUp?: (prompt: string, binding?: RecordedClaimReview) => void;
@@ -172,6 +176,8 @@ export default function ConversationRuntimeTrace({
   onOpenSavedArtifact,
   onPrepareAutomation,
   onInspectRun,
+  onOpenSavedArtifact,
+  onPrepareAutomation,
   onRecoveryAction,
   onFollowUp,
   onRetry,
@@ -267,7 +273,7 @@ export default function ConversationRuntimeTrace({
   const visualAnswerRequest = artifact?.type === "artifact" ? visualRequestFromRuntimeArtifact(artifact) : null;
   const working = busy && !terminal;
   const waitingForApproval = Boolean(legacyApproval || governedApproval);
-  const canShowWork = !!plan || !!observedReceipt || trust?.type === "trust" || recordedSources.length > 0 || activity.receipts.length > 0 || activity.mismatched > 0;
+  const canShowWork = !!plan || !!observedReceipt || trust?.type === "trust" || recordedSources.length > 0 || activity.receipts.length > 0 || activity.mismatched > 0 || recovery.needsReconciliation;
   const canResume = !busy && !!resumableRequestId && !!onResume;
   const stepCount = summary.stepCount || summary.settledSteps;
   const duration = formatDuration(summary.durationMs);
@@ -487,6 +493,7 @@ export default function ConversationRuntimeTrace({
       {activity.hasReceiptProblems && (
         <div role="alert" data-testid="trace-agent-receipt-warning" className="mb-2 rounded-lg border border-amber-300/30 px-3 py-2 font-ui text-[13px] text-amber-200">
           Recorded run receipts require review: {activity.failed} failed, {activity.cancelled} cancelled, {activity.mismatched} ignored because their run identity did not match. Do not assume these operations completed or that an external action succeeded. Open Show work to inspect matching receipts.
+          <p className="mt-1 text-xs leading-5">A failed or cancelled receipt does not establish that an external side effect did not happen. Reconcile original outcomes before repeating any work.</p>
         </div>
       )}
 

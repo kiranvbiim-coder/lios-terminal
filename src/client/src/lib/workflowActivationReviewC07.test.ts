@@ -27,6 +27,7 @@ test("C07 current Project consequence view offers only a locally reviewed paused
  assert.match(review,/disabled until separately reviewed and approved in P9/);
  assert.match(review,/setMonitorReview\(monitorHandoff\.graphHash\)/);
  assert.match(review,/<PulseProjectMonitorReview/);
+
  assert.match(draft,/quickMonitorDraft\("changes",false,60\)/);
  assert.match(draft,/definition\.enabled\)/);
  assert.doesNotMatch(review,/saveConversationAsP9Workflow|runP9WorkflowNow/);

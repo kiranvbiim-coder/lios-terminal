@@ -121,7 +121,6 @@ test("D06 long saved titles match their bounded P4 pin without ignoring live tit
   assert.deepEqual(currentProjectBriefingVisuals([pinned], [{ ...selected, title: fullTitle + " altered" }], live, 11), [],
     "changed selected title cannot bypass the live full-title equality check");
 });
-
 test("D06 revoked, renamed, archived and superseded saved visuals fail closed before report review", () => {
   const selected = artifact("figure", 3);
   const pinned = recordedVisual("figure");

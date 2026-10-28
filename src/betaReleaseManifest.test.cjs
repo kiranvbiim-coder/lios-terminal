@@ -41,6 +41,8 @@ test("SI07 $0 beta manifest signs and verifies the exact three local installer a
   });
   assert.equal(result.verified, true);
   assert.equal(result.assetCount, 3);
+  assert.deepEqual(result.multipartRequiredTargets, []);
+  assert.equal(result.assetHashes[0].target, "mac-arm64-dmg");
   assert.equal(result.qualification, "release_asset_integrity_only");
   assert.equal(result.installApproved, false);
   assert.equal(result.macNotarized, false);
@@ -86,10 +88,12 @@ test("SI07 manifest refuses unsupported/replayed/downgraded releases and spoofed
     ...body,
     assets: [{ ...body.assets[0], name: "../fake.dmg" }, ...body.assets.slice(1)],
   }), /asset filename/);
-  assert.throws(() => validateBody({
-    ...body,
-    assets: [{ ...body.assets[0], bytes: 2_000_000_001 }, ...body.assets.slice(1)],
-  }), /size invalid/);
+  for (const asset of body.assets) {
+    const ceiling = asset.target === "win-x64-nsis" ? 2_000_000_000 : 16_000_000_000;
+    const withBytes = bytes => ({ ...body, assets: body.assets.map(item => item.target === asset.target ? { ...item, bytes } : item) });
+    assert.doesNotThrow(() => validateBody(withBytes(ceiling)));
+    assert.throws(() => validateBody(withBytes(ceiling + 1)), /size invalid/);
+  }
   assert.throws(() => validateBody({
     ...body, assets: [body.assets[0], body.assets[0], body.assets[2]],
   }), /duplicate asset/);
@@ -167,4 +171,18 @@ test("SI07 signing refuses repository-resident material through external directo
       "--assets-dir", f.dir, "--private-key", casedKey,
       "--out", path.join(f.dir, "must-not-exist.json")]), /outside the public repository/);
   }
+});
+
+test("D10 signed root manifest represents large local Mac installer without allowing oversized direct Windows assets", async t => {
+  const f = await signed(t);
+  const { signature, ...body } = f.manifest;
+  const bigMacDmg = { ...body.assets[0], bytes: 2_752_494_208 };
+  const bigMacZip = { ...body.assets[1], bytes: 2_500_000_000 };
+  assert.doesNotThrow(() => validateBody({ ...body, assets: [bigMacDmg, bigMacZip, body.assets[2]] }));
+  assert.throws(() => validateBody({ ...body, assets: [
+    body.assets[0], body.assets[1], { ...body.assets[2], bytes: 2_000_000_001 },
+  ] }), /size invalid/);
+  assert.throws(() => validateBody({ ...body, assets: [
+    { ...bigMacDmg, bytes: 16_000_000_001 }, body.assets[1], body.assets[2],
+  ] }), /size invalid/);
 });

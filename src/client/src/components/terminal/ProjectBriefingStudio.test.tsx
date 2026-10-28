@@ -53,7 +53,6 @@ test("D01 Project switching cannot display or save stale source selections or la
   // Its finally block must never clear the newer inspection's lock.
   assert.match(src, /if \(visualRequestRef\.current === controller\) \{\s*visualRequestRef\.current = null;\s*if \(activeProjectRef\.current === inspectedProject\) setPinningId\(null\);\s*\}/);
   assert.doesNotMatch(src, /if \(visualRequestRef\.current === controller\) visualRequestRef\.current = null;\s*if \(activeProjectRef\.current === inspectedProject\) setPinningId\(null\)/);
-
   assert.match(src, /selectedSources\.filter\(source => source\.projectId === projectId\)/);
   assert.match(src, /currentProjectBriefingVisuals\(pinnedVisuals, chosen, byId, projectId\)/);
   assert.match(src, /if \(activeProjectRef\.current !== reviewedProject\) return/);
