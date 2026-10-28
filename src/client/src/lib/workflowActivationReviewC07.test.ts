@@ -18,7 +18,7 @@ test("C07 P9 saved workflow is an inactive, manual draft unless user separately 
    'saveConversationAsP9Workflow(projectId, {',
  ])assert.ok(s.includes(required),"Missing safe draft/review behavior: "+required);
  assert.doesNotMatch(s,/enabled: true/);
- assert.doesNotMatch(s,/text-\\[(?:6|7|8)px\\]/);
+ assert.doesNotMatch(s,/text-\[(?:6|7|8)px\]/);
 });
 test("C07 Chat hands off to existing P9 review only for a completed current Project request",()=>{
  const shell=source("../components/terminal/ProjectExperienceShell.tsx");
