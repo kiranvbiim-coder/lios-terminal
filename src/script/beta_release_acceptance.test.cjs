@@ -304,6 +304,14 @@ test("D10 signed root to multipart acceptance checks real two-Mac installer byte
   await assert.rejects(verifyBetaMultipartTransport(args),
     /BLOCKED.*does not match the exact reviewed installer/);
   fs.writeFileSync(indexFile, originalIndex);
+  // An otherwise valid upload folder must reject unreviewed extra part sets.
+  await assert.rejects(verifyBetaMultipartTransport(args),
+    /BLOCKED.*staging directory contains extra/);
+  for (const file of foreign.body.parts) fs.unlinkSync(path.join(parts, file.name));
+  fs.writeFileSync(path.join(parts, ".private-notes"), "never publish");
+  await assert.rejects(verifyBetaMultipartTransport(args),
+    /BLOCKED.*staging directory contains extra/);
+  fs.unlinkSync(path.join(parts, ".private-notes"));
   const part = path.join(parts, dmg + ".part001");
   const original = fs.readFileSync(part);
   fs.writeFileSync(part, Buffer.alloc(original.length, 0xaa));
