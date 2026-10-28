@@ -125,3 +125,34 @@ test("beta evidence checker reads and hashes actual screenshot and test log, nev
 test("native screenshot and UX evidence may never be inferred from an unchecked path label", () => {
   assert.throws(() => inspectNativeEvidence("/missing/ux.json", ["screen.png", "test.log"]), /ENOENT/);
 });
+
+test("D08 beta evidence gate refuses a replaced file between lstat and open", t => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "lios-beta-evidence-swap-"));
+  t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
+  const imageHeader = Buffer.from("89504e470d0a1a0a", "hex");
+  for (const [i, name] of ["discovery.png", "investigation.png", "briefing.png", "narrow.png"].entries()) {
+    fs.writeFileSync(path.join(dir, name), Buffer.concat([imageHeader, Buffer.alloc(80, i + 1)]));
+  }
+  const log = path.join(dir, "session.log");
+  const malicious = path.join(dir, "foreign.log");
+  fs.writeFileSync(log, "Recorded local macOS installed walkthrough.");
+  fs.writeFileSync(malicious, "Substituted file is not the inspected file.");
+  const files = ["discovery.png", "investigation.png", "briefing.png", "narrow.png", "session.log"];
+  const open = fs.openSync;
+  let swapped = false;
+  fs.openSync = function (name, flags, ...rest) {
+    if (!swapped && path.resolve(String(name)) === log) {
+      swapped = true;
+      fs.renameSync(log, path.join(dir, "original-session.log"));
+      fs.copyFileSync(malicious, log);
+    }
+    return open.call(this, name, flags, ...rest);
+  };
+  try {
+    assert.throws(() => inspectNativeEvidence(path.join(dir, "mac-ux.json"), files),
+      /BLOCKED.*changed/);
+    assert.equal(swapped, true);
+  } finally {
+    fs.openSync = open;
+  }
+});
