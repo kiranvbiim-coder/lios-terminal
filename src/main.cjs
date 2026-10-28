@@ -106,6 +106,10 @@ function setDockIcon() {
 // browser). Forcing software rendering trades a little GPU performance for
 // actually painting the window reliably. Must be called before app is ready.
 app.disableHardwareAcceleration();
+// With GPU compositing off Chromium exposes no WebGL, so the offline MapLibre map could never
+// render in the packaged app (observed: "Offline MapLibre rendering is unavailable"). Software
+// SwiftShader WebGL keeps the safe paint path and renders the bundled, tile-free geography.
+app.commandLine.appendSwitch("enable-unsafe-swiftshader");
 
 let serverProcess = null;
 let mainWindow = null;
