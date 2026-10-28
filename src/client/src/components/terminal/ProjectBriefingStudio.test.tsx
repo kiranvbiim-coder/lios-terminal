@@ -60,5 +60,5 @@ test("D01/D02 briefing offers source-ID search and readable accessible movement 
   assert.match(src, /min-h-11 min-w-11 place-items-center/);
   assert.match(src, /Move \$\{source\.title\} earlier/);
   assert.match(src, /Move \$\{source\.title\} later/);
-  assert.match(src, /No current saved Project sources match/);
+  assert.match(src, /No saved Project sources match this search in the current Project/);
 });
