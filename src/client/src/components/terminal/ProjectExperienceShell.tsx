@@ -2666,7 +2666,8 @@ export default function ProjectExperienceShell({
                   });
                   if (!saved || saved.artifactId !== artifactId || saved.version !== version ||
                       saved.projectId !== projectId || chatMode === "temporary" || busy || busyRef.current ||
-                      keepingArtifactRef.current || sendInFlightRef.current || !original.chatId) {
+                      keepingArtifactRef.current || sendInFlightRef.current || !original.chatId ||
+                      traceOwnerChatRef.current !== original.chatId) {
                     setLifecycleNotice("That saved version is not confirmed for this exact Chat. Inspect Artifact history.");
                     return;
                   }
@@ -2679,6 +2680,7 @@ export default function ProjectExperienceShell({
                     }))) return;
                     if (!isCurrentSavedArtifactHandoff(saved, { projectId: original.projectId, chatId: original.chatId },
                          sandboxSelectionRef.current, runtimeHandoffRequestIdRef.current) ||
+                        traceOwnerChatRef.current !== original.chatId ||
                         busyRef.current || keepingArtifactRef.current || sendInFlightRef.current) {
                       setLifecycleNotice("Project, Chat, or run changed during review. Nothing was opened.");
                       return;
