@@ -123,8 +123,12 @@ export function ProjectBriefingStudio({
         setError(cause instanceof Error ? cause.message : "Unable to review this saved visual.");
       }
     } finally {
-      if (visualRequestRef.current === controller) visualRequestRef.current = null;
-      if (activeProjectRef.current === inspectedProject) setPinningId(null);
+      // An older aborted inspection must not unlock Save or erase the newer
+      // inspection's progress indicator when both target the same Project.
+      if (visualRequestRef.current === controller) {
+        visualRequestRef.current = null;
+        if (activeProjectRef.current === inspectedProject) setPinningId(null);
+      }
     }
   };
   const save = async () => {
