@@ -19,3 +19,20 @@ export function summarizeRuntimeDoctor(snapshot: RuntimeDoctorSnapshot | null) {
     checked: records.length, impaired, available, unverified, records,
   };
 }
+
+/**
+ * D03 visible-only filter for the same P0 live observation.
+ * A filtered list is never a health certificate or a different probe.
+ */
+export function visibleRuntimeDoctorRecords(
+  records: RuntimeDoctorSnapshot["health"],
+  search: string,
+  attentionOnly = false,
+) {
+  const query = search.trim().toLocaleLowerCase().slice(0, 120);
+  return records.filter(record =>
+    (!attentionOnly || problemStates.has(record.state)) &&
+    (!query || record.componentId.toLocaleLowerCase().includes(query) ||
+      record.state.toLocaleLowerCase().replaceAll("_", " ").includes(query))
+  );
+}
