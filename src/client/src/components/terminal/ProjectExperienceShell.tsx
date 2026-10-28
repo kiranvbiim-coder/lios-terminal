@@ -2656,6 +2656,7 @@ export default function ProjectExperienceShell({
                   // The P4 sidecar owns the only authenticated read. This pointer grants no rights.
                   if (savedArtifactReopenInFlightRef.current) return;
                   const original = { projectId: selection.projectId, chatId: selection.chatId };
+                  const originalChatId = original.chatId;
                   const candidate = [...runtimeEvents].reverse().find(event =>
                     event.type === "artifact" && event.requestId === requestId &&
                     event.persistedArtifact?.id === artifactId && event.persistedArtifact.version === version);
@@ -2665,9 +2666,9 @@ export default function ProjectExperienceShell({
                     chatId: original.chatId,
                   });
                   if (!saved || saved.artifactId !== artifactId || saved.version !== version ||
-                      saved.projectId !== projectId || chatMode === "temporary" || busy || busyRef.current ||
-                      keepingArtifactRef.current || sendInFlightRef.current || !original.chatId ||
-                      traceOwnerChatRef.current !== original.chatId) {
+                      saved.projectId !== projectId || busy || busyRef.current ||
+                      keepingArtifactRef.current || sendInFlightRef.current || !originalChatId ||
+                      traceOwnerChatRef.current !== originalChatId) {
                     setLifecycleNotice("That saved version is not confirmed for this exact Chat. Inspect Artifact history.");
                     return;
                   }
@@ -2678,9 +2679,9 @@ export default function ProjectExperienceShell({
                       detail: "Opening the recorded version discards only unsaved local edits. Existing P4 versions are unchanged.",
                       confirmLabel: "Discard local edits",
                     }))) return;
-                    if (!isCurrentSavedArtifactHandoff(saved, { projectId: original.projectId, chatId: original.chatId },
+                    if (!isCurrentSavedArtifactHandoff(saved, { projectId: original.projectId, chatId: originalChatId },
                          sandboxSelectionRef.current, runtimeHandoffRequestIdRef.current) ||
-                        traceOwnerChatRef.current !== original.chatId ||
+                        traceOwnerChatRef.current !== originalChatId ||
                         busyRef.current || keepingArtifactRef.current || sendInFlightRef.current) {
                       setLifecycleNotice("Project, Chat, or run changed during review. Nothing was opened.");
                       return;
@@ -3111,7 +3112,7 @@ export default function ProjectExperienceShell({
       {showSaveWorkflow && canPrepareChatAutomation && selection.projectId && selection.chatId && activeChat?.scope === "project" && lastWorkflowRequest && runtimeRequestId && (
         <SaveWorkflowDialog
           projectId={selection.projectId}
-          chatId={activeChat.id}
+          chatId={selection.chatId}
           sourceRequestId={runtimeRequestId}
           activeArtifactRef={conversationArtifactRef}
           request={lastWorkflowRequest}

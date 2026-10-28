@@ -28,7 +28,7 @@ test("Integrated C06 reopens only the owned recorded P4 version and retains cano
   assert.match(shell, /onKeepArtifact=\{chatMode === "temporary" \? undefined : keepArtifact\}/);
   assert.match(shell, /exactRuntimeSavedArtifact\(candidate/);
   assert.match(shell, /isCurrentSavedArtifactHandoff\(saved/);
-  assert.match(shell, /traceOwnerChatRef\.current !== original\.chatId/);
+  assert.match(shell, /traceOwnerChatRef\.current !== originalChatId/);
   assert.match(shell, /requestLifecycle\(\{/);
   assert.match(shell, /setArtifactViewVersion\(saved\.version\)/);
   assert.match(exact, /event\.requestId !== owner\.requestId/);
