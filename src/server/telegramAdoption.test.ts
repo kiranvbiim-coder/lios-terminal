@@ -144,4 +144,22 @@ test("Telegram adoption commits Chat, replay custody, minimal Ledger and cursor 
     assert.equal(custody.find(r => Number(r.updateId) === 50)?.chatMessageId, null);
     assert.notEqual(custody.find(r => Number(r.updateId) === 51)?.chatMessageId, null);
   });
+
+  await t.test("retained imported text needs current AI consent and exact source/chat/retention scope", async () => {
+    for (const revoke of ["policy", "consent", "source", "chat", "retention"] as const) {
+      const f = await fixture();
+      const policy = { ...policyModule.parseTelegramSourceConfig(f.source.config), allowAiTransmission: true };
+      await db.update(schema.sourceConnections).set({ config: policyModule.telegramSourceConfig(policy) }).where(eq(schema.sourceConnections.id, f.source.id));
+      await f.adopt(await f.poll(body([{ update_id: 75, message: message(1, "restricted-channel-context") }])));
+      const rows = await f.messages();
+      assert.equal((await service.filterTelegramHistoryForAi(f.context, rows)).length, 1);
+      if (revoke === "policy") await db.update(schema.sourceConnections).set({ config: policyModule.telegramSourceConfig({ ...policy, allowAiTransmission: false }) }).where(eq(schema.sourceConnections.id, f.source.id));
+      if (revoke === "consent") await db.update(schema.userDataConsents).set({ revokedAt: new Date() }).where(eq(schema.userDataConsents.id, f.consent.id));
+      if (revoke === "source") await db.update(schema.sourceConnections).set({ config: policyModule.telegramSourceConfig({ ...policy, enabled: false }) }).where(eq(schema.sourceConnections.id, f.source.id));
+      if (revoke === "chat") rows[0].chatId = f.chat.id + 1000;
+      const now = revoke === "retention" ? rows[0].createdAt.getTime() + 8 * 86_400_000 : Date.now();
+      const ordinary = { ...rows[0], id: -1, metadata: {}, content: "ordinary context" };
+      assert.deepEqual((await service.filterTelegramHistoryForAi(f.context, [...rows, ordinary], now)).map(row => row.content), ["ordinary context"], revoke);
+    }
+  });
 });

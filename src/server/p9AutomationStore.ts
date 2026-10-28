@@ -23,7 +23,7 @@ import { getDb } from "./db";
 import type { TenantContext } from "./tenantContext";
 import { getProject, touchProjectActivity } from "./projectStore";
 import { appendLedgerEvent } from "./ledgerStore";
-import { decideP9Notification, nextP9ScheduledRun, p9NotificationTitle } from "./p9AutomationEngine";
+import { decideP9Notification, nextP9ScheduledRun, p9FailureBackoff, p9NotificationTitle } from "./p9AutomationEngine";
 import { admitP9ApprovedManualRun } from "./p9ManualRunIdempotency";
 import { requireAcceptedP9Workflow, requireSuccessfulP9Recipe } from "./p9AcceptedWorkflow";
 import { requireP9ModelRefreshReview } from "./p9ModelRefresh";
@@ -447,7 +447,12 @@ export async function completeP9Run(
   if (!run) throw new Error("Automation run not found or not owned by the requesting user.");
 
   const trigger = p9WorkflowTriggerSchema.parse(workflow.trigger);
-  const nextRunAt = workflow.enabled ? nextP9ScheduledRun(trigger, now) : null;
+  const scheduled = workflow.enabled ? nextP9ScheduledRun(trigger, now) : null;
+  const failures = success ? 0 : workflow.consecutiveFailures + 1;
+  // Backoff applies only to future recurring work. It never replays this run or brings a later schedule forward.
+  const nextRunAt = scheduled
+    ? new Date(Math.max(scheduled.getTime(), now.getTime() + p9FailureBackoff(failures)))
+    : null;
   const updateConditions = [
     eq(projectAutomationWorkflows.id, workflow.id),
     ...(input.claimToken ? [eq(projectAutomationWorkflows.claimToken, input.claimToken)] : []),
@@ -456,7 +461,7 @@ export async function completeP9Run(
     lastRunAt: now,
     lastSuccessAt: success ? now : workflow.lastSuccessAt,
     lastFailureAt: success ? workflow.lastFailureAt : now,
-    consecutiveFailures: success ? 0 : workflow.consecutiveFailures + 1,
+    consecutiveFailures: failures,
     nextRunAt,
     claimToken: null,
     claimExpiresAt: null,

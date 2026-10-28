@@ -48,6 +48,8 @@
         "server/telegramConnectionRoutes.ts",
         "client/src/components/connections/TelegramConnectionPanel.tsx",
         "client/src/lib/telegramConnectionForm.ts",
+        "server/p9AutomationEngine.ts",
+        "server/p9AutomationStore.ts",
         "server/browserRuntimePack.ts"
       ],
       "regressionEvidence": [
@@ -87,7 +89,9 @@
         "shared/telegramConnection.test.ts",
         "server/governedBrowserTool.test.ts",
         "server/telegramConnectionSetup.test.ts",
-        "client/src/lib/telegramConnectionForm.test.ts"
+        "client/src/lib/telegramConnectionForm.test.ts",
+        "server/p9AutomationEngine.test.ts",
+        "server/p9RunContinuity.test.ts"
       ],
       "lineage": "components.json importedPaths/destinationPaths/modifications is the exact source-to-destination authority; destinationPaths include both source imports and explicitly identified LiOS-owned consumers/pattern adaptations. GM-13 imports the pinned acp-core helpers; SI-02 L5 imports retry timing; SI-02.15 adapts placement binding; SI-02.14 imports CUA policy/helpers. SI-02.13 directly imports the pinned browser bounded-UTF8 diagnostic helper and ports its test, while server/browserRuntimePack.ts is a LiOS-owned consumer/pattern adaptation, not a donor byte copy. Its isolated worker/stdio/P13 broker path adapts pinned browser lifecycle, page ownership, interception and transport mechanics. Donor browser control/profile/auth/plugin authorities and host/raw-network launch paths are not imported. Earlier utility, Gateway/device and GM-10 mappings remain in components.json. Listed coverage is authored lineage, not an executed PASS or Shipping Point claim.",
       "authorityBoundary": "ACP helpers bind only to admitted GM-11 runs; timing authorizes no retry; placement cannot mint authority or fall back to ambient host; CUA assessment does not execute. The browser transport executes only an exact prepared plan in a physically deny-network container, with BrowserConnectorPolicy and P13 DNS-pinned host fetches. `agent.browser.navigate` uses the existing governed registry and exact server-held approval. No browser runtime image is qualified by this record; missing in-image Node/playwright-core/Chromium fails closed, and native GUI execution remains unavailable."

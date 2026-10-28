@@ -1,6 +1,6 @@
 import { appendLedgerEventInTransaction } from "./ledgerStore";
 import { normalizeTelegramPollBody } from "./telegramPollNormalizer";
-import { and, eq, isNull, lt, sql } from "drizzle-orm";
+import { and, eq, inArray, isNull, lt, sql } from "drizzle-orm";
 import {
   channelIngressCursors, channelIngressUpdates, organizations, projectChatMessages, projectChats, projects,
   sourceConnections, userDataConsents, users,
@@ -8,6 +8,7 @@ import {
 import {
   TELEGRAM_CONNECTION_CONSENT_VERSION, parseTelegramSourceConfig,
   telegramConsentScope, telegramCredentialName,
+  channelMessageExcludedFromAi,
 } from "@shared/telegramConnection";
 import { getDb } from "./db";
 import type { TenantContext } from "./tenantContext";
@@ -228,9 +229,12 @@ export async function adoptTelegramPoll(input: {
       await tx.insert(channelIngressCursors).values({ sourceConnectionId: input.connectionId, provider: "telegram", nextOffset: 0 }).onConflictDoNothing();
       const [cursor] = await tx.select().from(channelIngressCursors).where(eq(channelIngressCursors.sourceConnectionId, input.connectionId)).for("update").limit(1);
       const known = new Map<number, { fingerprint: string }>();
-      for (const row of await tx.select().from(channelIngressUpdates).where(eq(channelIngressUpdates.sourceConnectionId, input.connectionId))) {
-        known.set(Number(row.updateId), { fingerprint: row.fingerprint });
-      }
+      const batchIds = normalized.updates.map(update => update.updateId);
+      const existingUpdates = batchIds.length === 0 ? [] : await tx.select().from(channelIngressUpdates).where(and(
+        eq(channelIngressUpdates.sourceConnectionId, input.connectionId),
+        inArray(channelIngressUpdates.updateId, batchIds),
+      ));
+      for (const row of existingUpdates) known.set(Number(row.updateId), { fingerprint: row.fingerprint });
       let adopted = 0, ignored = 0, duplicates = 0;
       for (const update of normalized.updates) {
         const fingerprint = hashLedgerValue(update.payload);
@@ -336,4 +340,38 @@ export async function purgeExpiredTelegramMessages(now: Date = new Date()): Prom
     deleted += removed.length;
   }
   return deleted;
+}
+
+/**
+ * Admit retained channel history against current source/consent/work policy at each conversation attempt.
+ * Adoption-time permission is necessary, never a lasting transmission grant. Non-channel history is unchanged.
+ */
+export async function filterTelegramHistoryForAi<T extends {
+  chatId: number; createdAt: Date; metadata: Record<string, unknown>;
+}>(context: TenantContext, history: readonly T[], now = Date.now()): Promise<T[]> {
+  const result: T[] = [];
+  const bindings = new Map<number, Awaited<ReturnType<typeof currentBinding>> | null>();
+  for (const message of history) {
+    const raw = message.metadata.channelIngress;
+    if (raw === undefined) { result.push(message); continue; }
+    if (!raw || typeof raw !== "object" || Array.isArray(raw)) continue;
+    const marker = raw as Record<string, unknown>;
+    if (marker.provider !== "telegram" || channelMessageExcludedFromAi(message.metadata) ||
+        typeof marker.sourceConnectionId !== "number" || !Number.isSafeInteger(marker.sourceConnectionId) ||
+        marker.sourceConnectionId < 1 || typeof marker.conversationId !== "string") continue;
+    const sourceId = marker.sourceConnectionId;
+    if (!bindings.has(sourceId)) {
+      // The caller retains only a bounded recent history; also bound distinct lookups defensively.
+      if (bindings.size >= 20) continue;
+      try { bindings.set(sourceId, await currentBinding(context, sourceId)); }
+      catch { bindings.set(sourceId, null); }
+    }
+    const current = bindings.get(sourceId);
+    if (!current || !current.policy.allowAiTransmission || current.binding.chatId !== message.chatId ||
+        !current.policy.allowedConversationIds.includes(marker.conversationId) ||
+        !Number.isFinite(message.createdAt.getTime()) ||
+        message.createdAt.getTime() <= now - current.policy.retentionDays * 86_400_000) continue;
+    result.push(message);
+  }
+  return result;
 }

@@ -63,12 +63,20 @@ export class TelegramPollingController {
     this.stableMs = options.stableSuccessMs ?? 60_000;
   }
 
-  /** Idempotent per connection; a terminal loop may be restarted only by an explicit new start after it has settled. */
+  /** Discovery is idempotent even after failure. Only an explicit recovery may replace a settled attempt. */
   start(target: TelegramPollingTarget): void {
+    this.startAttempt(target, false);
+  }
+
+  /** Trusted Home recovery intent, never called by periodic discovery. Fresh cycle authority is still required. */
+  restart(target: TelegramPollingTarget): void {
+    this.startAttempt(target, true);
+  }
+
+  private startAttempt(target: TelegramPollingTarget, recover: boolean): void {
     if (this.closed) throw new Error("Telegram polling controller is stopped.");
     const existing = this.loops.get(target.connectionId);
-    if (existing && existing.status.state !== "stopped" && existing.status.state !== "refused" &&
-        existing.status.state !== "provider_blocked" && existing.status.state !== "exhausted") return;
+    if (existing && (!recover || !["stopped", "refused", "provider_blocked", "exhausted"].includes(existing.status.state))) return;
     const attempt = {};
     const abort = new AbortController();
     const status: TelegramPollingStatus = { connectionId: target.connectionId, state: "polling", consecutiveFailures: 0, lastFailure: null, lastAdoptedAt: null };

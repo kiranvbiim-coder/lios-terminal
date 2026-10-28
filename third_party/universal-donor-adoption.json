@@ -9,7 +9,7 @@
   "controlledForkCount": 10,
   "sourceSnapshot": {
     "baselineSha": "ad77f2d53189a7d98583e9d9996d532b79e4686d",
-    "componentsSha": "7d534f5aad73431e87b3a9d3e0d32ed04662accd",
+    "componentsSha": "d3db8dff2211b231b3cfd26ed25fa5e6529830d7",
     "upstreamPinsSha": "bfafe1ddf251fb05fd99b75864a3d4436a7550cb",
     "controlledForkSha": "142ff14c5e6b5d6804b20a346d5e31435db2f33b"
   },
@@ -2130,6 +2130,7 @@
         "src/process/decoded-output.test.ts",
         "src/process/bounded-line-framer.ts",
         "src/process/bounded-line-framer.test.ts",
+        "src/cron/service/jobs-scheduling.ts",
         "src/shared/bounded-buffer.test.ts",
         "src/utils/utf8-truncate.test.ts",
         "src/process/pipe-output.test.ts",
@@ -2215,6 +2216,8 @@
         "server/telegramConnectionRoutes.ts",
         "client/src/components/connections/TelegramConnectionPanel.tsx",
         "client/src/lib/telegramConnectionForm.ts",
+        "server/p9AutomationEngine.ts",
+        "server/p9AutomationStore.ts",
         "server/exec/bounded-buffer.test.ts",
         "server/exec/utf8-truncate.test.ts",
         "server/exec/pipe-output.test.ts",

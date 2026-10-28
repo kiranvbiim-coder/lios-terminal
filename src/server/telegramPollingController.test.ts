@@ -98,8 +98,35 @@ test("a stale attempt cannot publish after an explicit replacement start", async
   first.resolve(adopted(5));
   await stopping;
   assert.equal(controller.status()[0].lastAdoptedAt, null, "an aborted attempt cannot publish adoption status");
-  controller.start(target());
+  controller.restart(target());
   await settle();
   assert.equal(calls, 2);
   await controller.stop();
+});
+
+test("periodic rediscovery cannot restart terminal loops or reset their failure budget", { timeout: 5000 }, async () => {
+  for (const outcome of ["refused", "provider_blocked", "exhausted"] as const) {
+    let calls = 0;
+    const controller = new TelegramPollingController({
+      maxConsecutiveFailures: 2, sleep: instantSleep(),
+      isTerminalFailure: () => outcome === "refused",
+      cycle: async () => {
+        calls++;
+        if (outcome === "provider_blocked") return { kind: "provider_error", code: "unauthorized", retryAfterMs: null };
+        throw new Error("controlled failure");
+      },
+    });
+    try {
+      controller.start(target());
+      while (controller.status()[0].state !== outcome) await settle();
+      const callsBefore = calls;
+      const failuresBefore = controller.status()[0].consecutiveFailures;
+      for (let tick = 0; tick < 3; tick++) {
+        controller.start(target());
+        await settle();
+      }
+      assert.equal(calls, callsBefore, outcome);
+      assert.equal(controller.status()[0].consecutiveFailures, failuresBefore, outcome);
+    } finally { await controller.stop(); }
+  }
 });

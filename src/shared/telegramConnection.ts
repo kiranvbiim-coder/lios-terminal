@@ -50,7 +50,7 @@ export function telegramConsentScope(accountBindingId: string): string {
   return `channel:telegram:${uuid.parse(accountBindingId)}:ingress`;
 }
 
-/** Imported channel text is never model input unless its source policy explicitly allowed AI transmission when adopted. */
+/** Adoption-time AI opt-in is necessary, not sufficient: Home must also admit current source/consent/work policy. */
 export function channelMessageExcludedFromAi(metadata: unknown): boolean {
   if (typeof metadata !== "object" || metadata === null) return false;
   const channel = (metadata as Record<string, unknown>).channelIngress;

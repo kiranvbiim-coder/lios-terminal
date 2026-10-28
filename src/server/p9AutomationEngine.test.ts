@@ -4,6 +4,7 @@ import {
   decideP9Notification,
   executeMatchedP9EventWorkflows,
   nextP9ScheduledRun,
+  p9FailureBackoff,
   p9AutomationEventMatches,
   p9UnseenObservedFilings,
 } from "./p9AutomationEngine";
@@ -24,6 +25,15 @@ test("P9 interval and daily UTC schedules compute deterministic next run", () =>
     nextP9ScheduledRun({ type: "schedule", schedule: { kind: "daily_utc", hour: 10, minute: 0 } }, from)?.toISOString(),
     "2026-09-23T10:00:00.000Z",
   );
+});
+
+test("failure delay is capped, resettable and refuses invalid counters", () => {
+  assert.equal(p9FailureBackoff(0), 0);
+  assert.equal(p9FailureBackoff(1), 30_000);
+  assert.equal(p9FailureBackoff(4), 15 * 60_000);
+  assert.equal(p9FailureBackoff(5), 60 * 60_000);
+  assert.equal(p9FailureBackoff(10_000), 60 * 60_000);
+  for (const count of [-1, 1.5, NaN, Infinity]) assert.throws(() => p9FailureBackoff(count));
 });
 
 test("P9 event matching respects event type tenant fields and explicit filters", () => {

@@ -15,6 +15,7 @@ import { assertCurrentCredentialSnapshot, resolveCredential } from "./credential
 import { isTransientBYOAIFailure } from "./openclawByoaiFailover";
 import { recordConnectorVerification } from "./connectorVerification";
 import { getRequestIdentity } from "./requestContext";
+import { currentConversationTransmissionGuard } from "./exec/execution-scope";
 import { getStoredEnterprisePolicy } from "./enterprisePolicyService";
 import { evaluateEnterpriseAiProvider } from "@shared/enterpriseContracts";
 import { readBoundedText } from "./sourceConnectionPolicy";
@@ -471,8 +472,12 @@ export async function invokeAIProvider(request: AICompletionRequest): Promise<AI
     localModelIdentity = await requireInstalledLocalModel(provider, resolvedModel, resolveLocalProviderChatEndpoint(provider, localCredential));
   }
   // A local release-policy refusal did not contact the provider and must not change connector health.
+  const scopeRelease = currentConversationTransmissionGuard();
+  try { await scopeRelease?.(); } catch {
+    throw new AIProviderError("policy_denied", "Conversation source permission changed; provider transmission was refused.", { provider });
+  }
   await canonicalRequest.beforeTransmission?.();
-  if (canonicalRequest.beforeTransmission || localCredential !== undefined) {
+  if (scopeRelease || canonicalRequest.beforeTransmission || localCredential !== undefined) {
     // Source-release checks await mutable state. Bind the enterprise revision and re-evaluate the complete policy last.
     const releaseRevision = await enforceEnterpriseAiPolicy(canonicalRequest, config, resolvedModel);
     if (releaseRevision !== enterpriseRevision) {

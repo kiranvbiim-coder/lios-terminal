@@ -13,6 +13,8 @@ interface ConversationExecutionScope {
   detach: (() => void) | null;
   /** Cancel hooks still running; the scope joins them before the caller may persist a terminal result. */
   pending: Set<Promise<void>>;
+  /** Server-owned source-release check inherited by nested work; never supplied by model/wire data. */
+  beforeAiTransmission?: () => Promise<void>;
 }
 
 /** A cancel hook that hangs cannot hold a run open forever; the join is bounded and says so. */
@@ -36,10 +38,18 @@ export async function recoverConversationExecutions(): Promise<void> {
   await (await getConversationExecutionJournal()).recoverInterrupted();
 }
 
-export async function withConversationExecutionScope<T>(requestId: string, execute: () => Promise<T>): Promise<T> {
+export async function withConversationExecutionScope<T>(
+  requestId: string,
+  execute: () => Promise<T>,
+  beforeAiTransmission?: () => Promise<void>,
+): Promise<T> {
   const supervisor = getProcessSupervisor();
+  const parentGuard = currentConversationTransmissionGuard();
   const scope: ConversationExecutionScope = {
     requestId, scopeKey: `conversation:${requestId}`, controller: new AbortController(), closed: false, detach: null, pending: new Set(),
+    beforeAiTransmission: parentGuard
+      ? async () => { await parentGuard(); await beforeAiTransmission?.(); }
+      : beforeAiTransmission,
   };
   const close = supervisor.acquireScopeCleanup(scope.scopeKey);
   return scopes.run(scope, async () => {
@@ -54,6 +64,17 @@ export async function withConversationExecutionScope<T>(requestId: string, execu
       await close();
     }
   });
+}
+
+/** Capture the current attempt's release fence; even captured work cannot outlive its owning scope. */
+export function currentConversationTransmissionGuard(): (() => Promise<void>) | undefined {
+  const scope = scopes.getStore();
+  if (!scope?.beforeAiTransmission) return undefined;
+  return async () => {
+    if (scope.closed || scope.controller.signal.aborted) throw new Error("Conversation source release is closed.");
+    await scope.beforeAiTransmission?.();
+    if (scope.closed || scope.controller.signal.aborted) throw new Error("Conversation source release is closed.");
+  };
 }
 
 async function joinCancelHooks(scope: ConversationExecutionScope): Promise<void> {
