@@ -20,13 +20,13 @@ test("C07 P9 saved workflow is an inactive, manual draft unless user separately 
  assert.doesNotMatch(s,/enabled: true/);
  assert.doesNotMatch(s,/text-\\[(?:6|7|8)px\\]/);
 });
-test("C07 current Project consequence draft is separately inactive and never schedules a workflow",()=>{
+test("C07 current Project consequence view offers only a locally reviewed paused P9 definition",()=>{
  const review=source("../components/terminal/ProjectConsequenceReview.tsx");
  const draft=source("./reviewedProjectMonitorHandoff.ts");
  assert.match(review,/data-testid="c07-project-monitor-handoff"/);
  assert.match(review,/disabled until separately reviewed and approved in P9/);
- assert.match(review,/onInvestigate\(monitorHandoff\.prompt\)/);
- assert.match(draft,/quickMonitorDraft/);
+ assert.match(review,/setMonitorReview\(monitorHandoff\.graphHash\)/);
+ assert.match(review,/<PulseProjectMonitorReview/);
  assert.match(draft,/quickMonitorDraft\("changes",false,60\)/);
  assert.match(draft,/definition\.enabled\)/);
  assert.doesNotMatch(review,/saveConversationAsP9Workflow|runP9WorkflowNow/);
