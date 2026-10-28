@@ -38,6 +38,7 @@ export function ProjectBriefingStudio({
     setPinnedVisuals([]);
     setPreviewId(null);
     setPinningId(null);
+    setBusy(false);
     setError(null);
     setSearch("");
     visualRequestRef.current?.abort();
@@ -48,6 +49,8 @@ export function ProjectBriefingStudio({
   const byId = useMemo(() => new Map(available.map(item => [item.id, item])), [artifacts, projectId]);
   // Also filter synchronously in render, before the Project-switch effect.
   const chosen = selectedSources.filter(source => source.projectId === projectId);
+  const currentVisuals = pinnedVisuals.filter(visual => visual.projectId === projectId &&
+    chosen.some(source => source.id === visual.artifactId));
   const staleSelection = chosen.some(source =>
     !isReviewedBriefingSourceCurrent(source, byId.get(source.id), projectId));
   const offered = available.filter(item =>
@@ -71,9 +74,9 @@ export function ProjectBriefingStudio({
   const pinVisual = async (source: BriefingSource) => {
     if (busy || pinningId || !isReviewedBriefingSourceCurrent(source, byId.get(source.id), projectId)) return;
     if (source.kind !== "chart" && source.kind !== "table") return;
-    const already = pinnedVisuals.some(visual => visual.artifactId === source.id);
+    const already = currentVisuals.some(visual => visual.artifactId === source.id);
     if (already) { setPinnedVisuals(current => current.filter(visual => visual.artifactId !== source.id)); return; }
-    if (pinnedVisuals.length >= 3) { setError("Choose at most three native chart/table visuals."); return; }
+    if (currentVisuals.length >= 3) { setError("Choose at most three native chart/table visuals."); return; }
     setError(null);
     setPinningId(source.id);
     const controller = new AbortController();
@@ -112,12 +115,10 @@ export function ProjectBriefingStudio({
       if (activeProjectRef.current !== reviewedProject) return;
       if (staleSelection) throw new Error("A selected source is no longer in this Project. Remove it and review the outline.");
       // Validation is repeated against a fresh server read by onSave.
-      buildProjectBriefingReport({ projectId, title, introduction, sources: chosen, visuals: pinnedVisuals });
+      buildProjectBriefingReport({ projectId, title, introduction, sources: chosen, visuals: currentVisuals });
       inFlight.current = true;
       setBusy(true);
-      await onSave(chosen, title, introduction,
-        pinnedVisuals.filter(visual => visual.projectId === reviewedProject &&
-          chosen.some(source => source.id === visual.artifactId)));
+      await onSave(chosen, title, introduction, currentVisuals);
     } catch (cause) {
       if (activeProjectRef.current === reviewedProject) {
         setError(cause instanceof Error ? cause.message : "Unable to save the briefing.");
@@ -202,7 +203,7 @@ export function ProjectBriefingStudio({
         <section className="min-w-0 space-y-3 rounded-xl border border-border/60 p-3" aria-label="Review briefing storyboard">
           <div className="flex items-center justify-between gap-2">
             <h3 className="text-sm font-semibold">Storyboard · review order</h3>
-            <span className="text-xs text-muted-foreground">{chosen.length} frames · {pinnedVisuals.length}/3 verified visuals</span>
+            <span className="text-xs text-muted-foreground">{chosen.length} frames · {currentVisuals.length}/3 verified visuals</span>
           </div>
           {staleSelection && <p role="alert" className="rounded-lg border border-amber-300/30 p-3 text-sm text-amber-200">A selected Artifact has changed or become unavailable. Its previously reviewed version remains visible but cannot be saved. Remove and reselect it from the current library.</p>}
           {chosen.length ? <ol className="space-y-2">
@@ -223,13 +224,13 @@ export function ProjectBriefingStudio({
                     <button type="button" disabled={busy} aria-label={`Remove ${source.title} from briefing`}
                       onClick={() => toggle(source.id)} className="grid min-h-9 min-w-9 place-items-center rounded border border-border/70 text-rose-200 disabled:opacity-35"><Trash2 className="h-4 w-4" aria-hidden="true" /></button>
                     {(source.kind === "chart" || source.kind === "table") && <button type="button"
-                      disabled={busy || Boolean(pinningId) || (!pinnedVisuals.some(visual => visual.artifactId === source.id) && pinnedVisuals.length >= 3) ||
+                      disabled={busy || Boolean(pinningId) || (!currentVisuals.some(visual => visual.artifactId === source.id) && currentVisuals.length >= 3) ||
                         !isReviewedBriefingSourceCurrent(source, byId.get(source.id), projectId)}
-                      aria-pressed={pinnedVisuals.some(visual => visual.artifactId === source.id)}
+                      aria-pressed={currentVisuals.some(visual => visual.artifactId === source.id)}
                       onClick={() => void pinVisual(source)}
                       className="min-h-9 rounded border border-amber-300/30 px-3 text-xs text-amber-200 focus-visible:outline focus-visible:outline-2 focus-visible:outline-amber-300 disabled:opacity-40">
                       {pinningId === source.id ? "Checking saved visual…" :
-                        pinnedVisuals.some(visual => visual.artifactId === source.id) ? "Remove native visual" : "Include native visual"}
+                        currentVisuals.some(visual => visual.artifactId === source.id) ? "Remove native visual" : "Include native visual"}
                     </button>}
                     <button type="button" disabled={busy || !isReviewedBriefingSourceCurrent(source, byId.get(source.id), projectId)}
                       aria-expanded={previewId === source.id} onClick={() => setPreviewId(current => current === source.id ? null : source.id)}
@@ -239,7 +240,7 @@ export function ProjectBriefingStudio({
                   </div>
                 </div>
               </div>
-              {pinnedVisuals.filter(visual => visual.artifactId === source.id).map(visual =>
+              {currentVisuals.filter(visual => visual.artifactId === source.id).map(visual =>
                 <p role="status" key={visual.artifactId} className="mt-2 break-words text-xs text-amber-200">
                   Native {visual.content.kind} verified from saved v{visual.version} · {visual.sourceRefs.length} recorded source IDs ·
                   SHA-256 {visual.contentHash.slice(0, 16)}…
