@@ -41,6 +41,9 @@ test("empty authorized source collection has honest state and no enabled save", 
 test("D01 Project switching cannot display or save stale source selections or late P4 visual results", () => {
   const src = readFileSync(new URL("./ProjectBriefingStudio.tsx", import.meta.url), "utf8");
   assert.match(src, /activeProjectRef\.current = projectId/);
+  assert.match(src, /setTitle\("My intelligence briefing"\)/);
+  assert.match(src, /setIntroduction\(""\)/);
+  assert.match(src, /if \(pinningId === id\) \{ visualRequestRef\.current\?\.abort\(\)/);
   assert.match(src, /visualRequestRef\.current\?\.abort\(\)/);
   assert.match(src, /signal: controller\.signal/);
   assert.match(src, /controller\.signal\.aborted \|\| activeProjectRef\.current !== inspectedProject/);
