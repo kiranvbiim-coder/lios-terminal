@@ -10,7 +10,8 @@ test("B06 economic-vintage compare rejects unrecorded, cross-series and bad-hash
   for(const token of [
     'requireRole(...READ_ROLES)','z.string().uuid().safeParse(req.query.baselineId)',
     'z.string().uuid().safeParse(req.query.currentId)',
-    'getEconomicDatasetSnapshot(baselineId.data)','getEconomicDatasetSnapshot(currentId.data)',
+    'readAuthorizedCapturePair(',
+    'tenantContext(req.user!), [baselineId.data, currentId.data], "economic_series", getEconomicDatasetSnapshot',
     'economicCapturePairIssue(baseline,current,seriesId.data)',
     'economicSnapshotContentHash(snapshot.payload,snapshot.lineage) !== snapshot.contentHash',
     'compareEconomicDatasetPayloads(baseline.payload,current.payload)',
@@ -18,4 +19,11 @@ test("B06 economic-vintage compare rejects unrecorded, cross-series and bad-hash
     'res.setHeader("Cache-Control", "no-store")',
   ])assert.ok(route.includes(token),"missing backend boundary "+token);
   assert.doesNotMatch(route,/captureFredSeriesSnapshot|getIndicatorHistory|getIndicatorProfile/);
+  const admission=source.slice(source.indexOf("async function readAuthorizedCapturePair"),source.indexOf("export function registerDataFabricRoutes"));
+  for(const required of [
+    "getDb().transaction(", "for (const id of ids)", '.for("share")',
+    "!canAccessDatasetSnapshot(identity, ctx)", "getEntitlementPolicyById(",
+    '["display", "derived_output"].every(',
+    "return [await read(ids[0], tx), await read(ids[1], tx)]",
+  ]) assert.ok(admission.includes(required), "missing both-capture authorization gate: "+required);
 });

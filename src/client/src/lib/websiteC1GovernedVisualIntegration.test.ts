@@ -17,19 +17,26 @@ test("C1 runtime selects only exact P4 saved-artifact chart/table, without model
   assert.match(schema,/tableArtifactContentSchema\.safeParse/);
   assert.doesNotMatch(schema,/Math\.random|sourceUrl|URL\(|geocode|runConversation|promptTemplate|http[s]?:/);
 });
-test("C1 uses current authenticated P4 GET and original renderer, not client-trusted AI content or extra API",()=>{
+test("C1 uses the canonical fresh authenticated P4 query and Workbench rendering owners",()=>{
   const view=source("../components/terminal/GovernedVisualAnswer.tsx");
-  assert.match(view,/fetch\(/);
-  assert.match(view,/\/api\/artifacts\/\$\{encodeURIComponent\(request\.artifactId\)\}\?version=\$\{request\.version\}/);
-  assert.match(view,/credentials: "same-origin"/);
-  assert.match(view,/cache: "no-store"/);
-  assert.match(view,/resolveGovernedVisualAnswer\(request, remote\)/);
-  assert.match(view,/<ArtifactChart content=\{decision\.content\} artifactSourceRefs=\{decision\.sourceRefs\} readOnly\s*\/>/);
-  assert.match(view,/Not recorded/);
+  const hooks=source("./useArtifacts.ts");
+  // The saved visual no longer duplicates a direct fetch or a limited table renderer.
+  assert.match(view,/useArtifact\(request\.artifactId, request\.version, true\)/);
+  assert.match(view,/artifact\.isFetching \|\| artifact\.isPending \|\| !artifact\.isFetchedAfterMount/);
+  assert.match(view,/!loading && !artifact\.isError \? resolveGovernedVisualAnswer\(request, artifact\.data\)/);
+  assert.match(view,/void artifact\.refetch\(\)/);
+  assert.match(view,/Recheck current source permissions/);
+  assert.match(view,/TableArtifactTable = lazy/);
+  assert.match(view,/ArtifactChart content=\{decision\.content\} artifactSourceRefs=\{decision\.sourceRefs\} readOnly/);
   assert.match(view,/Recorded source IDs/);
-  assert.match(view,/current\.decision\?\.status === "ready"/);
+  assert.match(hooks,/export function useArtifact\(/);
+  assert.match(hooks,/queryKey: version \? \["\/api\/artifacts", artifactId, "version", version\]/);
+  assert.match(hooks,/credentials: "same-origin", cache: "no-store"/);
+  assert.match(hooks,/refetchOnMount: "always"/);
+  assert.match(hooks,/signal/);
   assert.doesNotMatch(view,/localStorage|sessionStorage|setTimeout\(|postMessage\(|eval\(|dangerouslySetInnerHTML|createArtifact\(|createP9Workflow\(/);
 });
+
 test("C1 P4 read authorization remains governed by existing server Artifact API",()=>{
   const hooks=source("./useArtifacts.ts");
   assert.match(hooks,/export function useArtifact\(/);

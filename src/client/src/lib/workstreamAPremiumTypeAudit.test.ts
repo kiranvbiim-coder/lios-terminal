@@ -47,12 +47,16 @@ test("A05 server-scoped saved view journey uses existing Wave D state, not brows
   const board = readFileSync(new URL("../components/terminal/FusionPulseBoard.tsx", import.meta.url), "utf8");
   const routes = readFileSync(new URL("../../../server/waveDRoutes.ts", import.meta.url), "utf8");
   for(const part of [
-    'normalizePulseSavedViews(pulse.savedViews)',
+    'publishSavedViewRead(pulse.savedViews)',
     '/api/wave-d/pulse/views',
     'encodeURIComponent(activeSavedSubject)',
     'onActivatePulseView={activateSavedView}',
     'onPulseChannelChange={(next) => { setPulseChannel(next); setActiveSavedSubject(null); }}',
   ]) assert.ok(shell.includes(part), "missing save/restore source boundary: " + part);
+  // A delayed Pulse read cannot undo a confirmed saved-view write.
+  assert.ok(shell.includes("savedViewReadEpoch === savedViewsEpoch.current"));
+  assert.ok(shell.includes("savedViewsEpoch.current += 1"));
+  assert.ok(shell.includes("setPulseSavedViews(normalizePulseSavedViews(views))"));
   assert.match(board, /pulse-saved-discovery-views/);
   assert.match(board, /Save view/);
   assert.match(board, /onActivatePulseView\(view\)/);

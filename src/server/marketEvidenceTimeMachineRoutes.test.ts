@@ -15,8 +15,8 @@ test("B06 compares only exact saved market captures using server-side hashes and
     'requireRole(...READ_ROLES)',
     'z.string().uuid().safeParse(req.query.baselineId)',
     'z.string().uuid().safeParse(req.query.currentId)',
-    'getMarketDatasetSnapshot(baselineId.data)',
-    'getMarketDatasetSnapshot(currentId.data)',
+    'readAuthorizedCapturePair(',
+    'tenantContext(req.user!), [baselineId.data, currentId.data], "market_series", getMarketDatasetSnapshot',
     'marketCapturePairIssue(baseline, current, symbol.data)',
     'stableSnapshotHash({ payload: snapshot.payload, lineage: snapshot.lineage })',
     'compareMarketDatasetPayloads(baseline.payload, current.payload',
@@ -26,4 +26,11 @@ test("B06 compares only exact saved market captures using server-side hashes and
     'res.setHeader("Cache-Control", "no-store")',
   ]) assert.ok(handler.includes(token),"missing truth check: "+token);
   assert.doesNotMatch(handler,/getOHLCV|getQuotes|captureMarketDatasetSnapshot|Math\.random/);
+  const admission=source.slice(source.indexOf("async function readAuthorizedCapturePair"),source.indexOf("export function registerDataFabricRoutes"));
+  for(const required of [
+    "getDb().transaction(", "for (const id of ids)", '.for("share")',
+    "!canAccessDatasetSnapshot(identity, ctx)", "getEntitlementPolicyById(",
+    '["display", "derived_output"].every(',
+    "return [await read(ids[0], tx), await read(ids[1], tx)]",
+  ]) assert.ok(admission.includes(required), "missing both-capture authorization gate: "+required);
 });
