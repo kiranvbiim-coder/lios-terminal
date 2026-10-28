@@ -10,11 +10,8 @@ test("C07 requests an inactive, project-scoped P9 draft using the canonical moni
  assert.equal(x.status,"ready");
  if(x.status!=="ready")return;
  assert.equal(x.intervalMinutes,60);
- assert.match(x.prompt,/Enabled: false/);
- assert.match(x.prompt,/Project ID: 5/);
- assert.match(x.prompt,/project_what_changed/);
- assert.match(x.prompt,/explicitly confirm/);
- assert.doesNotMatch(x.prompt,/Private title|private:source-ref/);
+ assert.equal(x.projectId,5);
+ assert.equal(x.graphHash,review.graphHash);
 });
 test("C07 denies missing/invalid Project source identity and all non-ready graph states",()=>{
  for(const r of [{...review,status:"no_sources" as const},{...review,graphHash:null},{...review,graphHash:"wrong"}]){

@@ -25,6 +25,7 @@ const {
   createArtifact, persistConversationDraft, keepConversationDraft, getArtifact, getArtifactVersion,
   createArtifactVersion, listArtifactVersions, listChatArtifacts, listProjectArtifacts,
   createArtifactReference, listArtifactReferences, forkArtifact, trashArtifact, restoreTrashedArtifact,
+  keepConversationDraftVersion,
 } = await import("./artifactStore");
 const { getArtifactExportPlan } = await import("./artifactExport");
 const { inspectArtifact } = await import("./artifactInspection");
@@ -71,6 +72,17 @@ test("Quick Chat uses canonical durable P4 ownership without manufacturing a Pro
     const other = await persistConversationDraft(tenant, { ...input, owningChatId: otherQuick.id });
     assert.notEqual(other.artifact.id, retained.artifact.id, "same request/draft in different Chats must not collide");
     await assert.rejects(persistConversationDraft(tenant, { ...input, draft: { ...input.draft, title: "Changed replay" } }), /different content/);
+  });
+
+  await t.test("reviewed draft append refuses a stale acknowledged target revision", async () => {
+    const initial = await persistConversationDraft(tenant, { ...input, requestId: crypto.randomUUID(), draft: draft() });
+    const update = { ...draft(), title: "Reviewed update" };
+    const saved = await keepConversationDraftVersion(tenant, { artifactId: initial.artifact.id, baseVersion: 1, draft: update });
+    assert.equal(saved.version.version, 2);
+    await assert.rejects(keepConversationDraftVersion(tenant, {
+      artifactId: initial.artifact.id, baseVersion: 1, draft: { ...update, title: "Stale acknowledgment" },
+    }));
+    assert.equal((await getArtifact(tenant, initial.artifact.id)).headVersion, 2);
   });
 
   await t.test("real HTTP Chat routes derive ownership and reopen exact P4 revisions", async () => {

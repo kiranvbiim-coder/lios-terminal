@@ -2,6 +2,7 @@ import * as React from "react";
 import type { P7Insight } from "@shared/p7ResearchContracts";
 import { consequenceReviewPrompt, type ConsequenceReview } from "@/lib/recordedConsequenceReview";
 import { reviewedProjectMonitorHandoff } from "@/lib/reviewedProjectMonitorHandoff";
+import { PulseProjectMonitorReview } from "./PulseProjectMonitorReview";
 
 const kindLabel: Record<string, string> = { decision: "Decision record", portfolio: "Portfolio reference", scenario: "Scenario reference", assumption: "Assumption record", thesis: "Thesis record" };
 
@@ -10,6 +11,7 @@ export function ProjectConsequenceReview({ projectId, insight, review, onInvesti
   projectId: number; insight: P7Insight; review: ConsequenceReview; onInvestigate?: (prompt: string) => void;
 }) {
   const monitorHandoff = reviewedProjectMonitorHandoff(projectId, insight, review);
+  const [monitorReview, setMonitorReview] = React.useState<string | null>(null);
   return <details data-testid="project-consequence-review" className="rounded-lg border border-border/55 p-3">
     <summary className="min-h-10 cursor-pointer py-2 font-ui text-sm font-semibold text-foreground focus-visible:ring-2 focus-visible:ring-amber-300/70">
       Recorded decision and portfolio references ({review.total})
@@ -21,18 +23,21 @@ export function ProjectConsequenceReview({ projectId, insight, review, onInvesti
       {review.status === "too_large" && <p role="status">Graph exceeds the bounded review limit. Narrow the Project evidence; no links were inferred.</p>}
       {review.status === "ready" && !review.targets.length && <p role="status">No source-backed decision or exposure reference was recorded within two links.</p>}
 
-      {onInvestigate && monitorHandoff.status === "ready" &&
+      {monitorHandoff.status === "ready" &&
         <section data-testid="c07-project-monitor-handoff" className="space-y-2 rounded-lg border border-border/55 p-3">
           <h4 className="font-ui text-sm font-semibold">Review a Project change monitor</h4>
           <p className="font-ui text-xs leading-5 text-muted-foreground">
             Proposal only · {monitorHandoff.intervalMinutes}-minute interval · disabled until separately reviewed and approved in P9.
             This monitors Project Intelligence changes, not just this insight.
           </p>
-          <button type="button" onClick={() => onInvestigate(monitorHandoff.prompt)}
+          <button type="button" onClick={() => setMonitorReview(monitorHandoff.graphHash)}
             className="min-h-11 rounded-lg border border-amber-300/35 px-3 py-2 font-ui text-sm focus-visible:ring-2 focus-visible:ring-amber-300/70">
-            Draft monitor review in Chat
+            Review paused Project monitor
           </button>
           <p className="font-ui text-xs text-muted-foreground">No scheduler, provider, notification or Project write is started by this control.</p>
+          {monitorReview === monitorHandoff.graphHash &&
+            <PulseProjectMonitorReview key={`${projectId}:${monitorHandoff.graphHash}`}
+              projectReview={monitorHandoff} onClose={() => setMonitorReview(null)} />}
         </section>}
       {review.targets.map(target => <article key={target.id} className="space-y-2 rounded-lg border border-border/45 p-3">
         <h5 className="text-sm font-semibold">{kindLabel[target.kind]}: {target.label}</h5>

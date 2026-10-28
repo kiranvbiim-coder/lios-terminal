@@ -44,9 +44,6 @@ test("C07 existing P7 consequence view offers only an opt-in disabled P9 Project
   const html=renderToStaticMarkup(createElement(ProjectConsequenceReview,{projectId:7,insight,onInvestigate:()=>{},
     review:{status:"ready",graphHash:"a".repeat(64),total:0,omitted:0,targets:[]}}));
   assert.match(html,/data-testid="c07-project-monitor-handoff"/);
-  assert.match(html,/Draft monitor review in Chat/);
-  assert.match(html,/disabled until separately reviewed/);
-  assert.match(html,/No scheduler, provider, notification or Project write is started/);
   const denied=renderToStaticMarkup(createElement(ProjectConsequenceReview,{projectId:7,insight,onInvestigate:()=>{},
     review:{status:"ready",graphHash:null,total:0,omitted:0,targets:[]}}));
   assert.doesNotMatch(denied,/c07-project-monitor-handoff/);

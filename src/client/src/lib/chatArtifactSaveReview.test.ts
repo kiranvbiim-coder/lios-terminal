@@ -36,3 +36,14 @@ test("C06 changes to draft payload, source lineage or destination always require
   {...draft,projectId:18}, {...draft,persistence:"chat_candidate" as const},
  ])assert.notEqual(chatArtifactSaveAcknowledgmentKey(changed,"22222222-2222-4222-8222-222222222222"),key);
 });
+
+test("changing the actual append target or reviewed revision invalidates save consent", () => {
+  const run = "22222222-2222-4222-8222-222222222222";
+  const target = { projectId:17, chatId:4, artifactId:"artifact:one", version:2 };
+  const key = chatArtifactSaveAcknowledgmentKey(draft, run, target);
+  for (const changed of [{...target,artifactId:"artifact:two"},{...target,version:3},{...target,chatId:5},{...target,artifactId:null,version:null}])
+    assert.notEqual(chatArtifactSaveAcknowledgmentKey(draft,run,changed),key);
+  const review = reviewChatArtifactSave(draft,run,target);
+  assert.equal(review.status,"review");
+  if(review.status==="review") assert.match(review.destination,/artifact:one.*v2/);
+});

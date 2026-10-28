@@ -292,6 +292,7 @@ export async function keepConversationDraft(target: number | { chatId: number },
 }
 export async function keepConversationDraftVersion(artifactId: string, draft: ConversationArtifactDraft, input?: {
   requestId?: string | null;
+  baseVersion?: number;
   trustManifest?: TrustManifest | null;
   dependencyRefs?: string[];
   refreshSpec?: ArtifactRefreshSpec | null;
@@ -299,6 +300,7 @@ export async function keepConversationDraftVersion(artifactId: string, draft: Co
   return (await apiRequest("POST", `/api/artifacts/${encodeURIComponent(artifactId)}/keep-draft-version`, {
     draft,
     requestId: input?.requestId ?? null,
+    ...(input?.baseVersion ? { baseVersion: input.baseVersion } : {}),
     trustManifest: input?.trustManifest ?? null,
     dependencyRefs: input?.dependencyRefs ?? [],
     refreshSpec: input?.refreshSpec ?? null,
