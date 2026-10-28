@@ -16,6 +16,68 @@ The goal is **not** to ship a thin wholesale rebrand/fork of OpenClaw. The goal 
 
 **Naming/reuse rule:** when a donor subsystem fits, prefer reusing the full useful subsystem/package over rewriting it piecemeal. The shipped product, user-facing UI, commands, app names, LiOS-owned API surfaces and integrated product terminology use **LiOS** naming. Imported/adapted source may be renamed/refactored into LiOS modules/types where that improves integration; donor-internal names may remain when retaining them materially improves upstream diffability/maintenance. In every case, OpenClaw provenance, pinned source commit, MIT notices and material modifications remain recorded internally.
 
+## 0.1 Owner decision — full OpenClaw capability convergence through an isolated supporting service — 2026-10-28
+
+**Decision status: APPROVED PRODUCT/ARCHITECTURE DIRECTION; IMPLEMENTATION AND ACCEPTANCE NOT INFERRED.** This is a supporting integration contract inside the established SI-06/SI-07, GM/TC/CA/P13 and SP/P14 authorities. It is **not** a replacement phase hierarchy or second implementation roadmap. The actionable, verifiable five-package checklist is maintained in `docs/PENDING_WORK.md` and coordinated in [master issue #91](https://github.com/kiranvbiim-coder/lios-terminal/issues/91).
+
+### Owner intent and integration boundary
+
+The owner chose **a supervised, isolated OpenClaw-derived supporting service**, not a new primary LiOS runtime, not a standalone consumer-facing OpenClaw app and not an indiscriminate wholesale rebrand. The full useful donor capability surface is in scope for inspection and adoption; **Telegram and WhatsApp are explicit first-class examples**, not a reason to narrow adoption to simple send/receive. Agents must consider all applicable upstream channel and messaging features, agents and delegation, models/account access, tools, skills/MCP, browser/computer-use, orchestration, sessions, memory, scheduling, notifications, device nodes and diagnostics. Reuse entire sound subsystems/packages when that yields better LiOS integration than rewriting. Record unsupported/unsafe/non-permitted features individually with evidence; never silently declare them imported or ready.
+
+**End-user experience:** users see only LiOS conversations, Projects, live Artifacts/Workbench, contextual integrations and permitted device experiences. They may know which external accounts/services they connect, and must see accurate permissions, delivery and failure status, but no extra OpenClaw-branded dashboard, account identity, product shell, setup labyrinth or implementation-specific branding is required. Internals must not be concealed from consent, troubleshooting, audits or required notices.
+
+```text
+LiOS desktop / mobile / tablet / watch / chat
+             |
+LiOS Chat + TC UX + P4 Artifacts / Workbench
+             |
+Existing LiOS Home / Gateway + canonical grants & trust receipts
+             | (typed, versioned, local/user-owned, authorized)
+Existing supervisor -> isolated OpenClaw-derived supporting service
+             |       |       |       |       |
+          channels  agents  skills  tools  device/runtime adapters
+             |
+  Telegram / WhatsApp / other user-connected endpoints
+             |
+normalized event/result -> existing LiOS Chat, P9 automation,
+P4 Artifact, memory, notification and device authorities
+```
+
+A process boundary is desirable for faults, lifecycle management, resource limits, upgrades and independent donor maintenance. It **does not grant** execution permissions, eliminate the existing sandbox requirement, justify remote public ingress or introduce a second LiOS state authority. Prefer existing local IPC/supervisor/auth primitives; assess Unix sockets, named pipes and authenticated loopback only against existing GM security. LiOS Home owns launch, health, restart/backoff, disable/recovery, versions and shutdown. User-owned remote Home may host the service under the same contracts; no LiOS-operated customer cloud or relay.
+
+**Canonical ownership:** GM/Home/Gateway owns process, identity binding, grants, execution/security and device trust; P13/GM owns plugins, skills/MCP and tool permissions; TC owns visible Chat/connection/Workbench UX; P4 owns durable Artifact identity/revisions; P9 owns automation/notifications; connector/AI-access owners own official source auth, OAuth/CLI/provider entitlements and egress. Imported donor modules are *implementations behind those contracts*, never a second auth/profile vault, chat ledger, schedule database, model-router authority or Artifact store. No new universal routing framework unless the existing owner proves its seam insufficient.
+
+### Explicit channel-surface acceptance: Telegram and WhatsApp
+
+Treat **complete useful channel capability** as an audited inventory, not a promise that every upstream/platform feature is technically or contractually available. For each channel and authorized account/path, inspect the exact pinned upstream and owner-fork implementations and record:
+
+- account onboarding, official/supported login/authorization, re-authorization, revocation, logout, identity/scope and multi-account behavior where allowed;
+- inbound/outbound one-to-one, group and other supported conversations; replies, threads, quoting, attachments and media, contacts/identifiers, reactions, edits/deletes, message status and delivery/receipt semantics **where the platform/API provides them**;
+- incoming event verification, webhook/polling/transport constraints, dedupe, ordering, idempotency, retries/backoff, reconnect, offline queue, cancellation and attachment size/type/resource limits;
+- conversation-to-Project mapping, history import/retention, background-agent and automation triggers, safe notifications, device continuity and file/evidence/Artifact creation when authorized;
+- per-source/project/tenant scope, explicit recipient/action confirmation for outbound side effects, minimum necessary disclosure to AI providers, consent, quotas, privacy and data retention;
+- server-side authorization, token custody, secret redaction, egress restrictions, external callback exposure, protocol updates, abuse/rate limits and rights/terms of service.
+
+**No hidden user-account use or unauthorized automation**. Prefer authorized official interfaces; do not promise unsupported access or circumvent platform limits. Use exact feature-matrix statuses: `EXISTING_VERIFIED`, `DONOR_AVAILABLE`, `IMPORT_REQUIRED`, `ADAPT_REQUIRED`, `BLOCKED_BY_PLATFORM_OR_RIGHTS`, `DEFER_WITH_TRIGGER`, `REJECT_WITH_EVIDENCE`. Each decision includes source pin/path, owning LiOS adapter, rights/security note, required test and proof link. A listed capability, forked repo or copied folder is not an integrated, connected or working capability.
+
+### Five execution packages — subordinate to current SI plan
+
+**Package 1 — Full-source inventory, rights and contracts (SI-06/SI-07; GM/CA/P13).** Compare current public `main`, existing private/owner-approved forks where legitimately accessible, donor baseline `openclaw/openclaw@c074824a27c96d3983043f9eeb33823cd1772d8c`, current registered donor registry and active PRs. Identify already-landed implementations to avoid duplicate work. For all relevant upstream packages/channels, record license/dependency provenance, current adoption, canonical owner, security posture, resource footprint and `DIRECT_REUSE/IMPORT/ADAPT/REPURPOSE/COMBINE/GENERALIZE/INNOVATE/DEFER/REJECT` disposition according to the **existing** donor policy. Output: a crosswalk/evidence update within canonical docs/registry and issue #91, not a new product master plan.
+
+**Package 2 — Isolated supervised supporting service (SI-06; GM-Home/Gateway/security).** Extend the existing supervised runtime and typed IPC/RPC boundary, version/health/restart and shutdown, bounded queues, lifecycle provisioning, logs/redaction, installed-app resources, safe disable/fallback and policy enforcement. Assess sandbox/permissions/capability grants before exposing privileged tools; reject duplicates of Home, Gateway, server identity, P13 plugin host, PGlite state or secret vault. Verify local off/denied/crash/unavailable/reconnect behavior and non-interference with existing Python/finance engines and normal AI-off work.
+
+**Package 3 — Capability and channel assimilation (SI-06; existing GM/P13/connector owners).** Import/adapt the actual useful donor packages from verified pins/forks behind LiOS adapters. Complete Telegram/WhatsApp feature-matrix treatment; integrate allowed channel connection/receive/send, media, agents, skills/MCP, model access, automations, memory, browser/computer-use and device runtime where appropriate. The same LiOS user/source/Project grants, trust receipts, side-effect authorization, egress/cost and secret restrictions apply. Platform/rights limitations are recorded, not papered over. Maintain upstream provenance, tests and notices.
+
+**Package 4 — Invisible unified LiOS interaction (SI-07; TC/P4/P9/GM).** Support conversation-first discover/connect/authorize/run/inspect flows. Channel activity must enter existing Chats/Projects with accurate source/delivery labels and permission visibility. Useful outputs become existing P4 Artifacts; the compact chat result, live sidecar and **existing full Workbench** stay synchronized. Notifications and recurrence use P9; mobile/tablet/watch act as permitted clients/nodes of the user's Home, not donor-branded parallel apps. Errors and unavailable states are visible in normal LiOS UX; no donor console or multiple settings stacks.
+
+**Package 5 — Hardening, native shipping and acceptance (SI-07; SP-06/SP-07/P14 owners).** Qualify real entitled model and approved Telegram/WhatsApp user journeys on supported platforms where access exists, plus no-connected-provider/denial/revocation/offline/partial outage/replay, real tool and side-effect approvals, message/media integrity, restart/recovery, cross-Project isolation, storage/secret privacy, resource limits, native packaged regression, mobile continuity and backward-compatible upgrades. Record exact build/commit, environment, permissions, input/expected/actual results, privacy/rights posture, logs/receipts and gaps. Free source CI, unit pass or import counts are **not** native Shipping Point/P14 acceptance. Preserve the owner’s strict $0 additional-cash public-beta contract; do not mark paid signing/notarization production obligations met.
+
+### Agent coordination and non-duplication gate
+
+Before coding, each agent must read `AGENTS.md`, SI execution and shipping contracts, this section, `docs/PENDING_WORK.md`, the donor policy, target subsystem source and the current [master issue #91](https://github.com/kiranvbiim-coder/lios-terminal/issues/91). Claim **one bounded existing implementation-owner task**, state base/head SHA, file ownership and dependency class, inspect open branches/PRs and classify evidence. Do not make simultaneous changes to shared Gateway, P13, TC, P4, P9, schema or release cores without the respective canonical owner. Use distinct branches/PRs; link issue #91 and maintain a concise handoff with exact validation and remaining gaps. Existing SI-01–SI-07, SP-01–SP-07, S0–S10, GM/TC/CA/P IDs and P14 retain their established meanings.
+
+**Acceptance principle:** `upstream found` is not `imported`; `imported` is not `integrated`; `integrated` is not `packaged/authorized`; `packaged` is not `real-user-journey verified`; only the canonical Shipping Point and release authorities may certify acceptance.
+
 ---
 
 ## 1. Non-negotiable owner decisions
