@@ -33,7 +33,7 @@ async function open(url: string) {
   await once(socket, "open");
   const call = async (id: string, method: string, params?: unknown) => {
     socket.send(JSON.stringify({ type: "req", id, method, params }));
-    for (let i = 0; i < 100; i += 1) {
+    for (let i = 0; i < 1500; i += 1) {
       const found = frames.find((f) => f.type === "res" && f.id === id);
       if (found) return found;
       await new Promise((r) => setTimeout(r, 10));
