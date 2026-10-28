@@ -341,6 +341,15 @@ Sixteen directly relevant broker/real-PGlite account behaviors and typecheck pas
 
 No connector registration, public setup/consent route, channel UI, service controller or account login is enabled by this reader. Durable adoption/dedupe/cursor, actual retention enforcement, consent presentation, full provider operations and native/entitled qualification remain required before exposure. Existing Chat/P3/source stores need transaction-aware adoption and replay identity; do not store raw provider bodies in Ledger or progress in strict source policy.
 
+### Atomic Telegram update adoption — bounded Home/DB proof
+
+Migration `0086_lios_channel_ingress` adds a per-source cursor and minimal per-update replay custody (`channel_ingress_cursors`, `channel_ingress_updates`; unique source+update identity, content fingerprint, `adopted|ignored`, bounded reason, nullable Chat-message reference that survives Chat clearing). `server/telegramPollNormalizer.ts` parses the raw getUpdates body (fatal UTF-8, 4MiB/100-update/depth bounds, strictly ascending safe update IDs, typed redacted provider errors, single event family per update; business/guest/inline namespaces remain null identities). `adoptTelegramPoll` then commits, in ONE transaction under current canonical authority: Chat message (existing `project_chat_messages`, no second inbox), replay disposition, a minimal `channel.update.dispositioned` P3 event (no message text) and the cursor. Poll authority digest must still equal the transaction-time source/consent/owner/Project/Chat/policy digest; locks order source row→Chat row and do not nest a Project lock against lifecycle writers.
+
+Edited, callback, reaction, member, media-only and every other non-text/unresolved family receive an explicit `ignored` receipt (`edit_not_applied`, `unsupported_event`, `namespace_unresolved`, `no_text`, `conversation_not_allowed`) — progress is accounted for honestly, **not** applied as a new turn or silently dropped; edit/delete synchronization and rich operations remain open. Adopted text is excluded from model history unless adoption-time source policy set `allowAiTransmission` (`channelMessageExcludedFromAi` in `conversationRunService`). Provider errors, malformed bodies and stale authority never advance durable progress; same-ID different-content conflicts roll back the whole batch.
+
+Evidence: 39 directly relevant normalizer/account/adoption/ledger/migration-chain behaviors and typecheck passed (including identical replay after Chat clearing, rollback of an earlier update on a later conflict, and refusal after consent/policy/owner change leaving no rows/cursor). Actual isolated PGlite + real loopback HTTP smoke: poll offset0 → adopt update17 → cursor18 → next poll offset18, no duplicate Chat message. Local protocol/DB proof only: no provider acceptance of the offset, no installed-vault custody, no public route/consent UI/service controller, no retention enforcement, no hosted PostgreSQL concurrency run, and no Telegram entitlement.
+
+
 
 
 

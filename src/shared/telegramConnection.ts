@@ -48,3 +48,11 @@ export function telegramCredentialName(userId: number, accountBindingId: string)
 export function telegramConsentScope(accountBindingId: string): string {
   return `channel:telegram:${uuid.parse(accountBindingId)}:ingress`;
 }
+
+/** Imported channel text is never model input unless its source policy explicitly allowed AI transmission when adopted. */
+export function channelMessageExcludedFromAi(metadata: unknown): boolean {
+  if (typeof metadata !== "object" || metadata === null) return false;
+  const channel = (metadata as Record<string, unknown>).channelIngress;
+  if (channel === undefined) return false;
+  return typeof channel !== "object" || channel === null || (channel as Record<string, unknown>).aiTransmissionAllowed !== true;
+}

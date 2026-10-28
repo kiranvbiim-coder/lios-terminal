@@ -81,6 +81,9 @@
 
 **Canonical polling binding progress:** source connection policy now resolves through current user/org, owned active Project/Chat, versioned canonical consent and exact owner/account vault namespace. Organization mode has no local fallback and uses the existing vault's versioned single-name snapshot; sync credential fences run at network dispatch/release. Sixteen focused broker/account checks/typecheck and an actual scratch PGlite/encrypted-vault/local-HTTP smoke passed; owner revocation withheld a received body and prevented subsequent networking. A null-org fallback defect has a failing-before/passing-after regression. This is an internal read path only: no connection/consent UI, public route, provider login, durable adoption/cursor, retention enforcement or enabled service/channel is claimed.
 
+**Atomic adoption progress:** migration0086 plus `adoptTelegramPoll` durably commit Chat message, replay custody, minimal P3 disposition and cursor together under current authority; non-text/edit/other families are explicit ignored dispositions; adopted channel text is AI-excluded unless adoption-time policy allowed it. 39 focused behaviors/typecheck and actual PGlite+loopback HTTP cursor-continuation smoke passed. Public setup/consent UI, retention enforcement, edit/delete semantics, outbound sends, hosted-Postgres concurrency evidence, service registration, provider and native proof remain open.
+
+
 
 
 ### Package 4 — One invisible LiOS user experience (SI-07; TC/P4/P9/GM owners)

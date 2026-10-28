@@ -1,4 +1,4 @@
-import { pgTable, text, integer, real, boolean, timestamp, jsonb, uniqueIndex, index, check, foreignKey } from "drizzle-orm/pg-core";
+import { pgTable, text, integer, bigint, real, boolean, timestamp, jsonb, uniqueIndex, index, check, foreignKey } from "drizzle-orm/pg-core";
 import { sql } from "drizzle-orm";
 import { relations } from "drizzle-orm";
 import { z } from "zod";
@@ -476,6 +476,40 @@ export const sourceConnections = pgTable("source_connections", {
   index("source_connection_org_idx").on(table.organizationId),
   index("source_connection_connector_idx").on(table.connectorId),
 ]);
+
+// Per-source polling progress. The cursor advances only in the same transaction that durably records every
+// update disposition (and any canonical Chat adoption) below it; it never stores provider bodies or credentials.
+export const channelIngressCursors = pgTable("channel_ingress_cursors", {
+  sourceConnectionId: integer("source_connection_id").primaryKey().references(() => sourceConnections.id, { onDelete: "cascade" }),
+  provider: text("provider").notNull(),
+  nextOffset: bigint("next_offset", { mode: "number" }).notNull().default(0),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+}, (table) => [
+  check("channel_ingress_cursors_provider_ck", sql`${table.provider} = 'telegram'`),
+  check("channel_ingress_cursors_offset_ck", sql`${table.nextOffset} >= 0 AND ${table.nextOffset} <= 9007199254740991`),
+]);
+
+// Replay custody that survives Chat clearing: identity, content fingerprint and minimal disposition only.
+// Raw provider text/profile/media is never retained here; Chat content stays under canonical Chat ownership.
+export const channelIngressUpdates = pgTable("channel_ingress_updates", {
+  id: integer("id").primaryKey().generatedAlwaysAsIdentity(),
+  sourceConnectionId: integer("source_connection_id").notNull().references(() => sourceConnections.id, { onDelete: "cascade" }),
+  updateId: bigint("update_id", { mode: "number" }).notNull(),
+  eventType: text("event_type").notNull(),
+  fingerprint: text("fingerprint").notNull(),
+  disposition: text("disposition").notNull(),
+  reason: text("reason"),
+  chatMessageId: integer("chat_message_id").references(() => projectChatMessages.id, { onDelete: "set null" }),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+}, (table) => [
+  uniqueIndex("channel_ingress_update_identity_unique").on(table.sourceConnectionId, table.updateId),
+  index("channel_ingress_update_message_idx").on(table.chatMessageId),
+  check("channel_ingress_update_disposition_ck", sql`${table.disposition} IN ('adopted','ignored')`),
+  check("channel_ingress_update_fingerprint_ck", sql`length(${table.fingerprint}) = 64`),
+  check("channel_ingress_update_id_ck", sql`${table.updateId} >= 0 AND ${table.updateId} < 9007199254740991`),
+  check("channel_ingress_update_adopted_ck", sql`${table.disposition} <> 'adopted' OR ${table.reason} IS NULL`),
+]);
+export type ChannelIngressUpdate = typeof channelIngressUpdates.$inferSelect;
 // Hosted credentials are tenant-scoped encrypted records. The ciphertext is
 // never returned to callers; local-first deployments continue using the
 // machine-local vault until hosted credential storage is configured.

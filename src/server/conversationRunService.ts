@@ -36,6 +36,7 @@ import {
   type GovernedToolAuthorization,
 } from "./conversationGrantStore";
 import { conversationRequestSchema } from "@shared/conversationRuntime";
+import { channelMessageExcludedFromAi } from "@shared/telegramConnection";
 import { resolveRecordedClaimReview } from "./recordedClaimReview";
 import type { ProjectChatMessage, ProjectResource } from "@shared/schemaProjects";
 import type {
@@ -621,11 +622,11 @@ async function runProjectChat(
       initiatingMessageId = initiatingMessage.id;
       await autoTitleProjectChat(context, chatId, request.message);
     }
-    const runtimeHistory = request.continuationOf
+    const runtimeHistory = (request.continuationOf
       && priorHistory.at(-1)?.role === "user"
       && priorHistory.at(-1)?.content === request.message
       ? priorHistory.slice(0, -1)
-      : priorHistory;
+      : priorHistory).filter((message) => !channelMessageExcludedFromAi(message.metadata));
 
     const preparedRestart = restart ? await prepareRestartRun({
       user, chatId, chat, tenant: context, restart, runtimeRequest, resources, projectName, projectInstructions, resolvedAttachments,
