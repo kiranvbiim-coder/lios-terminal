@@ -513,3 +513,20 @@ test("C04 Stop request never renders as confirmed cancellation before server rep
   const stopped = render([planEvent, event({type:"done", status:"cancelled"})], { defaultShowWork: true });
   assert.match(stopped, /data-step-state="cancelled"/);
 });
+
+test("C06 saved runtime Artifact offers exact-version reopen only when canonical P4 navigation exists",()=>{
+ const draft={artifactType:"research_brief",title:"Exact source-backed research",projectId:12,persistence:"project_candidate",sourceRefs:[]};
+ const evt=event({type:"artifact",artifact:draft,persistedArtifact:{
+   id:"artifact:66666666-6666-4666-8666-666666666666",version:4,
+ }});
+ const shown=render([evt,doneOk],{onOpenSavedArtifact:noop});
+ assert.match(shown,/data-testid="c06-open-recorded-artifact"/);
+ assert.match(shown,/Open saved v4/);
+ assert.match(shown,/Saved in Project · exact v4/);
+ assert.match(shown,/P4 checks access when opened/);
+ assert.doesNotMatch(shown,/Keep in Project/);
+ const unavailable=render([evt,doneOk],{onOpenSavedArtifact:undefined});
+ assert.doesNotMatch(unavailable,/c06-open-recorded-artifact|Open saved v4/);
+ const unsaved=render([event({type:"artifact",artifact:draft}),doneOk],{onOpenSavedArtifact:noop});
+ assert.doesNotMatch(unsaved,/c06-open-recorded-artifact/);
+});

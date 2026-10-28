@@ -13,6 +13,7 @@ import ChatSourcesControl from "./ChatSourcesControl";
 import ChatExtensionsDialog from "./ChatExtensionsDialog";
 import ConversationArtifactSidecar from "./ConversationArtifactSidecar";
 import { isCurrentArtifactLoad } from "@/lib/artifactSidecarSizing";
+import { exactRuntimeSavedArtifact } from "@/lib/exactRuntimeSavedArtifact";
 import type { z } from "zod";
 import { ProjectDestinationDialog } from "./ProjectDestinationDialog";
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
@@ -2585,6 +2586,33 @@ export default function ProjectExperienceShell({
                   interruptedRun.resume();
                 }}
                 onFollowUp={(prompt) => { setInput(current => stageSafeRunRetry(current, prompt)); requestAnimationFrame(() => composerRef.current?.focus()); }}
+                onOpenSavedArtifact={chatMode === "temporary" ? undefined : async (artifactId, version, projectId, requestId) => {
+                  // C06 is a navigation request, never an Artifact grant. Bind
+                  // against the still-selected run and owner before the P4 read.
+                  const activeRequestId = runtimeRequestId ?? runtimeEvents.at(-1)?.requestId ?? null;
+                  const candidate = [...runtimeEvents].reverse().find(event =>
+                    event.type === "artifact" && event.requestId === requestId);
+                  const saved = exactRuntimeSavedArtifact(candidate, {
+                    requestId:activeRequestId, projectId:selection.projectId, chatId:selection.chatId,
+                  });
+                  if (!saved || saved.artifactId !== artifactId || saved.version !== version ||
+                      saved.projectId !== projectId || chatMode === "temporary" || busy || busyRef.current ||
+                      keepingArtifactRef.current || sendInFlightRef.current) {
+                    setLifecycleNotice("This exact saved Artifact is no longer available in the active Chat, or work is still running. Open it through your saved Artifact history.");
+                    return;
+                  }
+                  if (artifactDraftDirtyRef.current && !(await requestLifecycle({
+                    title:"Leave unsaved Artifact edits?",
+                    detail:"Opening this saved revision discards only the local Artifact draft. Existing P4 versions are unchanged.",
+                    confirmLabel:"Discard local edits",
+                  }))) return;
+                  artifactDraftDirtyRef.current = false;
+                  setArtifactFocusMode(false);
+                  setConversationArtifactRef(saved.artifactId);
+                  setArtifactViewVersion(saved.version);
+                  // The existing ConversationArtifactSidecar/ArtifactPane now
+                  // re-fetches this exact version under P4 access controls.
+                }}
                 onKeepArtifact={chatMode === "temporary" ? undefined : keepArtifact}
                 onSubmitAssumptions={(message) => void send({ message })}
               />

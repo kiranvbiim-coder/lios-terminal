@@ -55,6 +55,8 @@ interface Props {
   onMutationApply: (action: ConversationActionName) => void;
   onMutationCancel: (action: ConversationActionName) => void;
   onKeepArtifact?: (artifact: ConversationArtifactDraft) => void;
+  /** C06: opens an exact previously saved P4 revision through the owning Chat; no implicit save or edit. */
+  onOpenSavedArtifact?: (artifactId: string, version: number, projectId: number | null, requestId: string) => void;
   onRecoveryAction?: (action: string) => void;
   /** Prefills the composer with a suggested next request; never sends it. */
   onFollowUp?: (prompt: string) => void;
@@ -158,6 +160,7 @@ export default function ConversationRuntimeTrace({
   onMutationApply,
   onMutationCancel,
   onKeepArtifact,
+  onOpenSavedArtifact,
   onRecoveryAction,
   onFollowUp,
   onRetry,
@@ -567,6 +570,23 @@ export default function ConversationRuntimeTrace({
             ? "This run did not complete. Inspect its partial work and receipts before deciding whether to retry."
             : "This run was stopped before it finished. Any partial answer above may be incomplete."}
         </div>
+      )}
+
+      {artifact?.type === "artifact" && artifact.persistedArtifact && onOpenSavedArtifact && (
+        <section data-testid="c06-open-recorded-artifact" aria-label="Open exact saved Artifact"
+          className="mb-2 flex flex-wrap items-center gap-3 rounded-lg border border-fuchsia-300/20 bg-fuchsia-300/[0.025] px-3 py-2.5">
+          <FileBarChart className="h-4 w-4 shrink-0 text-fuchsia-200" aria-hidden="true" />
+          <div className="min-w-0 flex-1">
+            <p className="break-words font-ui text-sm font-medium text-foreground">{artifact.artifact.title}</p>
+            <p className="font-ui text-xs text-muted-foreground">Saved in {artifact.artifact.projectId === null ? "Chat" : "Project"} · exact v{artifact.persistedArtifact.version}. P4 checks access when opened; this is not an execution receipt.</p>
+          </div>
+          <button type="button"
+            aria-label={`Open exact saved Artifact version ${artifact.persistedArtifact.version} in Chat`}
+            onClick={() => onOpenSavedArtifact(artifact.persistedArtifact!.id, artifact.persistedArtifact!.version, artifact.artifact.projectId, artifact.requestId)}
+            className="min-h-11 rounded-lg border border-fuchsia-300/40 px-3 py-2 font-ui text-sm text-fuchsia-100 hover:bg-fuchsia-300/[0.05] focus-visible:outline focus-visible:outline-2 focus-visible:outline-amber-300">
+            Open saved v{artifact.persistedArtifact.version}
+          </button>
+        </section>
       )}
 
       {visualAnswerRequest && <GovernedVisualAnswer
