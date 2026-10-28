@@ -1,4 +1,6 @@
 import type { CrossDomainEdge, CrossDomainGraph, CrossDomainNode } from "./terminalCrossDomainGraph";
+import { inferDomain } from "./terminalCrossDomainGraph";
+import type { IntelligenceObject } from "./terminalIntelligenceObjects";
 
 /** This selector is display-only. Every shown line must already exist in the published object graph. */
 export interface GraphExplorerPresentation {
@@ -119,4 +121,32 @@ export function summarizeRecordedGraphLinks(graph: CrossDomainGraph): Array<{
   }
   return [...counts].map(([relation, count]) => ({relation, count}))
     .sort((a, b) => b.count - a.count || a.relation.localeCompare(b.relation));
+}
+
+/**
+ * B07/B09: preserve source-authorized Intelligence Objects while prioritizing
+ * an explicit user search before the visual graph's 120-record memory bound.
+ * Neighbor context is admitted only through an actual saved relation.
+ */
+export function selectRecordedCrossDomainGraphObjects(
+  objects: readonly IntelligenceObject[],
+  query: string,
+  selectedId: string | null,
+  max = 120,
+): IntelligenceObject[] {
+  const limit = Number.isSafeInteger(max) ? Math.max(1, Math.min(120, max)) : 120;
+  const needle = query.trim().toLocaleLowerCase().slice(0, 120);
+  if (!needle && !selectedId) return objects.slice(0, limit);
+  const matches = objects.filter(object =>
+    object.id === selectedId || (!!needle && [
+      object.id, object.label, object.symbol ?? "", object.kind, inferDomain(object), ...object.tags,
+    ].some(value => value.toLocaleLowerCase().includes(needle))));
+  if (!matches.length) return needle ? [] : objects.slice(0, limit);
+  const focus = new Set(matches.map(object => object.id));
+  const neighbors = new Set(matches.flatMap(object => object.relations.map(rel => rel.targetId)));
+  for (const object of objects) {
+    if (object.relations.some(relation => focus.has(relation.targetId))) neighbors.add(object.id);
+  }
+  const preferred = [...matches, ...objects.filter(object => !focus.has(object.id) && neighbors.has(object.id))];
+  return preferred.slice(0, limit);
 }
