@@ -17,6 +17,7 @@ const fs = require("node:fs");
 const path = require("node:path");
 const crypto = require("node:crypto");
 const { verifyBetaManifest } = require("../betaReleaseManifest.cjs");
+const { evaluateP14PackagedPerformance } = require("../p14PerformanceBudget.cjs");
 
 const FIELDS = Object.freeze([
   "manifest", "asset-dir", "trusted-key", "commit",
@@ -60,8 +61,12 @@ function checkNativeSelfTest(value, platform, arch) {
     value.packagedResourceImmutability?.forbiddenPythonBytecodeAfter === 0,
     platform + " packaged Python resources were modified.");
   assert(value.updaterMetadataPresent === true, platform + " beta package updater metadata not checked.");
-  assert(Number.isFinite(value.performance?.desktopSelfTestElapsedMs) &&
-    value.performance.desktopSelfTestElapsedMs >= 0, platform + " self-test timing missing.");
+  // Reuse the already qualified native safety ceilings; a finite but
+  // multi-minute cold start or excessive RSS must not pass the $0 beta gate.
+  // This does not imply the separate P14 signed-production qualification.
+  const budget = evaluateP14PackagedPerformance(value.performance);
+  assert(budget.ok, platform + " packaged performance violates existing P14 safety limits: " +
+    budget.errors.join(" "));
   return { platform, arch, nativeSelfTest: true };
 }
 function checkNativeUX(value, target, expectedHash) {
