@@ -17,6 +17,19 @@ if (beta && (targetMac ? process.platform !== "darwin" || process.arch !== "arm6
   process.exit(1);
 }
 const betaVersion = process.env.LIOS_BETA_VERSION;
+// A beta must correspond to one exact, reviewed clean tracked source tree.
+// Package metadata carries this immutable commit to the installed self-test.
+let betaSourceCommit = null;
+if (beta) {
+  const cwd = path.join(__dirname, "..");
+  const head = spawnSync("git", ["rev-parse", "--verify", "HEAD"], { cwd, encoding: "utf8" });
+  const dirty = spawnSync("git", ["status", "--porcelain", "--untracked-files=no"], { cwd, encoding: "utf8" });
+  betaSourceCommit = head.status === 0 ? String(head.stdout || "").trim() : null;
+  if (!/^[a-f0-9]{40}$/.test(betaSourceCommit || "") || dirty.status !== 0 || String(dirty.stdout || "").trim()) {
+    console.error("Beta packaging requires a clean tracked Git tree at an exact 40-character commit.");
+    process.exit(1);
+  }
+}
 if (beta && !/^\d+\.\d+\.\d+-beta\.[1-9]\d*$/.test(betaVersion || "")) {
   console.error("Set LIOS_BETA_VERSION to an explicit version such as 1.0.0-beta.1.");
   process.exit(1);
@@ -106,7 +119,7 @@ const args = ["build"];
 if (mode === "pack") args.push("-c.extraMetadata.liosReleaseChannel=development");
 if (beta) {
   args.push("--publish", "never", "-c.forceCodeSigning=false", "-c.extraMetadata.liosReleaseChannel=beta",
-    `-c.extraMetadata.version=${betaVersion}`, "-c.artifactName=LiOS-${version}-${os}-${arch}-beta.${ext}");
+    `-c.extraMetadata.version=${betaVersion}`, `-c.extraMetadata.liosBuildCommit=${betaSourceCommit}`, "-c.artifactName=LiOS-${version}-${os}-${arch}-beta.${ext}");
   if (targetMac) args.push("--mac", ...(betaDirectoryOnly ? ["dir"] : ["dmg", "zip"]), "--arm64", "-c.mac.identity=-", "-c.mac.notarize=false",
     "-c.mac.entitlements=build-resources/entitlements.beta.mac.plist",
     "-c.mac.entitlementsInherit=build-resources/entitlements.beta.mac.plist",
