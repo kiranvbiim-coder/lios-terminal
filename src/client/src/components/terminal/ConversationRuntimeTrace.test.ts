@@ -581,3 +581,25 @@ test("C08 partial reconciliation is only a read-only draft and never offers an a
   assert.doesNotMatch(output, /data-testid="c08-reconcile-partial-actions"|data-testid="trace-error-retry"/);
   assert.match(output, /No automatic retry, tool execution or permission grant is performed/);
 });
+
+test("C06 exact P4 reopen is visible only for saved versions when current Chat provides the handler", () => {
+  const draft = {
+    artifactType: "research_brief", title: "Recorded filing analysis",
+    projectId: 12, persistence: "project_candidate", sourceRefs: [],
+  };
+  const saved = event({ type: "artifact", artifact: draft,
+    persistedArtifact: { id: "artifact:66666666-6666-4666-8666-666666666666", version: 4 } });
+  const shown = render([saved, doneOk], { onOpenSavedArtifact: noop });
+  assert.match(shown, /data-testid="c06-open-recorded-artifact"/);
+  assert.match(shown, /data-testid="c06-open-exact-saved-version"/);
+  assert.match(shown, /Open saved v4/);
+  assert.match(shown, /Saved in Project · exact v4/);
+  assert.match(shown, /P4 rechecks permissions when opened/);
+  assert.doesNotMatch(shown, /Keep in Project/);
+
+  const unavailable = render([saved, doneOk], { onOpenSavedArtifact: undefined });
+  assert.doesNotMatch(unavailable, /c06-open-recorded-artifact|Open saved v4/);
+  const unsaved = render([event({ type: "artifact", artifact: draft }), doneOk],
+    { onOpenSavedArtifact: noop });
+  assert.doesNotMatch(unsaved, /c06-open-recorded-artifact/);
+});
