@@ -15,7 +15,13 @@ function packaged(platform, arch) {
     pythonSidecar: { representativeRoute: { verified: true } },
     packagedResourceImmutability: { forbiddenPythonBytecodeBefore: 0, forbiddenPythonBytecodeAfter: 0 },
     updaterMetadataPresent: true,
-    performance: { desktopSelfTestElapsedMs: 50 },
+    performance: {
+      desktopSelfTestElapsedMs: 50,
+      electronAppReadyElapsedMs: 250,
+      mainProcessMemoryAtCompletion: {
+        rssBytes: 128 * 1024 * 1024, heapUsedBytes: 64 * 1024 * 1024,
+      },
+    },
   };
 }
 function ui(target) {
@@ -154,5 +160,27 @@ test("D08 beta evidence gate refuses a replaced file between lstat and open", t 
     assert.equal(swapped, true);
   } finally {
     fs.openSync = open;
+  }
+});
+
+test("D08 $0 beta gate reuses native performance ceilings rather than finite-only timing", () => {
+  const original = packaged("darwin", "arm64");
+  assert.equal(checkNativeSelfTest(original, "darwin", "arm64").nativeSelfTest, true);
+  for (const performance of [
+    { ...original.performance, desktopSelfTestElapsedMs: 60_001 },
+    { ...original.performance, electronAppReadyElapsedMs: 20_001 },
+    { ...original.performance, mainProcessMemoryAtCompletion: {
+      ...original.performance.mainProcessMemoryAtCompletion,
+      rssBytes: 1024 * 1024 * 1024 + 1,
+    } },
+    { ...original.performance, mainProcessMemoryAtCompletion: {
+      ...original.performance.mainProcessMemoryAtCompletion,
+      heapUsedBytes: 512 * 1024 * 1024 + 1,
+    } },
+    { ...original.performance, electronAppReadyElapsedMs: Infinity },
+    { ...original.performance, mainProcessMemoryAtCompletion: undefined },
+  ]) {
+    assert.throws(() => checkNativeSelfTest({ ...original, performance }, "darwin", "arm64"),
+      /BLOCKED.*performance/i);
   }
 });
