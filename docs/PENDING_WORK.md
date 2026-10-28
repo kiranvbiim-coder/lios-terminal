@@ -52,6 +52,9 @@
 
 **Transport mechanism progress, not Package 2 acceptance:** `server/supportingServiceTransport.ts` now implements bounded generation-bound pipe framing with current-authority callbacks, serialized queues, deadlines and single-flight stop ownership. Exact upstream byte-framer import and both tests are recorded in canonical OSS/notice ledgers. Ten focused tests and typecheck passed; actual synthetic Node-pipe smoke passed readiness/health/revoked-write refusal/child close. Full strict supervisor/Home/account integration, channel connections, installed proof and all P2.01–P2.09 acceptance remain open; no new public route or enabled capability.
 
+**GM-11 Home-scope admission progress:** existing placement now supports explicitly policy-enabled internal Home-service identity only on an isolated deny-network container, without Chat/Project inheritance, ambient secrets or host fallback. Eleven focused placement tests/typecheck passed; actual immutable strict-container exact-approval execution produced the fixed synthetic scope marker and then refused service-policy revocation. Public Chat operation proposals still reject internal service facts. No Home service/controller or channel is enabled; Package 2 remains open.
+
+
 
 ### Package 3 — Full useful donor capability and channel assimilation (SI-06; existing GM/P13/connector/AI-access owners)
 
