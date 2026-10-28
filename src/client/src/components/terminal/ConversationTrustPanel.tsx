@@ -10,6 +10,7 @@ import {
   ShieldCheck,
 } from "lucide-react";
 import type { TrustManifest } from "@shared/trustContracts";
+import type { RecordedClaimReview } from "@shared/conversationRuntime";
 import { recordP3TrustInteraction } from "@/lib/p3TrustTelemetry";
 import EvidencePrism from "./EvidencePrism";
 import EvidenceExceptionDetails from "./EvidenceExceptionDetails";
@@ -20,7 +21,7 @@ import { BeuiCitations } from "@/components/vendor/beui/BeuiCitations";
 interface Props {
   manifest: TrustManifest;
   onRecoveryAction?: (action: string) => void;
-  onReviewDecision?: (prompt: string) => void;
+  onReviewDecision?: (prompt: string, binding: RecordedClaimReview) => void;
 }
 
 function titleCase(value: string): string {

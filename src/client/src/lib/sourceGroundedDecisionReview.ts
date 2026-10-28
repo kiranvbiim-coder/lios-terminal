@@ -1,9 +1,11 @@
 import type {TrustManifest} from "@shared/trustContracts";
+import type { RecordedClaimReview } from "@shared/conversationRuntime";
 import { recordedSourceAccess } from "./evidenceExceptions";
 
 export type DecisionReviewDraft = {
   claimId:string;
   prompt:string;
+  binding: RecordedClaimReview;
   sourceCount:number;
   unresolvedAssumptions:number;
   warnings:number;
@@ -59,6 +61,6 @@ export function sourceGroundedDecisionReview(
     "Propose alternatives and trade-offs only when evidence permits. Do not claim verified exposure, causal impact, source rights or a numeric forecast without a current deterministic receipt.",
     "Do not execute tools, create automation, save an Artifact, send data externally or apply recommendations without explicit user approval.",
   ].join("\n");
-  return {status:"ready",draft:{claimId,prompt,sourceCount:sources,
+  return {status:"ready",draft:{claimId,prompt,binding:{sourceRequestId:manifest.requestId,trustId:manifest.trustId,claimId},sourceCount:sources,
     unresolvedAssumptions:missing,warnings:manifest.warnings.length+manifest.missing.length}};
 }

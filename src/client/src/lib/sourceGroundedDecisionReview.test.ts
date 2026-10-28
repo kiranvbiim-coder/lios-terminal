@@ -5,7 +5,7 @@ import {sourceGroundedDecisionReview} from "./sourceGroundedDecisionReview";
 const ID="22222222-2222-4222-8222-222222222222";
 const SOURCE="private:never-send-this";
 const manifest={
- trustId:ID,summary:{conflictState:"none"},evidence:[{
+ requestId:ID,trustId:ID,summary:{conflictState:"none"},evidence:[{
   sourceRef:SOURCE,kind:"provider",access:{state:"allowed",entitlementRequired:false},
   connectorState:"live_verified",providerLabel:"Saved provider",observedAt:"2026-10-27T09:00:00Z",
  }],assumptions:[{ref:"assumption:a",value:"NEVER-TRANSMIT-MODEL-DATA"}],
@@ -20,6 +20,7 @@ test("C05 only creates an opt-in review prompt from exact, matched, known-access
  if(review.status!=="ready")return;
  assert.equal(review.draft.sourceCount,1);
  assert.equal(review.draft.unresolvedAssumptions,0);
+ assert.deepEqual(review.draft.binding,{sourceRequestId:ID,trustId:ID,claimId:ID});
  assert.match(review.draft.prompt,/CURRENT source permission/);
  assert.match(review.draft.prompt,/Do not execute tools/);
  assert.doesNotMatch(review.draft.prompt,/private:never|NEVER-TRANSMIT|Do not blindly advise|Private recorded text/);

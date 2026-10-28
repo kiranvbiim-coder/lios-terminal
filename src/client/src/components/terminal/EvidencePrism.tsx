@@ -3,6 +3,7 @@ import { useEffect, useId, useState } from "react";
 import { ChevronDown, ChevronUp } from "lucide-react";
 import { recordedIsoTimestamp } from "@/lib/recordedIsoTimestamp";
 import { sourceGroundedDecisionReview } from "@/lib/sourceGroundedDecisionReview";
+import type { RecordedClaimReview } from "@shared/conversationRuntime";
 import type { EvidenceObservation, TrustManifest } from "@shared/trustContracts";
 import {
   describeObservationRights,
@@ -16,7 +17,7 @@ export function recordedClaimObservationTimestamp(value: string | null): string 
 }
 
 /** Inspect an existing structured P3 claim. No inferred evidence, live provider reads or new grants. */
-export default function EvidencePrism({ manifest, onReviewDecision }: { manifest: TrustManifest; onReviewDecision?: (prompt: string) => void }) {
+export default function EvidencePrism({ manifest, onReviewDecision }: { manifest: TrustManifest; onReviewDecision?: (prompt: string, binding: RecordedClaimReview) => void }) {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [observedBy, setObservedBy] = useState<string>("");
   const prefix = useId();
@@ -127,7 +128,7 @@ export default function EvidencePrism({ manifest, onReviewDecision }: { manifest
                   {decision?.status === "ready" && onReviewDecision && (
                     <div className="space-y-1 rounded-lg border border-amber-300/30 bg-amber-300/[0.035] p-3" data-testid="c05-recorded-decision-review">
                       <p className="text-xs">Review {decision.draft.sourceCount} recorded evidence observation(s) and {claim.assumptionRefs.length} assumption reference(s). No action will be taken automatically.</p>
-                      <button type="button" onClick={() => onReviewDecision(decision.draft.prompt)}
+                      <button type="button" onClick={() => onReviewDecision(decision.draft.prompt, decision.draft.binding)}
                         className="min-h-11 rounded-lg border border-amber-300/50 px-3 py-2 text-sm font-medium text-foreground focus-visible:ring-2 focus-visible:ring-amber-300/70">
                         Review decision options in Chat
                       </button>

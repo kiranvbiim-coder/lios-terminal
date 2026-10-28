@@ -139,6 +139,7 @@ import { uploadRealChatAttachment, type UploadStage } from "@/lib/realFileAttach
 import { ambiguousMentionTokens, eligibleProjectMentions, stageResourceMention } from "@shared/mentionContext";
 import { stageUniversalChatQuestion, type UniversalChatHandoff } from "@/lib/universalChatHandoff";
 import { hasObservedCompletion, stageSafeRunRetry } from "@/lib/observedRunPolicy";
+import type { RecordedClaimReview } from "@shared/conversationRuntime";
 import { clearSubmittedComposerDraft, mayClearComposerDraft, restoreFailedComposerDraft } from "@/lib/composerDraftSafety";
 import ConversationRuntimeTrace from "./ConversationRuntimeTrace";
 import ChatMarkdown from "./ChatMarkdown";
@@ -439,6 +440,13 @@ export default function ProjectExperienceShell({
   const [runtimeEvents, setRuntimeEvents] = useState<ConversationRuntimeEvent[]>([]);
   const [runtimeRequestId, setRuntimeRequestId] = useState<string | null>(null);
   const [declinedRunAction, setDeclinedRunAction] = useState<{ requestId: string; action: ConversationActionName } | null>(null);
+  const [claimReviewDraft, setClaimReviewDraft] = useState<{ prompt: string; binding: RecordedClaimReview; chatId: number | null } | null>(null);
+  const submittedClaimReview = useRef<typeof claimReviewDraft>(null);
+  useEffect(() => {
+    if (submittedClaimReview.current?.chatId !== selection.chatId) submittedClaimReview.current = null;
+    if (!input.trim() || claimReviewDraft?.chatId !== selection.chatId) setClaimReviewDraft(null);
+    if (submittedClaimReview.current?.prompt === input.trim()) setClaimReviewDraft(submittedClaimReview.current);
+  }, [input, selection.chatId]);
   const [executionTerminalOpen, setExecutionTerminalOpen] = useState(false);
   const [sandboxProposal, setSandboxProposal] = useState<SandboxTerminalProposal | null>(null);
   const [sandboxSessionId, setSandboxSessionId] = useState<string | null>(null);
@@ -1437,6 +1445,12 @@ export default function ProjectExperienceShell({
     const message = (override?.message ?? input).trim()
       || (hasStagedAttachments ? "Analyze the attached file(s). Cite each file by name and clearly identify any missing or unreadable content." : "");
     if (!message || busy || busyRef.current || sendInFlightRef.current || chatCreationInFlightRef.current || projectCreationInFlightRef.current) return;
+    const boundReview = claimReviewDraft ?? (submittedClaimReview.current?.chatId === selection.chatId &&
+      submittedClaimReview.current.prompt === message ? submittedClaimReview.current : null);
+    if (boundReview && message !== boundReview.prompt) {
+      setLifecycleNotice("This edited draft no longer matches its selected claim review. Clear the draft to cancel it, or restage the review from Show work.");
+      return;
+    }
     if (voiceRecorder.isPending()) { setLifecycleNotice("Finish voice recording and transcription before Send. Your draft and clip remain in this Chat."); return; }
     if (chatMode === "project" && selection.projectId && transmissionPolicy.allowResourceReferences && (sourceScope === "auto" || sourceScope === "my_data")) {
       const owned = resources.filter(resource => resource.projectId === selection.projectId && resource.status === "active" && !resource.trashedAt);
@@ -1489,7 +1503,7 @@ export default function ProjectExperienceShell({
     if (!override?.approval && !override?.continuationOf && await runCommand(message, () => {
       if (canClearDraft) setInput(current => clearSubmittedComposerDraft(current, originalComposerDraft, message));
     })) return;
-    if (agentComposer.enabled && !agentComposer.ready) {
+    if (!boundReview && agentComposer.enabled && !agentComposer.ready) {
       setLifecycleNotice(agentComposer.guidance);
       return;
     }
@@ -1547,6 +1561,8 @@ export default function ProjectExperienceShell({
       requestId,
       continuationOf: override?.continuationOf ?? null,
       message,
+      ...(boundReview && boundReview.chatId === selection.chatId && !override?.message
+        ? { recordedClaimReview: boundReview.binding } : {}),
       sourceScope: sourceScopeForChatMode(chatMode, sourceScope),
       executionMode,
       aiDirectApproved,
@@ -1560,7 +1576,7 @@ export default function ProjectExperienceShell({
     const voiceReview = voiceTranscripts.length
       ? { transcripts: voiceTranscripts, transcriptReviewed: voiceTranscriptReviewed }
       : undefined;
-    if (!override?.continuationOf && chatMode === "project") {
+    if (!override?.continuationOf && chatMode === "project" && !payload.recordedClaimReview) {
       const projectApprovals = approvals.filter((grant) => grant.scope === "project");
       setLastWorkflowRequest({
         message,
@@ -1575,6 +1591,7 @@ export default function ProjectExperienceShell({
     }
 
     recordP1ShellEvent("composer_submit");
+    if (boundReview) submittedClaimReview.current = boundReview;
     busyRef.current = true;
     cancelAcknowledgedRunRef.current = null;
     setCancelAcknowledgedRunId(null);
@@ -1669,7 +1686,7 @@ export default function ProjectExperienceShell({
 
         const result = await runConversation(requireGateway(), {
           chatId,
-          body: { ...payload, agent: agentComposer.enabled, ...(voiceReview ? { voiceReview } : {}) },
+          body: { ...payload, agent: payload.recordedClaimReview ? false : agentComposer.enabled, ...(voiceReview ? { voiceReview } : {}) },
           onEvent: applyRuntimeEvent,
         });
         if (result.status === 428) {
@@ -2584,7 +2601,14 @@ export default function ProjectExperienceShell({
                   setCancelAcknowledgedRunId(null);
                   interruptedRun.resume();
                 }}
-                onFollowUp={(prompt) => { setInput(current => stageSafeRunRetry(current, prompt)); requestAnimationFrame(() => composerRef.current?.focus()); }}
+                onFollowUp={(prompt, binding) => {
+                  if (binding) {
+                    if (input.trim() || chatMode === "temporary") { setLifecycleNotice("Save or clear the current draft first. Recorded-claim review requires this saved Chat."); return; }
+                    setClaimReviewDraft({ prompt, binding, chatId: selection.chatId });
+                    setInput(prompt);
+                  } else { setClaimReviewDraft(null); setInput(current => stageSafeRunRetry(current, prompt)); }
+                  requestAnimationFrame(() => composerRef.current?.focus());
+                }}
                 onKeepArtifact={chatMode === "temporary" ? undefined : keepArtifact}
                 onSubmitAssumptions={(message) => void send({ message })}
               />

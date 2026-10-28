@@ -39,6 +39,7 @@ import type {
   GovernedToolReviewDecision,
 } from "@shared/conversationRuntime";
 import type { TrustManifest } from "@shared/trustContracts";
+import type { RecordedClaimReview } from "@shared/conversationRuntime";
 
 interface Props {
   events: ConversationRuntimeEvent[];
@@ -57,7 +58,7 @@ interface Props {
   onKeepArtifact?: (artifact: ConversationArtifactDraft) => void;
   onRecoveryAction?: (action: string) => void;
   /** Prefills the composer with a suggested next request; never sends it. */
-  onFollowUp?: (prompt: string) => void;
+  onFollowUp?: (prompt: string, binding?: RecordedClaimReview) => void;
   /** Re-sends the last request after a failed run. */
   onRetry?: () => void;
   /** Opens the optional read-only Terminal view for this exact execution session. Offered only inside Show Work. */

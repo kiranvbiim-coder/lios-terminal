@@ -207,6 +207,8 @@ export interface ConversationRuntimeInput {
   resolvedAttachments?: ResolvedConversationAttachment[];
   history: Array<{ role: "user" | "assistant"; content: string }>;
   request: ConversationRequest;
+  /** Owner-scoped server-resolved historical claim inspection; never accepted from a wire payload. */
+  recordedClaimReviewText?: string;
   preferredProvider?: string | null;
   preferredModel?: string | null;
   aiCompletion?: (request: AIRoutedCompletionRequest) => Promise<AICompletionResult>;
@@ -1483,7 +1485,11 @@ export function planConversationWorkflow(requestInput: ConversationRequest): Wor
   const naturalResearch = naturalResearchEntry(request.message);
 
   const runtimeDiagnosis = /^(?:please\s+)?(?:run\s+)?(?:lios\s+doctor|(?:check|diagnose|inspect)\s+(?:the\s+|my\s+)?(?:lios\s+)?(?:runtime|python(?:\s+runtime)?|core(?:\s+runtime)?)(?:\s+(?:health|readiness|status))?)[.!?]?\s*$/i.test(request.message.trim());
-  if (request.context?.nodeFinancePolicy) {
+  if (request.recordedClaimReview) {
+    capabilities = [];
+    intent = { action: "research", confidence: 1, entityRefs: [], parameters: { workflow: "recorded_claim_review" }, requiresAI: false, requiresDeterministicCompute: false };
+    steps.push({ id: "recorded-claim-review", kind: "resolve", label: "Inspect the exact owner-scoped recorded claim locally", componentId: "lios.trust.review", permissionClass: "safe_auto", dependsOn: [] });
+  } else if (request.context?.nodeFinancePolicy) {
     capabilities = [];
     intent = { action: "calculate", confidence: 1, entityRefs: [], parameters: { workflow: "node_finance_snapshot" }, requiresAI: false, requiresDeterministicCompute: true };
     steps.push({ id: "node-finance", kind: "calculate", label: "Calculate exact owner-selected node-local P6 snapshot", componentId: "lios.finance.node_snapshot", permissionClass: "safe_auto", dependsOn: [] });
@@ -5239,7 +5245,12 @@ export async function executeConversationRuntime(input: ConversationRuntimeInput
     if (plannerNote) await emit(runtimeInput, { ...eventBase(request.requestId), type: "status", stepId: null, message: plannerNote, state: "running" });
 
     let result: ConversationRuntimeResult;
-    if (input.agentLoop) {
+    if (request.recordedClaimReview) {
+      if (!input.recordedClaimReviewText || input.agentLoop) throw new Error("The exact owner-scoped claim review is unavailable. No generic analysis was executed.");
+      const text = input.recordedClaimReviewText;
+      await emit(runtimeInput, { ...eventBase(request.requestId), type: "text", text, label: "manual" });
+      result = { text, label: "manual", plan, receiptIds: [], artifacts: [], cancelled: false, awaitingApproval: false };
+    } else if (input.agentLoop) {
       result = await executeAgentLoop(runtimeInput, context, plan, budgetSignal);
     } else if (plan.intent.action === "edit_artifact") {
       result = await executeArtifactEditProposal(runtimeInput, plan, budgetSignal);
