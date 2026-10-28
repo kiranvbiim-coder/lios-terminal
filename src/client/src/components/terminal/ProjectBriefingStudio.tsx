@@ -1,5 +1,5 @@
 import * as React from "react";
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { ArrowDown, ArrowUp, BookOpenCheck, FileText, Layers3, Plus, Trash2, X } from "lucide-react";
 import { ProjectArtifactGalleryPreview } from "./ProjectArtifactGalleryPreview";
 import { captureBriefingVisual, type PinnedBriefingVisual } from "@/lib/phase4BriefingVisuals";
@@ -28,10 +28,26 @@ export function ProjectBriefingStudio({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const inFlight = useRef(false);
+  // Switching Projects invalidates all pending visual inspections and saved
+  // review state. A late P4 response must not paint into the new Project.
+  const activeProjectRef = useRef(projectId);
+  activeProjectRef.current = projectId;
+  const visualRequestRef = useRef<AbortController | null>(null);
+  useEffect(() => {
+    setSelectedSources([]);
+    setPinnedVisuals([]);
+    setPreviewId(null);
+    setPinningId(null);
+    setError(null);
+    setSearch("");
+    visualRequestRef.current?.abort();
+    return () => visualRequestRef.current?.abort();
+  }, [projectId]);
   // Only exact, currently active Project Artifacts appear; source contents are not fetched.
   const available = artifacts.filter(artifact => artifact.projectId === projectId && artifact.status === "active");
   const byId = useMemo(() => new Map(available.map(item => [item.id, item])), [artifacts, projectId]);
-  const chosen = selectedSources;
+  // Also filter synchronously in render, before the Project-switch effect.
+  const chosen = selectedSources.filter(source => source.projectId === projectId);
   const staleSelection = chosen.some(source =>
     !isReviewedBriefingSourceCurrent(source, byId.get(source.id), projectId));
   const offered = available.filter(item =>
@@ -60,40 +76,55 @@ export function ProjectBriefingStudio({
     if (pinnedVisuals.length >= 3) { setError("Choose at most three native chart/table visuals."); return; }
     setError(null);
     setPinningId(source.id);
+    const controller = new AbortController();
+    visualRequestRef.current?.abort();
+    visualRequestRef.current = controller;
+    const inspectedProject = projectId;
     try {
       // Only on explicit selection: P4 is the owner of saved figures and rights.
       const response = await fetch("/api/artifacts/" + encodeURIComponent(source.id), {
-        credentials: "same-origin", cache: "no-store",
+        credentials: "same-origin", cache: "no-store", signal: controller.signal,
       });
       if (!response.ok) throw new Error("The current saved chart/table is not accessible.");
       const detail = await response.json() as ArtifactDetail;
-      const visual = captureBriefingVisual(detail, projectId);
+      if (controller.signal.aborted || activeProjectRef.current !== inspectedProject) return;
+      const visual = captureBriefingVisual(detail, inspectedProject);
       if (visual.artifactId !== source.id || visual.version !== source.headVersion ||
           visual.content.kind !== source.kind)
         throw new Error("The selected chart/table changed; review this saved source again.");
-      setPinnedVisuals(current => current.some(v => v.artifactId === visual.artifactId)
-        ? current : [...current, visual].slice(0, 3));
+      setPinnedVisuals(current => activeProjectRef.current !== inspectedProject
+        ? current : current.some(v => v.artifactId === visual.artifactId)
+          ? current : [...current, visual].slice(0, 3));
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : "Unable to review this saved visual.");
+      if (activeProjectRef.current === inspectedProject && !controller.signal.aborted) {
+        setError(cause instanceof Error ? cause.message : "Unable to review this saved visual.");
+      }
     } finally {
-      setPinningId(null);
+      if (visualRequestRef.current === controller) visualRequestRef.current = null;
+      if (activeProjectRef.current === inspectedProject) setPinningId(null);
     }
   };
   const save = async () => {
     if (busy || inFlight.current || pinningId) return;
+    const reviewedProject = projectId;
     setError(null);
     try {
+      if (activeProjectRef.current !== reviewedProject) return;
       if (staleSelection) throw new Error("A selected source is no longer in this Project. Remove it and review the outline.");
       // Validation is repeated against a fresh server read by onSave.
       buildProjectBriefingReport({ projectId, title, introduction, sources: chosen, visuals: pinnedVisuals });
       inFlight.current = true;
       setBusy(true);
-      await onSave(chosen, title, introduction, pinnedVisuals);
+      await onSave(chosen, title, introduction,
+        pinnedVisuals.filter(visual => visual.projectId === reviewedProject &&
+          chosen.some(source => source.id === visual.artifactId)));
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : "Unable to save the briefing.");
+      if (activeProjectRef.current === reviewedProject) {
+        setError(cause instanceof Error ? cause.message : "Unable to save the briefing.");
+      }
     } finally {
       inFlight.current = false;
-      setBusy(false);
+      if (activeProjectRef.current === reviewedProject) setBusy(false);
     }
   };
 
