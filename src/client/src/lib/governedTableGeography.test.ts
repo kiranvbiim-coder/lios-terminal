@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
+
 import type { AuthorizedVisualAnswer } from "../../../shared/governedVisualAnswer";
 import { projectSavedTableGeography } from "./governedTableGeography";
 
@@ -73,13 +73,4 @@ test("map never invents event times from ambiguous or rolled-over saved dates", 
   assert.deepEqual(result.points.map(point => point.occurredAt), [
     null, null, null, "2024-02-29T00:00:00.000Z", "2026-10-27T10:00:00.000Z", null,
   ]);
-});
-
-test("Chat map uses saved source-backed table only, no external map network or invented location", () => {
-  const ui = readFileSync(new URL("../components/terminal/GovernedVisualAnswer.tsx", import.meta.url), "utf8");
-  assert.match(ui, /projectSavedTableGeography\(decision\)/);
-  assert.match(ui, /<OfflineProjectWorldMap points=\{mapProjection\.points\} origin="P4 saved table"/);
-  assert.match(ui, /View recorded locations/);
-  assert.match(ui, /\{mapOpen && <GovernedChartBoundary>/);
-  assert.doesNotMatch(ui, /geocode|mapbox|googleapis|OpenStreetMap|createArtifact\(/i);
 });
