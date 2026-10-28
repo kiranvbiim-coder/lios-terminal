@@ -19,10 +19,14 @@ test("C1 runtime selects only exact P4 saved-artifact chart/table, without model
 });
 test("C1 uses current authenticated P4 GET and original renderer, not client-trusted AI content or extra API",()=>{
   const view=source("../components/terminal/GovernedVisualAnswer.tsx");
-  assert.match(view,/fetch\(/);
-  assert.match(view,/\/api\/artifacts\/\$\{encodeURIComponent\(request\.artifactId\)\}\?version=\$\{request\.version\}/);
-  assert.match(view,/credentials: "same-origin"/);
-  assert.match(view,/cache: "no-store"/);
+  const hook=source("./useArtifacts.ts");
+  assert.match(view,/useArtifact\(request\.artifactId, request\.version, true\)/);
+  assert.match(hook,/export function useArtifact\(/);
+  assert.match(hook,/\/api\/artifacts\/\$\{encodeURIComponent\(artifactId!\)\}/);
+  assert.match(hook,/\?version=\$\{version\}/);
+  assert.match(hook,/credentials: "same-origin"/);
+  assert.match(hook,/cache: "no-store"/);
+  assert.match(hook,/refetchOnMount: "always"/);
   assert.match(view,/resolveGovernedVisualAnswer\(request, remote\)/);
   assert.match(view,/<ArtifactChart content=\{decision\.content\} artifactSourceRefs=\{decision\.sourceRefs\} readOnly\s*\/>/);
   assert.match(view,/Not recorded/);
