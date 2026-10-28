@@ -161,11 +161,11 @@ Applicable donor tests located (not run or ported): agent-loop async-tool/yield/
 
 ### Selected lifecycle and Telegram package assessment — P1.04 evidence
 
-**Exact pin remains `c074824a`; no code imported.** Complete useful-package reuse is the target; small pure mechanisms below are usable parts of that package, not an arbitrary cap on adoption.
+**Exact pin remains `c074824a`; only the byte-framer mechanism below is now imported.** Other assessed mechanisms remain candidates. Complete useful-package reuse is the target; this staged transport dependency is not an arbitrary cap on adoption.
 
 | Selected mechanism | Inspected donor closure / test | Disposition and LiOS-specific remainder |
 | --- | --- | --- |
-| Byte-bounded LF framing | `src/process/bounded-line-framer.ts` and `.test.ts`; Node Buffer only | `DIRECT_REUSE` candidate with MIT notice/pin. Preserve byte fragmentation, per-line limits and retirement before later frames; LiOS supplies schema, generation, EOF and aggregate queue policy. |
+| Byte-bounded LF framing | `src/process/bounded-line-framer.ts` and `.test.ts`; Node Buffer only | `DIRECT_REUSE` in `server/exec/bounded-line-framer.ts`; implementation byte-equal beyond provenance header (upstream SHA256 `8a1a82baafa087e3060c3ec9fef51f45b52e783e8aef3168870b1cb9a7823c3c`). Both donor tests ported. LiOS transport supplies schema/generation/EOF/aggregate queues. This is not a full supervisor-family import. |
 | Awaited output consumer | `src/process/decoded-output.ts` and `.test.ts`; deferred/error/Windows decoder helpers | `ADAPT` into existing `server/exec/decoded-output.ts`, whose source explicitly records omitted awaited-consumer behavior. Reuse current LiOS UTF-8/deferred implementation; await consumers so pipe pressure and completion track accepted work. No second supervisor. |
 | Owned stdio and relay | `src/process/owned-stdio.ts`, `supervisor/service-child-output-relay.ts`, relay-host/retirement/cleanup/protocol/group-ownership families and associated awaited-output/cleanup tests | `COMBINE/ADAPT` custody invariants through current GM container plan/finalize/extinction path. Larger donor closure reaches worker-entrypoint/build output, spawn broker, secret FDs, Linux OOM and Windows native Job machinery; it is not wholesale-import cleared or cross-platform proven. |
 | Generation-safe auth publication | `src/gateway/server-shared-auth-generation.ts` and tests | `ADAPT` stale-refresh compare/publish invariant, not donor config reload, credential store or Gateway authority. Existing Home/account/P13 revisions remain authoritative. |
@@ -230,6 +230,15 @@ Risk classes follow the existing progressive-validation contract: inventory/docu
 `src/shared/supportingServiceContracts.ts` defines internal protocol `lios-supporting-service/1`, separate Home/worker frame unions, exact session/generation/account/launch-nonce binding, typed invocation/adoption/cancel/shutdown, provider event IDs, bounded errors, canonical attachment identity fields and provider accepted/partial/rejected/unknown facts. These facts are **not** canonical execution receipts or proof of recipient delivery. `decodeSupportingServiceFrame` rejects oversized raw bytes before parsing, invalid UTF-8, wrong direction/version/binding and duplicate advertised operation IDs.
 
 Evidence: six focused boundary tests and typecheck passed; an actual Node process stdin smoke preserved a partial-send provider ID and refused stale generation. Narrow independent source reviews found no concrete P1/P2 contract defect or import cycle. No service, channel adapter, account login, durable record, Gateway method or launch permission is enabled by these schemas. Operation-specific payload validation, current account/tenant/Project/source authorization, request correlation, event sequencing, queue limits and native extinction remain runtime integration requirements, not supplied by the frame decoder. Direct schema parsing is not the bounded wire entry point.
+
+### Package 2 bounded transport mechanism — not enabled service acceptance
+
+`server/supportingServiceTransport.ts` consumes the approved byte framer over externally admitted pipes. It checks the exact build/operation handshake, generation/account/session, current authority before/after queued work, monotonic event sequence, per-frame and aggregate wire-byte reservations, finite operation deadlines and serialized writes/handlers. Closing fences admission and aborts host work before joining the owning supervisor's stop callback. It does not create a launcher, listener, permission registry, channel account or state store.
+
+Review found and corrected two real boundary defects: fragmented active frames must retain their full byte reservation until handler settlement, and the single cleanup promise must be published before synchronous abort listeners can reenter `close`. Regression tests cover both. Ten focused framer/transport tests and typecheck passed. An actual synthetic Node child-pipe smoke negotiated readiness, delivered health, refused a revoked outgoing request before a third physical write and joined child close. This proves transport behavior only—not strict service placement, provider delivery or installed acceptance.
+
+Remaining runtime obligations are unchanged: current Home/P13 account and exact-operation authorization, operation-specific payload schemas, canonical request/receipt correlation and durable adoption, strict Home-scoped launch and actual native extinction through the established supervisor. Callbacks must honor cancellation and revalidate at their real dispatch boundary. No service or Telegram/WhatsApp path is registered or enabled; Package 2 checkboxes remain open.
+
 
 
 

@@ -35,6 +35,8 @@
         "server/exec/terminal-pty.ts",
         "server/exec/retry-timing.ts",
         "server/browser-runtime-pack/bounded-utf8-tail.ts",
+        "server/exec/bounded-line-framer.ts",
+        "server/supportingServiceTransport.ts",
         "server/browserRuntimePack.ts"
       ],
       "regressionEvidence": [
@@ -62,6 +64,8 @@
         "server/exec/retry-timing.test.ts",
         "server/exec/backends/container-lifecycle.test.ts",
         "server/browser-runtime-pack/bounded-utf8-tail.test.ts",
+        "server/exec/bounded-line-framer.test.ts",
+        "server/supportingServiceTransport.test.ts",
         "server/browserRuntimePack.test.ts",
         "server/governedBrowserTool.test.ts"
       ],

@@ -101,6 +101,8 @@ const decoder = new TextDecoder("utf-8", { fatal: true });
  * sequence, attachment grants, startup/closing state and operation-specific payloads. This parser
  * creates no grant, registration, durable state, retry policy or service availability claim.
  */
+export function decodeSupportingServiceFrame(bytes: Uint8Array, direction: "home", binding: SupportingServiceBinding, maxFrameBytes?: number): SupportingServiceHomeFrame;
+export function decodeSupportingServiceFrame(bytes: Uint8Array, direction: "worker", binding: SupportingServiceBinding, maxFrameBytes?: number): SupportingServiceWorkerFrame;
 export function decodeSupportingServiceFrame(
   bytes: Uint8Array,
   direction: "home" | "worker",

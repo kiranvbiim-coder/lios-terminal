@@ -9,7 +9,7 @@
   "controlledForkCount": 10,
   "sourceSnapshot": {
     "baselineSha": "ad77f2d53189a7d98583e9d9996d532b79e4686d",
-    "componentsSha": "c770e3786069c98652832f9bd19307ad75a7fc8b",
+    "componentsSha": "ab41cd3e5d51d671953bc4cb2aaa381b3364abc7",
     "upstreamPinsSha": "bfafe1ddf251fb05fd99b75864a3d4436a7550cb",
     "controlledForkSha": "142ff14c5e6b5d6804b20a346d5e31435db2f33b"
   },
@@ -2127,6 +2127,8 @@
         "src/process/supervisor/adapters/env.ts",
         "src/process/supervisor/adapters/process-events.ts",
         "src/process/decoded-output.ts",
+        "src/process/bounded-line-framer.ts",
+        "src/process/bounded-line-framer.test.ts",
         "src/shared/bounded-buffer.test.ts",
         "src/utils/utf8-truncate.test.ts",
         "src/process/pipe-output.test.ts",
@@ -2198,6 +2200,9 @@
         "server/exec/env.ts",
         "server/exec/process-events.ts",
         "server/exec/decoded-output.ts",
+        "server/exec/bounded-line-framer.ts",
+        "server/exec/bounded-line-framer.test.ts",
+        "server/supportingServiceTransport.ts",
         "server/exec/bounded-buffer.test.ts",
         "server/exec/utf8-truncate.test.ts",
         "server/exec/pipe-output.test.ts",

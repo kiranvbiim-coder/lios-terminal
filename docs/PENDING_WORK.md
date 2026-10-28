@@ -50,6 +50,9 @@
 
 **Package 2 proof:** exact supervised local/packaged execution evidence, denial/restart/rollback cases and signed-off existing GM/P13 architectural boundaries. A launched donor executable alone does not pass.
 
+**Transport mechanism progress, not Package 2 acceptance:** `server/supportingServiceTransport.ts` now implements bounded generation-bound pipe framing with current-authority callbacks, serialized queues, deadlines and single-flight stop ownership. Exact upstream byte-framer import and both tests are recorded in canonical OSS/notice ledgers. Ten focused tests and typecheck passed; actual synthetic Node-pipe smoke passed readiness/health/revoked-write refusal/child close. Full strict supervisor/Home/account integration, channel connections, installed proof and all P2.01–P2.09 acceptance remain open; no new public route or enabled capability.
+
+
 ### Package 3 — Full useful donor capability and channel assimilation (SI-06; existing GM/P13/connector/AI-access owners)
 
 - [ ] P3.01 Import/adapt approved donor packages and their relevant upstream tests using exact pins, notices and an explicit imported-path-to-LiOS-owner register; avoid unneeded whole-repo baggage.
