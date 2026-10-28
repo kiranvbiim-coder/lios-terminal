@@ -46,6 +46,8 @@
         "server/telegramPollingRuntime.ts",
         "server/telegramConnectionSetup.ts",
         "server/telegramConnectionRoutes.ts",
+        "client/src/components/connections/TelegramConnectionPanel.tsx",
+        "client/src/lib/telegramConnectionForm.ts",
         "server/browserRuntimePack.ts"
       ],
       "regressionEvidence": [

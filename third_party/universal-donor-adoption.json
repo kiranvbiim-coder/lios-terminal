@@ -2213,6 +2213,8 @@
         "server/telegramPollingRuntime.ts",
         "server/telegramConnectionSetup.ts",
         "server/telegramConnectionRoutes.ts",
+        "client/src/components/connections/TelegramConnectionPanel.tsx",
+        "client/src/lib/telegramConnectionForm.ts",
         "server/exec/bounded-buffer.test.ts",
         "server/exec/utf8-truncate.test.ts",
         "server/exec/pipe-output.test.ts",
