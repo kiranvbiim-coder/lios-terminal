@@ -24,7 +24,7 @@
 
 **Package 1 proof:** complete owner/fork/upstream source map; channel feature matrix; legal/security findings; existing-code crosswalk; one existing-owner task/PR per integration seam.
 
-**P1.01/P1.02 inventory evidence (source only):** [Blueprint §0.2](technical/OPENCLAW_ASSIMILATION_BLUEPRINT.md#02-package-1-source-inventory-and-integration-constraints--2026-10-28) records main `8ab41b15`, decision PR #392 head `486d2826`, the resolved approved upstream pin/tree, observed owner-fork SHA, existing LiOS owners and test candidates. The isolated supporting service and Telegram/WhatsApp adapters were not located in current main; PR392 is documentation-only. Current strict LEP refusal, conversation-only placement, donor runtime version, channel dependency/rights and account-custody constraints remain open. These checked items attest an inventory, not exercised integration. No tests, installs, builds or new CI runs for the source inventory.
+**P1.01/P1.02 inventory evidence (source only):** [Blueprint §0.2](technical/OPENCLAW_ASSIMILATION_BLUEPRINT.md#02-package-1-source-inventory-and-integration-constraints--2026-10-28) records main `8ab41b15`, decision PR #392 head `486d2826`, the approved upstream pin/tree, observed owner-fork SHA, existing LiOS owners and test candidates. The isolated service and Telegram/WhatsApp adapters were not located in that main; PR392 is documentation-only. Later implementation-branch evidence below records explicit Home placement/session mechanics; the strict LEP refusal is intentionally unchanged. Donor runtime versions, full channel rights/dependency and canonical account/lifecycle constraints remain open. These inventory checkmarks do not attest exercised full integration. No checks, installs, builds or CI runs were required for the source inventory itself.
 
 **P1.03/P1.05 inventory evidence (source only):** the same blueprint §0.2 now includes the approved-pin family/channel breadth register and per-feature Telegram/WhatsApp matrix, with `PARTIAL`/`NOT_INSPECTED`, `ADAPT_REQUIRED`, explicit unknown/deferred features and rights gates. These inventory checkmarks do not attest that all bodies/dependencies/tests are audited, imported or supported. P1.04 still owns selected-package/fork dependency and test disposition; P1.06 still owns full rights/security review. Telegram MiniApp/native commands and the remaining feature-specific unknowns remain visible, not silently excluded.
 
@@ -56,6 +56,9 @@
 
 **Strict session composition progress, not enabled service acceptance:** existing GM-10 now has opt-in awaited stdout with raw-byte-first decoding/backpressure and accepted-work/native-cleanup joining; backend-injected async observers are denied. `server/supportingServiceSession.ts` composes exact prepared Home placement/approval and the existing supervisor with bounded cancellable account lookup, framed pipes and EOF validation. Initial72 integration behaviors, subsequent13 session/transport and42 directly changed output/approval behaviors, one late-close regression, typecheck and OSS inventory passed; prior unchanged checks were reused. Actual strict-container readiness/health/joined close and truncated-EOF refusal passed; real native blocked-consumer pipe-failure cancellation also passed. A separate Docker SIGTERM-tail marker was not observed, so that native case is not qualified. Synthetic authority is not account/provider proof. Home lifecycle registration, real account/operation/adoption/receipt binding, providers and installed journeys remain open; P2 checkboxes are unchanged.
 
+**Bounded request correlation:** terminal worker results/errors require an entered physical writer plus successful stdin callback completion; queued/unknown/duplicate replies, failed-write results and reused invocation IDs are refused. Per-generation request/tombstone bounds prevent unbounded pending/replay state. Fourteen focused transport checks/typecheck and actual strict-container correlated partial-result smoke passed. A reproduced early-reply/failed-write defect now has a failing-before/passing-after regression. Provider part identity remains a synthetic observation, not a canonical receipt/live delivery claim; no broad suite or PR check restart.
+
+
 
 
 
@@ -73,6 +76,9 @@
 - [ ] P3.10 Run real connected-provider tests where entitled; record capability-specific `supported / unavailable / blocked` accurately for Telegram/WhatsApp/other channels and never claim full upstream parity merely from compilation.
 
 **Package 3 proof:** feature-by-feature code and runtime evidence plus license/test/source references; platform-limited capabilities explicitly accounted for, with no silent removal of useful donor depth.
+
+**Telegram transport prerequisite, not connected-channel acceptance:** internal Home-only `telegramNetworkBroker.ts` now performs fixed HTTPS `getUpdates` using existing P13 DNS pinning/HTTP custody, Home-only token resolution and current-authority fences. Its45s absolute deadline includes DNS/secret/body; the generic30s P13 limit is unchanged. Seven focused tests/typecheck and actual local HTTP update/stalled-body cancellation/revocation smoke passed. Raw4MiB bodies stay in Home; no worker receives a token or oversized base64 frame. Canonical account/secret bindings, durable adoption/cursor, full donor adapters, consent and entitled provider/native proof remain open; P3 checkboxes are unchanged.
+
 
 ### Package 4 — One invisible LiOS user experience (SI-07; TC/P4/P9/GM owners)
 

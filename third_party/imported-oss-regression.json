@@ -38,6 +38,7 @@
         "server/exec/bounded-line-framer.ts",
         "server/supportingServiceTransport.ts",
         "server/supportingServiceSession.ts",
+        "server/telegramNetworkBroker.ts",
         "server/browserRuntimePack.ts"
       ],
       "regressionEvidence": [
@@ -68,6 +69,7 @@
         "server/exec/bounded-line-framer.test.ts",
         "server/supportingServiceTransport.test.ts",
         "server/supportingServiceSession.test.ts",
+        "server/telegramNetworkBroker.test.ts",
         "server/browserRuntimePack.test.ts",
         "server/governedBrowserTool.test.ts"
       ],

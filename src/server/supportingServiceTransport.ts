@@ -7,6 +7,8 @@ import { createBoundedLineFramer } from "./exec/bounded-line-framer";
 
 // Byte budgets alone do not bound Buffer/Promise metadata for tiny or highly fragmented writes.
 const MAX_RETAINED_CHUNKS = 1024;
+const MAX_PENDING_REQUESTS = 64;
+const MAX_GENERATION_REQUESTS = 4096;
 
 export class SupportingServiceTransportClosedError extends Error {
   constructor() {
@@ -54,6 +56,8 @@ export class SupportingServiceTransport {
   private retainedFrameChunks = 0;
   private queuedOutputChunks = 0;
   private lastSequence = -1;
+  private readonly requests = new Map<string, { dispatched: boolean; written: Promise<void> | null }>();
+  private readonly usedRequestIds = new Set<string>();
   private stopping: Promise<void> | null = null;
   private readyResolve!: () => void;
   private readyReject!: (error: Error) => void;
@@ -134,6 +138,15 @@ export class SupportingServiceTransport {
       body = Buffer.from(JSON.stringify(frame));
       admitted = decodeSupportingServiceFrame(body, "home", this.binding, this.maxFrameBytes);
       if (this.queuedOutputBytes + body.length + 1 > this.maxQueuedBytes || this.queuedOutputChunks >= MAX_RETAINED_CHUNKS) throw new Error("queue full");
+      if (admitted.kind === "invoke") {
+        if (!this.initialize.operations.includes(admitted.operationId) || admitted.deadlineAt <= Date.now() ||
+            this.usedRequestIds.has(admitted.requestId) || this.requests.size >= MAX_PENDING_REQUESTS ||
+            this.usedRequestIds.size >= MAX_GENERATION_REQUESTS) throw new Error("request admission denied");
+        this.usedRequestIds.add(admitted.requestId);
+        this.requests.set(admitted.requestId, { dispatched: false, written: null });
+      } else if (admitted.kind === "cancel" && !this.requests.has(admitted.requestId)) {
+        throw new Error("unknown cancellation");
+      }
     } catch {
       this.failure();
       return Promise.reject(new Error("Supporting-service outgoing frame refused."));
@@ -144,7 +157,14 @@ export class SupportingServiceTransport {
     const pending = this.outbound.then(async () => {
       await this.current();
       if (admitted.kind === "invoke" && admitted.deadlineAt <= Date.now()) throw new Error("Supporting-service invocation expired.");
-      await this.bounded(() => this.options.write(wire, this.abort.signal));
+      const request = admitted.kind === "invoke" ? this.requests.get(admitted.requestId)! : null;
+      const writing = this.bounded(async () => {
+        this.requireLive();
+        if (request) request.dispatched = true;
+        await this.options.write(wire, this.abort.signal);
+      });
+      if (request) request.written = writing;
+      await writing;
       await this.current();
     }).finally(() => { this.queuedOutputBytes -= wire.length; this.queuedOutputChunks--; });
     this.outbound = pending.catch(() => { this.failure(); });
@@ -182,6 +202,14 @@ export class SupportingServiceTransport {
             continue;
           }
           if (this.state !== "ready") throw new Error("frame before ready");
+          if (frame.kind === "result" || (frame.kind === "error" && frame.requestId !== null)) {
+            const request = this.requests.get(frame.requestId!);
+            if (!request?.dispatched || !request.written) throw new Error("unknown terminal request");
+            // A worker can respond before stdin's callback settles; never publish a result for failed delivery.
+            await request.written;
+            await this.current();
+            this.requests.delete(frame.requestId!);
+          }
           if (frame.kind === "event") {
             if (frame.sequence <= this.lastSequence) throw new Error("old sequence");
             this.lastSequence = frame.sequence;
@@ -224,6 +252,8 @@ export class SupportingServiceTransport {
     this.framer.clear();
     this.queuedInputBytes = 0;
     this.queuedInputChunks = 0;
+    this.requests.clear();
+    this.usedRequestIds.clear();
     this.retainedFrameChunks = 0;
     return this.stopping;
   }

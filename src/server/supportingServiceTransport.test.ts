@@ -188,22 +188,108 @@ test("tiny incomplete input chunks cannot retain unbounded Buffer metadata below
 
 test("tiny queued writes have a count bound even when below the aggregate wire-byte budget", async () => {
   const entered = deferred(), release = deferred();
-  let physicalInvocations = 0;
+  let physicalAdoptions = 0;
   const f = fixture({ write: async bytes => {
-    if (JSON.parse(bytes.toString()).kind === "invoke") {
-      physicalInvocations++;
+    if (JSON.parse(bytes.toString()).kind === "adopt") {
+      physicalAdoptions++;
       entered.resolve();
       await release.promise;
     }
   } });
   await f.open();
-  const first = f.transport.send(f.invoke()).then(() => false, () => true);
+  const adoption = () => ({ protocol: SUPPORTING_SERVICE_PROTOCOL, binding: f.binding, kind: "adopt" as const, eventId: crypto.randomUUID(), providerEventId: "update:1" });
+  const first = f.transport.send(adoption()).then(() => false, () => true);
   await entered.promise;
-  const queued = Array.from({ length: 4096 }, () => f.transport.send(f.invoke()).then(() => false, () => true));
+  const queued = Array.from({ length: 4096 }, () => f.transport.send(adoption()).then(() => false, () => true));
   release.resolve();
   const refused = await Promise.all([first, ...queued]);
   await f.transport.close();
   assert.ok(refused.some(Boolean), "Saturation must refuse admission rather than accumulate every pending write");
-  assert.equal(physicalInvocations, 1);
+  assert.equal(physicalAdoptions, 1);
   assert.equal(f.stopped(), 1);
+});
+
+test("terminal replies require an actually dispatched request and each request ID is single-use", async () => {
+  for (const scenario of ["unknown", "queued", "duplicate-result", "reused-request", "unadvertised-operation"] as const) {
+    const gate = deferred(), entered = deferred();
+    let writes = 0;
+    const f = fixture({ write: async bytes => {
+      const frame = JSON.parse(bytes.toString());
+      if (frame.kind === "invoke") {
+        writes++;
+        if (scenario === "queued") { entered.resolve(); await gate.promise; }
+      }
+    } });
+    await f.open();
+    const request = f.invoke();
+    const result = (requestId: string) => f.wire({ kind: "result", requestId, output: { text: "provider observation" }, attachments: [], delivery: null });
+    if (scenario === "unknown") {
+      await assert.rejects(f.transport.receive(result(request.requestId)));
+    } else if (scenario === "queued") {
+      const first = f.transport.send(request).catch(() => {});
+      await entered.promise;
+      const second = f.invoke();
+      const queued = f.transport.send(second).catch(() => {});
+      await assert.rejects(f.transport.receive(result(second.requestId)));
+      gate.resolve();
+      await Promise.all([first, queued]);
+    } else if (scenario === "unadvertised-operation") {
+      await assert.rejects(f.transport.send({ ...request, operationId: "telegram.unapproved" }));
+    } else {
+      await f.transport.send(request);
+      await f.transport.receive(result(request.requestId));
+      if (scenario === "duplicate-result") await assert.rejects(f.transport.receive(result(request.requestId)));
+      else await assert.rejects(f.transport.send(request));
+    }
+    await f.transport.close();
+    assert.equal(f.frames.filter(frame => frame.kind === "result").length, scenario === "duplicate-result" || scenario === "reused-request" ? 1 : 0);
+    assert.equal(writes, scenario === "unknown" || scenario === "unadvertised-operation" ? 0 : 1);
+  }
+});
+
+test("terminal errors release pending capacity but generation replay protection is never evicted to admit more work", async () => {
+  const f = fixture();
+  await f.open();
+  for (let i = 0; i < 4096; i++) {
+    const request = f.invoke();
+    await f.transport.send(request);
+    await f.transport.receive(f.wire({ kind: "error", requestId: request.requestId, code: "OUTCOME_UNKNOWN", retryAfterMs: null, delivery: null }));
+  }
+  assert.equal(f.frames.filter(frame => frame.kind === "error").length, 4096);
+  await assert.rejects(f.transport.send(f.invoke()));
+  assert.equal(f.writes.filter(wire => JSON.parse(wire).kind === "invoke").length, 4096);
+  await f.transport.close();
+});
+
+test("unanswered dispatched requests have a finite count bound independent of wire-byte retention", async () => {
+  const f = fixture();
+  await f.open();
+  for (let i = 0; i < 64; i++) await f.transport.send(f.invoke());
+  await assert.rejects(f.transport.send(f.invoke()));
+  assert.equal(f.writes.filter(wire => JSON.parse(wire).kind === "invoke").length, 64);
+  await f.transport.close();
+  assert.equal(f.stopped(), 1);
+});
+
+test("an early terminal reply cannot be published when the pipe write later fails without dispatch", async () => {
+  const entered = deferred(), writeResult = deferred();
+  const f = fixture({ write: async bytes => {
+    if (JSON.parse(bytes.toString()).kind === "invoke") { entered.resolve(); await writeResult.promise; }
+  } });
+  await f.open();
+  const request = f.invoke();
+  const sending = f.transport.send(request).catch(() => {});
+  await entered.promise;
+  const receiving = f.transport.receive(f.wire({ kind: "result", requestId: request.requestId, output: {}, attachments: [], delivery: null })).catch(() => {});
+  let publishedBeforeWriteCompleted = -1;
+  try {
+    await new Promise<void>(resolve => setImmediate(resolve));
+    publishedBeforeWriteCompleted = f.frames.filter(frame => frame.kind === "result").length;
+  } finally {
+    writeResult.reject(new Error("pipe write refused before bytes were accepted"));
+    await Promise.all([sending, receiving]);
+    await f.transport.close();
+  }
+  assert.equal(publishedBeforeWriteCompleted, 0);
+  assert.equal(f.frames.filter(frame => frame.kind === "result").length, 0);
 });
