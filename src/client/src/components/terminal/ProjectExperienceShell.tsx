@@ -3096,7 +3096,7 @@ export default function ProjectExperienceShell({
           requestAnimationFrame(() => composerRef.current?.focus());
         }}
       />
-      {showSaveWorkflow && canPrepareChatAutomation && selection.projectId && selection.chatId && lastWorkflowRequest && runtimeRequestId && (
+      {showSaveWorkflow && canPrepareChatAutomation && activeChat && selection.projectId && selection.chatId && lastWorkflowRequest && runtimeRequestId && (
         <SaveWorkflowDialog
           projectId={selection.projectId}
           chatId={activeChat.id}
