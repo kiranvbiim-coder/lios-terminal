@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import crypto from "node:crypto";
 import test from "node:test";
-import { SupportingServiceTransport, type SupportingServiceTransportOptions } from "./supportingServiceTransport";
+import { SupportingServiceTransport, SupportingServiceTransportClosedError, type SupportingServiceTransportOptions } from "./supportingServiceTransport";
 import { SUPPORTING_SERVICE_PROTOCOL, type SupportingServiceWorkerFrame } from "@shared/supportingServiceContracts";
 
 const deferred = () => Promise.withResolvers<void>();
@@ -166,6 +166,7 @@ test("an abort listener reentering close shares the original supervisor cleanup"
   release.resolve();
   cleanup.resolve();
   await Promise.all([closing, pendingRefused]);
+  await assert.rejects(f.transport.receive(f.wire({ kind: "health", state: "available" })), SupportingServiceTransportClosedError);
   assert.equal(stops, 1);
 });
 

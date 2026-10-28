@@ -1,17 +1,18 @@
 // Adapted from OpenClaw src/process/supervisor/adapters/child.ts (MIT, Copyright (c) 2026 OpenClaw Foundation), commit c074824a27c96d3983043f9eeb33823cd1772d8c.
 // LiOS (GM-10a) modifications:
 // - Child-only, synchronous construction; omitted Windows Job, spawn broker, service relay, worker IPC/start gate,
-//   secret descriptor, OOM wrapper, spawn fallback and awaited-consumer branches (their owners are not imported).
+//   secret descriptor, OOM wrapper and spawn fallback branches (their owners are not imported).
 // - Allow-listed inherited environment plus explicit overlay; stdin defaults to pipe-closed.
 // - Detached POSIX group ownership survives root close: join every signal delivery and kill retained descendants
 //   before confirming extinction. Native close and decoder drain fence wait; bounded cleanup failure drains pipes.
 // - Inject native spawn, tree signaling and group probing for deterministic ports of donor lifecycle tests.
 // LiOS (GM-10b): expose readable-stream pause/resume for pipe terminals; termination resumes paused output to drain.
+// LiOS: explicitly opted stdout uses the donor awaited sink; normal decoded/raw subscriptions remain synchronous.
 import { execFileSync, spawn } from "node:child_process";
 import type { ChildProcess, SpawnOptions } from "node:child_process";
 import { toErrorObject } from "./coerce";
 import { createDeferredCore } from "./deferred";
-import { onDecodedOutput } from "./decoded-output";
+import { createAwaitedDecodedOutput, joinProcessCompletionAndOutput, onDecodedOutput } from "./decoded-output";
 import { signalProcessTree } from "./kill-tree";
 import { createManagedChildStdin } from "./child-stdin";
 import { buildChildEnv, type ChildEnvProfile } from "./env";
@@ -36,6 +37,7 @@ export type ChildAdapterInput = {
   windowsVerbatimArguments?: boolean;
   input?: string;
   stdinMode?: "inherit" | "pipe-open" | "pipe-closed";
+  stdoutConsumption?: "awaited";
 };
 
 export type ChildAdapterOptions = {
@@ -173,6 +175,7 @@ export function createChildAdapter(params: ChildAdapterInput, dependencies: Chil
     forceKillWaitFallbackTimer = setTimeout(() => {
       failCleanup(new Error("child cleanup could not be confirmed before the kill deadline"));
       forcedExitState = { code: null, signal: "SIGKILL" };
+      awaitedStdout?.close();
       stdout.destroy();
       stderr.destroy();
       afterOutputBoundary();
@@ -271,7 +274,9 @@ export function createChildAdapter(params: ChildAdapterInput, dependencies: Chil
       return;
     }
     if (signal === "SIGTERM" || signal === "SIGKILL") {
-      stdout.resume();
+      if (params.stdoutConsumption !== "awaited") {
+        stdout.resume();
+      }
       stderr.resume();
       if (processClosed && !childIsDetached) {
         return;
@@ -291,18 +296,33 @@ export function createChildAdapter(params: ChildAdapterInput, dependencies: Chil
       }
     }
   };
+  const awaitedStdout = params.stdoutConsumption === "awaited"
+    ? createAwaitedDecodedOutput(stdout, (error) => {
+        try {
+          events.emitError(toErrorObject(error, "Process stdout consumption failed"), "stdout");
+        } finally {
+          if (!hardKillRequested) {
+            kill("SIGKILL");
+          }
+        }
+      })
+    : undefined;
   const dispose = () => {
     if (disposed) {
       return;
     }
     disposed = true;
+    awaitedStdout?.close();
     for (const unsubscribe of outputUnsubscribers.splice(0)) {
       unsubscribe();
     }
-    stdout.off("end", markStdoutDrained);
-    stdout.off("close", markStdoutDrained);
-    stderr.off("end", markStderrDrained);
-    stderr.off("close", markStderrDrained);
+    // Awaited disposal still owes native completion and accepted work after destroy's queued close.
+    if (!awaitedStdout) {
+      stdout.off("end", markStdoutDrained);
+      stdout.off("close", markStdoutDrained);
+      stderr.off("end", markStderrDrained);
+      stderr.off("close", markStderrDrained);
+    }
     stdout.destroy();
     stderr.destroy();
     stdin?.destroy?.();
@@ -334,11 +354,19 @@ export function createChildAdapter(params: ChildAdapterInput, dependencies: Chil
     get pid() { return child.pid; },
     stdin,
     supportsRawOutput: true,
-    onStdout: (listener, onRaw) => outputUnsubscribers.push(onDecodedOutput(stdout, listener, onRaw)),
+    onStdout: (listener, onRaw) => {
+      if (awaitedStdout) {
+        throw new Error("Process stdout requires its awaited consumer");
+      }
+      outputUnsubscribers.push(onDecodedOutput(stdout, listener, onRaw));
+    },
+    ...(awaitedStdout ? { consumeStdout: awaitedStdout.consume } : {}),
     onStderr: (listener, onRaw) => outputUnsubscribers.push(onDecodedOutput(stderr, listener, onRaw)),
     onExit: events.onExit,
     onError: events.onError,
-    wait: () => completion.promise,
+    wait: () => awaitedStdout
+      ? joinProcessCompletionAndOutput(completion.promise, awaitedStdout.drain())
+      : completion.promise,
     waitForExtinction: () => cleanup.promise,
     pauseOutput: () => { stdout.pause(); stderr.pause(); },
     resumeOutput: () => { stdout.resume(); stderr.resume(); },

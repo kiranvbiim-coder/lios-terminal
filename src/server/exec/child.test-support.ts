@@ -51,7 +51,9 @@ export function createChildAdapterHarness(params: Partial<ChildAdapterInput> = {
   });
   const stdout: string[] = [];
   const stderr: string[] = [];
-  adapter.onStdout((chunk) => stdout.push(chunk));
+  if (params.stdoutConsumption !== "awaited") {
+    adapter.onStdout((chunk) => stdout.push(chunk));
+  }
   adapter.onStderr((chunk) => stderr.push(chunk));
   return { ...stub, adapter, spawnMock, signalTreeMock, deliveries, stdout, stderr };
 }

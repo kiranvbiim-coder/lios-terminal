@@ -183,6 +183,15 @@ test("a backend still cannot open stdin that the request did not ask for", async
   );
 });
 
+test("a backend cannot install an unapproved awaited stdout observer", async t => {
+  const cwd = fs.mkdtempSync(path.join(os.tmpdir(), "lios-governed-async-output-"));
+  t.after(() => fs.rmSync(cwd, { recursive: true, force: true }));
+  const { backend } = passthroughBackend(plan => { plan.spawn.onStdoutAsync = async () => {}; });
+  await assert.rejects(prepareAnalyzedGovernedCommand({
+    backend, request: request([process.execPath, "-e", "process.stdout.write('private')"], cwd),
+  }), (error: unknown) => error instanceof GovernedCommandAdmissionError && error.reason === "backend-control-field-unsupported");
+});
+
 test("backend hard resource ceilings may tighten but never relax the requested bounds", async (t) => {
   const cwd = fs.mkdtempSync(path.join(os.tmpdir(), "lios-governed-hard-cap-"));
   t.after(() => fs.rmSync(cwd, { recursive: true, force: true }));

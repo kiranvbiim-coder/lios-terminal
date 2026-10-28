@@ -210,6 +210,7 @@ function assertBackendPlan(
     plan.spawn.runId !== undefined
     || plan.spawn.replaceExistingScope !== undefined
     || plan.spawn.onStdout !== undefined
+    || plan.spawn.onStdoutAsync !== undefined
     || plan.spawn.onStderr !== undefined
     || ((plan.spawn.onStdoutRaw !== undefined || plan.spawn.onStderrRaw !== undefined) && !privateOutputTransport)
     || (hasPrivateOutputControls(plan) && !privateOutputTransport)

@@ -37,6 +37,7 @@
         "server/browser-runtime-pack/bounded-utf8-tail.ts",
         "server/exec/bounded-line-framer.ts",
         "server/supportingServiceTransport.ts",
+        "server/supportingServiceSession.ts",
         "server/browserRuntimePack.ts"
       ],
       "regressionEvidence": [
@@ -66,6 +67,7 @@
         "server/browser-runtime-pack/bounded-utf8-tail.test.ts",
         "server/exec/bounded-line-framer.test.ts",
         "server/supportingServiceTransport.test.ts",
+        "server/supportingServiceSession.test.ts",
         "server/browserRuntimePack.test.ts",
         "server/governedBrowserTool.test.ts"
       ],

@@ -54,6 +54,9 @@
 
 **GM-11 Home-scope admission progress:** existing placement now supports explicitly policy-enabled internal Home-service identity only on an isolated deny-network container, without Chat/Project inheritance, ambient secrets or host fallback. Eleven focused placement tests/typecheck passed; actual immutable strict-container exact-approval execution produced the fixed synthetic scope marker and then refused service-policy revocation. Public Chat operation proposals still reject internal service facts. No Home service/controller or channel is enabled; Package 2 remains open.
 
+**Strict session composition progress, not enabled service acceptance:** existing GM-10 now has opt-in awaited stdout with raw-byte-first decoding/backpressure and accepted-work/native-cleanup joining; backend-injected async observers are denied. `server/supportingServiceSession.ts` composes exact prepared Home placement/approval and the existing supervisor with bounded cancellable account lookup, framed pipes and EOF validation. Initial72 integration behaviors, subsequent13 session/transport and42 directly changed output/approval behaviors, one late-close regression, typecheck and OSS inventory passed; prior unchanged checks were reused. Actual strict-container readiness/health/joined close and truncated-EOF refusal passed; real native blocked-consumer pipe-failure cancellation also passed. A separate Docker SIGTERM-tail marker was not observed, so that native case is not qualified. Synthetic authority is not account/provider proof. Home lifecycle registration, real account/operation/adoption/receipt binding, providers and installed journeys remain open; P2 checkboxes are unchanged.
+
+
 
 
 ### Package 3 — Full useful donor capability and channel assimilation (SI-06; existing GM/P13/connector/AI-access owners)

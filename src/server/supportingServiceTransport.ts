@@ -8,6 +8,13 @@ import { createBoundedLineFramer } from "./exec/bounded-line-framer";
 // Byte budgets alone do not bound Buffer/Promise metadata for tiny or highly fragmented writes.
 const MAX_RETAINED_CHUNKS = 1024;
 
+export class SupportingServiceTransportClosedError extends Error {
+  constructor() {
+    super("Supporting-service transport is closed.");
+    this.name = "SupportingServiceTransportClosedError";
+  }
+}
+
 export interface SupportingServiceTransportOptions {
   binding: SupportingServiceBinding;
   buildSha256: string;
@@ -71,7 +78,7 @@ export class SupportingServiceTransport {
   }
 
   private requireLive(): void {
-    if (this.state === "closed") throw new Error("Supporting-service transport is closed.");
+    if (this.state === "closed") throw new SupportingServiceTransportClosedError();
   }
 
   private async bounded<T>(work: () => Promise<T>): Promise<T> {
@@ -80,7 +87,7 @@ export class SupportingServiceTransport {
     let onAbort: (() => void) | undefined;
     try {
       return await Promise.race([Promise.resolve().then(work), new Promise<never>((_, reject) => {
-        onAbort = () => reject(new Error("Supporting-service operation cancelled."));
+        onAbort = () => reject(new SupportingServiceTransportClosedError());
         this.abort.signal.addEventListener("abort", onAbort, { once: true });
         timer = setTimeout(() => reject(new Error("Supporting-service operation timed out.")), this.timeoutMs);
       })]);
@@ -145,6 +152,7 @@ export class SupportingServiceTransport {
   }
 
   receive(chunk: Buffer): Promise<void> {
+    if (this.state === "closed") return Promise.reject(new SupportingServiceTransportClosedError());
     if (this.state !== "starting" && this.state !== "ready") return Promise.reject(new Error("Supporting-service transport is not receiving."));
     if (chunk.length === 0) return Promise.resolve();
     if (this.queuedInputChunks + this.retainedFrameChunks >= MAX_RETAINED_CHUNKS) {
@@ -191,7 +199,10 @@ export class SupportingServiceTransport {
       if (this.state !== "closed") this.queuedInputChunks--;
     });
     this.inbound = pending.catch(() => { this.failure(); });
-    return pending.catch(() => { throw new Error("Supporting-service incoming frame refused."); });
+    return pending.catch(error => {
+      if (error instanceof SupportingServiceTransportClosedError) throw error;
+      throw new Error("Supporting-service incoming frame refused.");
+    });
   }
 
   async end(): Promise<void> {
@@ -209,7 +220,7 @@ export class SupportingServiceTransport {
     // Publish before synchronous abort listeners can reenter close().
     this.stopping = Promise.resolve().then(() => this.options.stop());
     this.abort.abort();
-    this.readyReject(new Error("Supporting-service transport closed before readiness."));
+    this.readyReject(new SupportingServiceTransportClosedError());
     this.framer.clear();
     this.queuedInputBytes = 0;
     this.queuedInputChunks = 0;

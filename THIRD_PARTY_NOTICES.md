@@ -249,6 +249,7 @@ LiOS adapts code from `openclaw/openclaw` (release `v2026.9.7`, commit `c074824a
 Files currently imported:
 
 - `src/process/bounded-line-framer.ts` and `.test.ts` → `src/server/exec/bounded-line-framer.ts` and `.test.ts` (SI-06 supporting-service transport: complete byte-framing mechanism, provenance header only; both tests ported to `node:test`). `server/supportingServiceTransport.ts` is the LiOS-owned consumer, not copied donor source. It creates no service launch, channel permission, second Gateway or state authority; full service/provider/packaged acceptance remains open.
+- `src/process/decoded-output.ts` awaited-consumer branch and `src/process/decoded-output.test.ts` → existing `src/server/exec/decoded-output.ts` and `.test.ts` (SI-06: current LiOS UTF-8/deferred/error helpers replace donor Windows-codepage/config closure; relevant EOF/backpressure/rejection/disposal tests ported). Existing child/supervisor expose explicit awaited stdout without changing normal synchronous consumers. `server/supportingServiceSession.ts` is a LiOS-owned exact-prepared-operation/strict-placement consumer, not a second donor launcher.
 
 - `src/security/secret-equal.ts` → `src/server/safeEqualSecret.ts` (constant-time secret comparison; verbatim) and its test, ported to `node:test`.
 - `src/infra/backup-archive-path-policy.ts` (`normalizeArchivePath`) → `src/server/tarFormat.ts` (adapted archive-entry path rules: relative, forward slashes, no traversal; shared by backup creation, verification and extraction).

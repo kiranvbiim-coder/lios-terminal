@@ -305,6 +305,7 @@
         "src/process/supervisor/adapters/env.ts",
         "src/process/supervisor/adapters/process-events.ts",
         "src/process/decoded-output.ts",
+        "src/process/decoded-output.test.ts",
         "src/process/bounded-line-framer.ts",
         "src/process/bounded-line-framer.test.ts",
         "src/shared/bounded-buffer.test.ts",
@@ -382,6 +383,7 @@
         "server/exec/bounded-line-framer.ts",
         "server/exec/bounded-line-framer.test.ts",
         "server/supportingServiceTransport.ts",
+        "server/supportingServiceSession.ts",
         "server/exec/bounded-buffer.test.ts",
         "server/exec/utf8-truncate.test.ts",
         "server/exec/pipe-output.test.ts",
@@ -408,6 +410,7 @@
       ],
       "pathMappingNote": "All destinationPaths are relative to the LiOS src/ directory; importedPaths retain upstream repository-relative paths. GM-10 flattens donor namespaces into server/exec under that destination base. Multiple supervisor lifecycle test files are consolidated into supervisor.scope.test.ts and supervisor.output.test.ts; ring cases from the session-manager suite exercise output-ring directly. New LiOS command-entry/runtime integration files are not donor copies. The browser destination server/browserRuntimePack.ts is a LiOS-owned consumer/pattern adaptation, not imported donor source; server/browser-runtime-pack/bounded-utf8-tail.ts is the actual pinned browser source import and its test is ported. Per-file source headers and the modification list retain exact source lineage.",
       "modifications": [
+        "SI-06 awaited stdout: restore approved src/process/decoded-output.ts awaited-consumer/join mechanism and port relevant decoded-output.test.ts tests into existing GM-10 decoder/child/supervisor. Use current LiOS UTF-8 decoder/deferred/coerce, preserve raw-byte observer before decoding and synchronous subscribers, add explicit onStdoutAsync opt-in, refuse unsupported adapters, join accepted async work with native result/extinction rather than queueing unbounded callbacks. SupportingServiceSession.ts is LiOS-owned prepared strict-Home-scope consumer, not donor launcher; no new Gateway/account/permission store or enabled provider.",
         "SI-06 isolated supporting-service transport: complete src/process/bounded-line-framer.ts copied at c074824a with provenance header only; both upstream byte-fragmentation and retired-consumer cases ported from Vitest to node:test. Runtime closure is Node Buffer only. server/supportingServiceTransport.ts is a LiOS-owned consumer, not donor source: frame schemas, generation/account binding, authority fences, byte-limited queues and stop callback use current LiOS contracts. No donor Gateway, config/session/cron store, channel package, dependency or native service was imported. Full channel-package/fork audit, service launch/strict lifecycle and provider/native qualification remain open.",
         "SI-02.13/GM-14 browser donor import: extensions/browser/src/browser/bounded-utf8-tail.ts was byte-verified against pinned raw c074824a (SHA-256 96f185682672dd849d1e4c909681fa8edad8c3a933d9e38cd209a6066207b28b) and copied with provenance only; its test (pinned SHA-256 990555c19b88be78921b45c867c1ecba13f3de8fb0e1c756233fba8c553f0f51) is ported from Vitest to node:test. The helper bounds broker subprocess diagnostics without corrupting UTF-8.",
         "SI-02.13/GM-14 browser adaptation: complete useful pinned worker/session/tab/navigation/transport paths were inspected, including runtime-lifecycle.ts, pw-session*.ts, session-tab-*.ts, navigation-guard.ts, client-actions*.ts, browser control/bridge routes and extensions/browser/package.json. LiOS preserves their bounded transport, one-page ownership, request interception, close/join and cancellation mechanics behind the existing ExecutionBackend, supervisor, BrowserConnectorPolicy, P13 DNS-pinned broker and governed conversation registry. LiOS worker/stdio protocol code is new because the donor runtime launches or attaches networked host Chromium/CDP and cannot enforce a physically --network=none child whose every resource crosses LiOS's canonical P13 broker.",
