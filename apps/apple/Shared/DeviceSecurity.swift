@@ -36,6 +36,13 @@ enum DeviceKeychain {
         }
         guard status == errSecSuccess else { throw ClientFailure(message: "Keychain write failed (\(status)).") }
     }
+    static func remove(_ account: String) throws {
+        let status = SecItemDelete([kSecClass as String: kSecClassGenericPassword,
+            kSecAttrService as String: service, kSecAttrAccount as String: account] as CFDictionary)
+        guard status == errSecSuccess || status == errSecItemNotFound else {
+            throw ClientFailure(message: "Keychain removal failed (\(status)).")
+        }
+    }
 }
 
 struct HomeConfiguration: Codable, Equatable {
