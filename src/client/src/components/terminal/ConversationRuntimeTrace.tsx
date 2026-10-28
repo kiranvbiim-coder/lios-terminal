@@ -27,6 +27,7 @@ import { presentRuntimeError } from "@/lib/runtimeErrorKit";
 import { reviewEvidenceExceptions, sourceExceptionCaveats } from "@/lib/evidenceExceptions";
 import { followUpPrompts, formatDuration, summarizeRuntimeTrace } from "@/lib/runtimeTraceSummary";
 import { inspectAgentReceiptActivity } from "@/lib/agentReceiptActivity";
+import { projectRecordedAgentSteps, RECORDED_AGENT_STEP_LABELS } from "@/lib/recordedAgentStepTruth";
 import { observedRunActivity } from "@/lib/sprintAObservedActivity";
 import AgentExecutionReceipts from "./AgentExecutionReceipts";
 import { governedReviewRisk, legacyReviewFacts } from "@/lib/approvalReviewTruth";
@@ -74,16 +75,6 @@ interface Props {
   defaultShowWork?: boolean;
   /** Sends the plain-language assumptions confirmed in the guided inputs form through the normal chat path. */
   onSubmitAssumptions?: (message: string) => void;
-}
-
-function latestByStep(events: ConversationRuntimeEvent[]) {
-  const result = new Map<string, ConversationRuntimeEvent>();
-  for (const event of events) {
-    if ("stepId" in event && typeof event.stepId === "string" && event.stepId) {
-      result.set(event.stepId, event);
-    }
-  }
-  return result;
 }
 
 /** Source limitations the person must always see: missing evidence, conflicts, warnings, low quality. */
@@ -206,7 +197,6 @@ export default function ConversationRuntimeTrace({
   // disclosure; approvals, errors, data gaps, source caveats and review-required items are never hidden.
   const workVisible = showWork;
   const followUps = onFollowUp ? followUpPrompts(summary) : [];
-  const stepEvents = latestByStep(events);
   const steps = plan?.type === "plan" ? plan.plan.steps : [];
   const capabilities = plan?.type === "plan" ? plan.plan.capabilities : [];
   const done = [...events].reverse().find((event) => event.type === "done");
@@ -257,6 +247,8 @@ export default function ConversationRuntimeTrace({
   const stepCount = summary.stepCount || summary.settledSteps;
   const duration = formatDuration(summary.durationMs);
   const observed = observedRunActivity(events, steps.length, working, waitingForApproval);
+  const recordedSteps = projectRecordedAgentSteps(events, requestId, { busy: working, stopRequested });
+  const stepPresentation = new Map(recordedSteps.map(step => [step.id, step]));
   const quietControlClass = "inline-flex min-h-11 items-center gap-1 rounded-lg px-3 py-2 font-ui text-sm text-muted-foreground hover:bg-white/[0.04] hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-300/50";
 
   return (
@@ -401,32 +393,42 @@ export default function ConversationRuntimeTrace({
         )}
 
         {workVisible && !!steps.length && (
-          <div className="grid gap-1.5 md:grid-cols-2">
-            {steps.map((step) => {
-              const observed = stepEvents.get(step.id);
-              const complete = (observed?.type === "tool_result" && (observed.outcome === "completed" || (observed.outcome === undefined && step.kind !== "agent")))
-                || (observed?.type === "status" && observed.state === "completed");
-              const running = observed?.type === "tool_start" || (observed?.type === "status" && observed.state === "running");
-              return (
-                <div key={step.id} className="flex items-start gap-2 rounded-lg border border-border/40 bg-white/[0.012] px-2.5 py-2">
-                  {complete
-                    ? <Check className="mt-0.5 h-3 w-3 shrink-0 text-emerald-300" aria-hidden="true" />
-                    : running
-                      ? <Loader2 className="mt-0.5 h-3 w-3 shrink-0 animate-spin text-cyan-300" aria-hidden="true" />
-                      : <Circle className="mt-0.5 h-3 w-3 shrink-0 text-muted-foreground/50" aria-hidden="true" />}
-                  <div className="min-w-0">
-                    <div className="truncate font-ui text-[13px] text-foreground">{step.label}</div>
-                    <div className="mt-0.5 font-terminal text-[12px] uppercase tracking-wider text-muted-foreground">
-                      {step.kind} · {step.permissionClass.replace("_", " ")}
+          <section aria-label="Recorded agent step activity" data-testid="c04-agent-step-activity" className="space-y-2">
+            <p className="font-ui text-xs leading-5 text-muted-foreground">
+              Plan and tool reports are not execution receipts. A reported completion is not proof of an external side effect.
+              Pending approvals and failed or unconfirmed steps never imply permission or success.
+            </p>
+            <ol className="grid gap-1.5 md:grid-cols-2">
+              {steps.map((step) => {
+                const state = stepPresentation.get(step.id)?.state ?? "queued";
+                const complete = state === "reported_complete";
+                const running = state === "running";
+                const attention = state === "reported_failed" || state === "denied" || state === "cancelled";
+                return (
+                  <li key={step.id} data-step-state={state}
+                    className="flex min-w-0 items-start gap-2 rounded-lg border border-border/40 bg-white/[0.012] px-2.5 py-2">
+                    {complete
+                      ? <Check className="mt-0.5 h-3 w-3 shrink-0 text-emerald-300" aria-hidden="true" />
+                      : running
+                        ? <Loader2 className="mt-0.5 h-3 w-3 shrink-0 animate-spin motion-reduce:animate-none text-cyan-300" aria-hidden="true" />
+                        : attention
+                          ? <X className="mt-0.5 h-3.5 w-3.5 shrink-0 text-rose-300" aria-hidden="true" />
+                          : <Circle className="mt-0.5 h-3 w-3 shrink-0 text-muted-foreground/50" aria-hidden="true" />}
+                    <div className="min-w-0">
+                      <div className="break-words font-ui text-[13px] text-foreground">{step.label}</div>
+                      <div className="mt-0.5 font-ui text-xs text-muted-foreground">
+                        {step.kind} · {step.permissionClass.replace("_", " ")}
+                      </div>
+                      <div className={`mt-1 font-ui text-xs ${attention ? "text-rose-200" : "text-muted-foreground"}`}
+                        role={attention ? "status" : undefined}>
+                        {RECORDED_AGENT_STEP_LABELS[state]}
+                      </div>
                     </div>
-                    {observed?.type === "tool_result" && (
-                      <div className="mt-1 line-clamp-2 font-ui text-[12px] leading-5 text-muted-foreground">{observed.summary}</div>
-                    )}
-                  </div>
-                </div>
-              );
-            })}
-          </div>
+                  </li>
+                );
+              })}
+            </ol>
+          </section>
         )}
 
         {workVisible && trust?.type === "trust" && (
