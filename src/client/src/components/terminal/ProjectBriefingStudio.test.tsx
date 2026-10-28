@@ -69,3 +69,24 @@ test("D01/D02 briefing offers source-ID search and readable accessible movement 
   assert.match(src, /Move \$\{source\.title\} later/);
   assert.match(src, /No saved Project sources match this search in the current Project/);
 });
+
+test("D04 quiet storyboard review stays opt-in, reversible and source-preserving", () => {
+  const html = renderToStaticMarkup(React.createElement(ProjectBriefingStudio, {
+    projectId: 11, artifacts: sources, onClose: () => {}, onOpenSource: () => {}, onSave: async () => {},
+  }));
+  // Default remains full discovery; no hidden source choice or automatic save.
+  assert.match(html, /Focus on selected briefing storyboard/);
+  assert.match(html, /aria-pressed="false"/);
+  assert.match(html, /Choose Project sources/);
+  assert.match(html, /Observed research record/);
+
+  const src = readFileSync(new URL("./ProjectBriefingStudio.tsx", import.meta.url), "utf8");
+  assert.match(src, /const \[quietReview, setQuietReview\] = useState\(false\)/);
+  assert.match(src, /onClick=\{\(\) => setQuietReview\(current => !current\)\}/);
+  assert.match(src, /\{!quietReview && <section/);
+  assert.match(src, /quietReview \? "grid-cols-1" : "xl:grid-cols-2"/);
+  assert.match(src, /setQuietReview\(false\)/); // Project switching resets view preference.
+  assert.match(src, /selectedSources\.filter\(source => source\.projectId === projectId\)/);
+  assert.match(src, /await onSave\(chosen, title, introduction, currentVisuals\)/);
+  assert.doesNotMatch(src, /localStorage|sessionStorage|setTimeout|createP9Workflow/);
+});
