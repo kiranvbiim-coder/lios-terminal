@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import type { PinnedBriefingVisual } from "./phase4BriefingVisuals";
 import {
-  buildProjectBriefingReport, currentProjectBriefingVisuals, isReviewedBriefingSourceCurrent, MAX_BRIEFING_SOURCES, type BriefingSource,
+  buildProjectBriefingReport, currentProjectBriefingVisuals, isRecordedBriefingVisualTitleCurrent, isReviewedBriefingSourceCurrent, MAX_BRIEFING_SOURCES, type BriefingSource,
 } from "./projectBriefingStoryboard";
 
 const artifact = (id: string, version: number, projectId = 11): BriefingSource => ({
@@ -103,6 +103,23 @@ test("D06 a verified pinned chart remains visible only while its exact selected 
   assert.deepEqual(currentProjectBriefingVisuals([{ ...pinned,
     content: { kind: "table", columns: [{ key: "x", label: "X", type: "number" }], rows: [{ x: 42 }] } }],
     [selected], live, 11), [], "a forged kind swap cannot be displayed");
+});
+
+test("D06 long saved titles match their bounded P4 pin without ignoring live title revocation", () => {
+  const fullTitle = "Recorded chart ".padEnd(160, "X") + " reviewed quarterly evidence";
+  const selected = { ...artifact("figure", 3), title: fullTitle };
+  const pinned = { ...recordedVisual("figure"), title: fullTitle.slice(0, 160) };
+  const live = new Map([[selected.id, selected]]);
+  assert.equal(isRecordedBriefingVisualTitleCurrent(pinned, selected), true);
+  assert.deepEqual(currentProjectBriefingVisuals([pinned], [selected], live, 11), [pinned],
+    "the P4 recorder's intentional 160-character title bound must not hide valid source data");
+  assert.deepEqual(currentProjectBriefingVisuals([{ ...pinned, title: fullTitle }], [selected], live, 11), [],
+    "unbounded client-supplied pinned title must not impersonate P4 capture");
+  const renamed = { ...selected, title: fullTitle + " renamed after review" };
+  assert.deepEqual(currentProjectBriefingVisuals([pinned], [selected], new Map([[selected.id, renamed]]), 11), [],
+    "a change beyond the P4 title bound must still revoke an earlier full-title review");
+  assert.deepEqual(currentProjectBriefingVisuals([pinned], [{ ...selected, title: fullTitle + " altered" }], live, 11), [],
+    "changed selected title cannot bypass the live full-title equality check");
 });
 
 test("D06 revoked, renamed, archived and superseded saved visuals fail closed before report review", () => {
