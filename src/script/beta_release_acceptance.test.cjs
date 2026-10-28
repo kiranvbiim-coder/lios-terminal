@@ -7,9 +7,10 @@ const path = require("node:path");
 const { checkNativeSelfTest, checkNativeUX, inspectNativeEvidence, parseFlags } = require("./beta_release_acceptance.cjs");
 
 const checksum = "a".repeat(64);
+const BETA_VERSION = "1.0.0-beta.1";
 function packaged(platform, arch) {
   return {
-    status: "verified", platform, arch,
+    status: "verified", platform, arch, packageVersion: BETA_VERSION,
     nativeSecretCustody: { mode: "native_protected", protectedAtRest: true, roundTripVerified: true },
     workspaceRecovery: { workspaceId: "local-workspace", persistedFileCount: 1 },
     pythonSidecar: { representativeRoute: { verified: true } },
@@ -52,12 +53,12 @@ function ui(target) {
 }
 
 test("beta native gate accepts only target-matched actual self-test fields", () => {
-  assert.deepEqual(checkNativeSelfTest(packaged("darwin", "arm64"), "darwin", "arm64"),
+  assert.deepEqual(checkNativeSelfTest(packaged("darwin", "arm64"), "darwin", "arm64", BETA_VERSION),
     { platform: "darwin", arch: "arm64", nativeSelfTest: true });
-  assert.deepEqual(checkNativeSelfTest(packaged("win32", "x64"), "win32", "x64"),
+  assert.deepEqual(checkNativeSelfTest(packaged("win32", "x64"), "win32", "x64", BETA_VERSION),
     { platform: "win32", arch: "x64", nativeSelfTest: true });
-  assert.throws(() => checkNativeSelfTest(packaged("darwin", "arm64"), "win32", "x64"), /wrong|not from this target/);
-  assert.throws(() => checkNativeSelfTest({ ...packaged("darwin", "arm64"), status: "pending" }, "darwin", "arm64"), /not from this target/);
+  assert.throws(() => checkNativeSelfTest(packaged("darwin", "arm64"), "win32", "x64", BETA_VERSION), /wrong|not from this target/);
+  assert.throws(() => checkNativeSelfTest({ ...packaged("darwin", "arm64"), status: "pending" }, "darwin", "arm64", BETA_VERSION), /not from this target/);
 });
 
 test("beta gate rejects absence of OS protected secret custody, persisted work or Python calculation", () => {
@@ -69,7 +70,7 @@ test("beta gate rejects absence of OS protected secret custody, persisted work o
     { updaterMetadataPresent: false },
     { performance: {} },
   ]) {
-    assert.throws(() => checkNativeSelfTest({ ...packaged("darwin", "arm64"), ...mutation }, "darwin", "arm64"), /BLOCKED/);
+    assert.throws(() => checkNativeSelfTest({ ...packaged("darwin", "arm64"), ...mutation }, "darwin", "arm64", BETA_VERSION), /BLOCKED/);
   }
 });
 
@@ -171,7 +172,7 @@ test("D08 beta evidence gate refuses a replaced file between lstat and open", t 
 
 test("D08 $0 beta gate reuses native performance ceilings rather than finite-only timing", () => {
   const original = packaged("darwin", "arm64");
-  assert.equal(checkNativeSelfTest(original, "darwin", "arm64").nativeSelfTest, true);
+  assert.equal(checkNativeSelfTest(original, "darwin", "arm64", BETA_VERSION).nativeSelfTest, true);
   for (const performance of [
     { ...original.performance, desktopSelfTestElapsedMs: 60_001 },
     { ...original.performance, electronAppReadyElapsedMs: 20_001 },
@@ -186,7 +187,7 @@ test("D08 $0 beta gate reuses native performance ceilings rather than finite-onl
     { ...original.performance, electronAppReadyElapsedMs: Infinity },
     { ...original.performance, mainProcessMemoryAtCompletion: undefined },
   ]) {
-    assert.throws(() => checkNativeSelfTest({ ...original, performance }, "darwin", "arm64"),
+    assert.throws(() => checkNativeSelfTest({ ...original, performance }, "darwin", "arm64", BETA_VERSION),
       /BLOCKED.*performance/i);
   }
 });
@@ -210,4 +211,16 @@ test("D09 beta native acceptance refuses missing source-to-installed C06/C07/C08
     assert.throws(() => checkNativeUX(omitted, target, checksum), /BLOCKED.*missing or unexpected/);
   }
   assert.equal(checkNativeUX(ui("win-x64-nsis"), "win-x64-nsis", checksum).checks, 29);
+});
+
+test("D10 installed self-test cannot be replayed across signed beta versions", () => {
+  const latest = packaged("darwin", "arm64");
+  assert.equal(checkNativeSelfTest(latest, "darwin", "arm64", BETA_VERSION).nativeSelfTest, true);
+  assert.throws(() => checkNativeSelfTest(latest, "darwin", "arm64", "1.0.0-beta.2"), /BLOCKED.*version/);
+  assert.throws(() => checkNativeSelfTest({ ...latest, packageVersion: "1.0.0-beta.2" },
+    "darwin", "arm64", BETA_VERSION), /BLOCKED.*version/);
+  assert.throws(() => checkNativeSelfTest({ ...latest, packageVersion: undefined },
+    "darwin", "arm64", BETA_VERSION), /BLOCKED.*version/);
+  assert.throws(() => checkNativeSelfTest(latest, "darwin", "arm64"), /BLOCKED.*version/);
+  assert.throws(() => checkNativeSelfTest(latest, "darwin", "arm64", "dev"), /BLOCKED.*version/);
 });
