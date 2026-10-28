@@ -10,6 +10,7 @@ test("D03 System Doctor searches actual authenticated registry reports with no r
   assert.match(component, /visibleRuntimeDoctorRecords\(summary\.records, search, attentionOnly\)/);
   assert.match(component, /shown\.slice\(0, 100\)/);
   assert.match(component, /Find a registered component/);
+  assert.match(component, /className="inline-flex min-h-11 items-center gap-2 rounded-lg border border-border\/70 px-3/); // 44px inspect target.
   assert.match(component, /Needs attention only/);
   assert.match(component, /Search changes only this list, not actual health/);
   assert.match(component, /Native installation: <strong className="text-foreground">Not verified here/);
