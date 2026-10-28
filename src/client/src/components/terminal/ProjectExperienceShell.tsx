@@ -13,6 +13,8 @@ import ChatSourcesControl from "./ChatSourcesControl";
 import ChatExtensionsDialog from "./ChatExtensionsDialog";
 import ConversationArtifactSidecar from "./ConversationArtifactSidecar";
 import { isCurrentArtifactLoad } from "@/lib/artifactSidecarSizing";
+import { exactRuntimeSavedArtifact, isCurrentSavedArtifactHandoff } from "@/lib/exactRuntimeSavedArtifact";
+import { canPrepareProjectAutomationDraft } from "@/lib/projectAutomationDraftEligibility";
 import type { z } from "zod";
 import { ProjectDestinationDialog } from "./ProjectDestinationDialog";
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
@@ -440,6 +442,10 @@ export default function ProjectExperienceShell({
   busyRef.current = busy;
   const [runtimeEvents, setRuntimeEvents] = useState<ConversationRuntimeEvent[]>([]);
   const [runtimeRequestId, setRuntimeRequestId] = useState<string | null>(null);
+  const runtimeHandoffRequestIdRef = useRef<string | null>(null);
+  runtimeHandoffRequestIdRef.current = runtimeRequestId ?? runtimeEvents.at(-1)?.requestId ?? null;
+  const runtimeHandoffEventsRef = useRef(runtimeEvents);
+  runtimeHandoffEventsRef.current = runtimeEvents;
   const [declinedRunAction, setDeclinedRunAction] = useState<{ requestId: string; action: ConversationActionName } | null>(null);
   const [claimReviewDraft, setClaimReviewDraft] = useState<{ prompt: string; binding: RecordedClaimReview; chatId: number | null } | null>(null);
   const submittedClaimReview = useRef<typeof claimReviewDraft>(null);
@@ -461,6 +467,7 @@ export default function ProjectExperienceShell({
   sandboxSelectionRef.current = { projectId: selection.projectId, chatId: selection.chatId };
   const [lastSubmittedMessage, setLastSubmittedMessage] = useState("");
   const [lastWorkflowRequest, setLastWorkflowRequest] = useState<Omit<ConversationRequest, "requestId" | "continuationOf"> | null>(null);
+  const [lastWorkflowSourceRequestId, setLastWorkflowSourceRequestId] = useState<string | null>(null);
   const [showSaveWorkflow, setShowSaveWorkflow] = useState(false);
   const composerToolsTrigger = useRef<HTMLButtonElement>(null);
   const pendingComposerDialog = useRef<"workflow" | "resource" | "plugins" | null>(null);
@@ -488,6 +495,7 @@ export default function ProjectExperienceShell({
   const terminalSelectionRef = useRef({ chatId: selection.chatId, setArtifact: setConversationArtifactRef, setVersion: setArtifactViewVersion });
   terminalSelectionRef.current = { chatId: selection.chatId, setArtifact: setConversationArtifactRef, setVersion: setArtifactViewVersion };
   const artifactDraftDirtyRef = useRef(false);
+  const savedArtifactReopenInFlightRef = useRef(false);
   const reopenArtifactFocusRef = useRef<HTMLButtonElement>(null);
   const displayedArtifactRef = useRef<{ artifactId: string; requestedVersion: number | null; version: number } | null>(null);
   const handledWorkbenchReturn = useRef<number | null>(null);
@@ -751,6 +759,7 @@ export default function ProjectExperienceShell({
     setVisibleMessageCount(CHAT_RENDER_BATCH);
     setLastSubmittedMessage("");
     setLastWorkflowRequest(null);
+    setLastWorkflowSourceRequestId(null);
     setVoiceTranscripts([]);
     setVoiceTranscriptReviewed(false);
     setPendingAttachmentFiles([]);
@@ -1581,6 +1590,7 @@ export default function ProjectExperienceShell({
       : undefined;
     if (!override?.continuationOf && chatMode === "project" && !payload.recordedClaimReview) {
       const projectApprovals = approvals.filter((grant) => grant.scope === "project");
+      setLastWorkflowSourceRequestId(requestId);
       setLastWorkflowRequest({
         message,
         sourceScope,
@@ -1591,6 +1601,9 @@ export default function ProjectExperienceShell({
         attachments: attachmentsForRequest,
         context,
       });
+    } else if (!override?.continuationOf) {
+      setLastWorkflowSourceRequestId(null);
+      setLastWorkflowRequest(null);
     }
 
     recordP1ShellEvent("composer_submit");
@@ -2081,6 +2094,18 @@ export default function ProjectExperienceShell({
       semanticContext: conversationVisualIntensity === "contextual" ? inferVisualSemanticContext(activeView) : "general",
     });
   }, [activeView, busy, chatMode, conversationVisualIntensity, home?.project.name, selection.projectId, streaming, displayMessages.length]);
+
+  const canPrepareChatAutomation = canPrepareProjectAutomationDraft({
+    mode: chatMode,
+    projectId: selection.projectId,
+    chatId: selection.chatId,
+    activeChatScope: activeChat?.scope ?? null,
+    sourceRequestId: lastWorkflowSourceRequestId,
+    currentRequestId: runtimeHandoffRequestIdRef.current,
+    hasSavedRequest: Boolean(lastWorkflowRequest),
+    busy,
+    events: runtimeEvents,
+  });
 
   return (
     <div ref={shellRef} data-context-open={contextOpen && section === "conversation" && !!home && chatMode === "project" && !conversationArtifactRef} className="lios-project-experience-shell flex h-full min-h-0 bg-transparent text-foreground">
@@ -2623,6 +2648,60 @@ export default function ProjectExperienceShell({
                   } else { setClaimReviewDraft(null); setInput(current => stageSafeRunRetry(current, prompt)); }
                   requestAnimationFrame(() => composerRef.current?.focus());
                 }}
+                onOpenSavedArtifact={chatMode === "temporary" ? undefined : async (artifactId, version, projectId, requestId) => {
+                  if (savedArtifactReopenInFlightRef.current) return;
+                  const original = { projectId: selection.projectId, chatId: selection.chatId };
+                  const candidate = [...runtimeHandoffEventsRef.current].reverse().find(event =>
+                    event.type === "artifact" && event.requestId === requestId &&
+                    event.persistedArtifact?.id === artifactId && event.persistedArtifact.version === version);
+                  const saved = exactRuntimeSavedArtifact(candidate, {
+                    requestId: runtimeHandoffRequestIdRef.current,
+                    projectId: original.projectId, chatId: original.chatId,
+                  });
+                  if (!saved || saved.artifactId !== artifactId || saved.version !== version ||
+                      saved.projectId !== projectId || chatMode === "temporary" || busy || busyRef.current ||
+                      keepingArtifactRef.current || sendInFlightRef.current || !original.chatId) {
+                    setLifecycleNotice("That exact saved Artifact is no longer available in this Chat. Inspect its saved Artifact history.");
+                    return;
+                  }
+                  savedArtifactReopenInFlightRef.current = true;
+                  try {
+                    if (artifactDraftDirtyRef.current && !(await requestLifecycle({
+                      title: "Leave unsaved Artifact edits?",
+                      detail: "Opening this recorded version discards only local unsaved edits. Existing P4 versions are unchanged.",
+                      confirmLabel: "Discard local edits",
+                    }))) return;
+                    if (!isCurrentSavedArtifactHandoff(saved, original,
+                          sandboxSelectionRef.current, runtimeHandoffRequestIdRef.current) ||
+                        busyRef.current || keepingArtifactRef.current || sendInFlightRef.current) {
+                      setLifecycleNotice("Original Chat or run changed. Nothing was opened; choose the saved version in its owning Chat.");
+                      return;
+                    }
+                    artifactDraftDirtyRef.current = false;
+                    setArtifactFocusMode(false);
+                    setConversationArtifactRef(saved.artifactId);
+                    setArtifactViewVersion(saved.version);
+                    // The existing authenticated P4 sidecar re-fetches exact vN.
+                  } finally { savedArtifactReopenInFlightRef.current = false; }
+                }}
+                onPrepareAutomation={canPrepareChatAutomation ? () => {
+                  if (!canPrepareProjectAutomationDraft({
+                    mode: chatMode,
+                    projectId: sandboxSelectionRef.current.projectId,
+                    chatId: sandboxSelectionRef.current.chatId,
+                    activeChatScope: activeChat?.scope ?? null,
+                    sourceRequestId: lastWorkflowSourceRequestId,
+                    currentRequestId: runtimeHandoffRequestIdRef.current,
+                    hasSavedRequest: Boolean(lastWorkflowRequest),
+                    busy: busyRef.current || sendInFlightRef.current ||
+                      keepingArtifactRef.current || artifactDraftDirtyRef.current,
+                    events: runtimeHandoffEventsRef.current,
+                  })) {
+                    setLifecycleNotice("This run is no longer an eligible completed Project request. Nothing was scheduled.");
+                    return;
+                  }
+                  setShowSaveWorkflow(true);
+                } : undefined}
                 onKeepArtifact={chatMode === "temporary" ? undefined : keepArtifact}
                 artifactSaveTarget={artifactSaveTarget}
                 onSubmitAssumptions={(message) => void send({ message })}
@@ -2888,7 +2967,7 @@ export default function ProjectExperienceShell({
                               <DropdownMenuItem title="Save Session" onSelect={() => void saveCurrentSession()}>Save session</DropdownMenuItem>
                             </>
                           )}
-                          {chatMode === "project" && selection.projectId && activeChat?.scope === "project" && lastWorkflowRequest && runtimeRequestId && runtimeEvents.some(event => event.type === "done" && event.requestId === runtimeRequestId && event.status === "completed") && (
+                          {canPrepareChatAutomation && (
                             <DropdownMenuItem onSelect={() => { pendingComposerDialog.current = "workflow"; }}>Save workflow</DropdownMenuItem>
                           )}
                           {voiceOutputAvailable && (
@@ -3017,7 +3096,7 @@ export default function ProjectExperienceShell({
           requestAnimationFrame(() => composerRef.current?.focus());
         }}
       />
-      {showSaveWorkflow && chatMode === "project" && selection.projectId && activeChat?.scope === "project" && lastWorkflowRequest && runtimeRequestId && (
+      {showSaveWorkflow && canPrepareChatAutomation && selection.projectId && selection.chatId && lastWorkflowRequest && runtimeRequestId && (
         <SaveWorkflowDialog
           projectId={selection.projectId}
           chatId={activeChat.id}
