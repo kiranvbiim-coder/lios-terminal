@@ -50,7 +50,7 @@ test("D01 Project switching cannot display or save stale source selections or la
   assert.match(src, /signal: controller\.signal/);
   assert.match(src, /controller\.signal\.aborted \|\| activeProjectRef\.current !== inspectedProject/);
   assert.match(src, /selectedSources\.filter\(source => source\.projectId === projectId\)/);
-  assert.match(src, /pinnedVisuals\.filter\(visual => visual\.projectId === projectId/);
+  assert.match(src, /currentProjectBriefingVisuals\(pinnedVisuals, chosen, byId, projectId\)/);
   assert.match(src, /if \(activeProjectRef\.current !== reviewedProject\) return/);
   assert.match(src, /buildProjectBriefingReport\(\{ projectId, title, introduction, sources: chosen, visuals: currentVisuals \}\)/);
   assert.match(src, /await onSave\(chosen, title, introduction, currentVisuals\)/);
@@ -118,9 +118,7 @@ test("D05 shows only exact P4 native visuals with explicit bounded recorded prev
   assert.doesNotMatch(empty, /Preview recorded visual/); // No source pinned by default.
   const src = readFileSync(new URL("./ProjectBriefingStudio.tsx", import.meta.url), "utf8");
   assert.match(src, /GalleryRecordedPreviewContent content=\{visual\.content\}/);
-  assert.match(src, /source\.headVersion === visual\.version/);
-  assert.match(src, /source\.kind === visual\.content\.kind/);
-  assert.match(src, /isReviewedBriefingSourceCurrent\(source, byId\.get\(source\.id\), projectId\)/);
+  assert.match(src, /currentProjectBriefingVisuals\(pinnedVisuals, chosen, byId, projectId\)/);
   assert.match(src, /const \[expandedVisualId, setExpandedVisualId\] = useState<string \| null>\(null\)/);
   assert.match(src, /aria-expanded=\{expandedVisualId === visual\.artifactId\}/);
   assert.match(src, /setExpandedVisualId\(null\)/); // Project change resets preview state.
