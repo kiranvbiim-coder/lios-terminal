@@ -5,7 +5,7 @@ import { GalleryRecordedPreviewContent, ProjectArtifactGalleryPreview } from "./
 import { captureBriefingVisual, type PinnedBriefingVisual } from "@/lib/phase4BriefingVisuals";
 import type { ArtifactDetail } from "@/lib/useArtifacts";
 import {
-  buildProjectBriefingReport, currentProjectBriefingVisuals, isReviewedBriefingSourceCurrent, MAX_BRIEFING_SOURCES, type BriefingSource,
+  buildProjectBriefingReport, currentProjectBriefingVisuals, isRecordedBriefingVisualTitleCurrent, isReviewedBriefingSourceCurrent, MAX_BRIEFING_SOURCES, type BriefingSource,
 } from "@/lib/projectBriefingStoryboard";
 
 export function ProjectBriefingStudio({
@@ -113,7 +113,7 @@ export function ProjectBriefingStudio({
       if (controller.signal.aborted || activeProjectRef.current !== inspectedProject) return;
       const visual = captureBriefingVisual(detail, inspectedProject);
       if (visual.artifactId !== source.id || visual.version !== source.headVersion ||
-          visual.title !== source.title || visual.content.kind !== source.kind)
+          !isRecordedBriefingVisualTitleCurrent(visual, source) || visual.content.kind !== source.kind)
         throw new Error("The selected chart/table changed; review this saved source again.");
       setPinnedVisuals(current => activeProjectRef.current !== inspectedProject
         ? current : current.some(v => v.artifactId === visual.artifactId)
