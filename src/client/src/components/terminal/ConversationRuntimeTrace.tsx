@@ -490,7 +490,10 @@ export default function ConversationRuntimeTrace({
         </div>
       )}
 
-      {done?.type === "done" && done.status === "completed" && recovery.needsReconciliation && (
+      {done?.type === "done" && done.status === "completed" &&
+        (recovery.failedToolReports > 0 || recovery.deniedToolReports > 0 ||
+          recovery.skippedToolReports > 0 || recovery.unconfirmedToolReports > 0 ||
+          recovery.unfinishedToolStarts > 0) && (
         <section role="alert" aria-label="Recorded action reconciliation" data-testid="c08-recorded-action-recovery"
           className="mb-2 space-y-2 rounded-lg border border-amber-300/30 p-3 font-ui text-sm text-amber-100">
           <p className="font-semibold text-foreground">Some individual actions need reconciliation</p>

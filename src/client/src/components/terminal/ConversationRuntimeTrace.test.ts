@@ -560,6 +560,14 @@ test("C08 completed run surfaces a denied individual tool without unsafe replay"
     summary: "", deterministic: true, sourceRefs: [], outcome: "completed",
   }), doneOk], { onInspectRun: noop });
   assert.doesNotMatch(completed, /c08-recorded-action-recovery/);
+  const receiptOnly = render([planEvent, event({
+    type: "receipt", receipt: {
+      id: "77777777-7777-4777-8777-777777777777",
+      requestId: REQUEST_ID, status: "failed",
+    },
+  }), doneOk], { onInspectRun: noop });
+  assert.match(receiptOnly, /data-testid="trace-agent-receipt-warning"/);
+  assert.doesNotMatch(receiptOnly, /data-testid="c08-recorded-action-recovery"/);
 });
 
 test("C06 exact saved revision appears only with a current Chat navigation handler", () => {
