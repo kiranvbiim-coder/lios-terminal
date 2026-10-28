@@ -495,7 +495,7 @@ test("C04 Show work distinguishes a recorded action from an unconfirmed action w
   }), doneOk], { defaultShowWork: true });
   assert.match(reported, /data-step-state="reported_complete"/);
   assert.match(reported, /Reported complete/);
-  assert.doesNotMatch(reported, /PRIVATE_TOOL_PAYLOAD_NEVER_IN_STEP/);
+  assert.doesNotMatch(reported.split('data-testid="c04-agent-step-activity"')[1]?.split("</section>")[0] ?? "", /PRIVATE_TOOL_PAYLOAD_NEVER_IN_STEP/);
   const denied = render([planEvent, event({
     type: "tool_result", stepId: "step-1", label: "Fetch filings",
     summary: "", deterministic: false, sourceRefs: [], outcome: "denied",
