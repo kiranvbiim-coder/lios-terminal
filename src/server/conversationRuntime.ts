@@ -2258,6 +2258,7 @@ async function executeP7ProjectIntelligence(
     label,
     summary: tool.summary,
     deterministic: true,
+    outcome: "completed",
     sourceRefs: tool.sourceRefs,
   });
 
@@ -2348,6 +2349,7 @@ async function executeRuntimeDoctor(input: ConversationRuntimeInput, plan: Workf
     "This diagnosis does not certify optional engines, provider access, sandbox readiness or shipping acceptance.",
   ].join("\n");
   const receipt = createReceipt({ requestId, operation: "runtime_doctor", componentId, startedAt, deterministic: true, aiDerived: false, input: {}, output: tool.output, sourceRefs: tool.sourceRefs });
+  await emit(input, { ...eventBase(requestId), type: "tool_result", stepId: "runtime-doctor", label: runtimeDoctorTool.label, summary: tool.summary, deterministic: true, sourceRefs: tool.sourceRefs, outcome: "completed" });
   await emit(input, { ...eventBase(requestId), type: "receipt", receipt });
   await emit(input, { ...eventBase(requestId), type: "text", text, label: "deterministic" });
   return { text, label: "deterministic", plan, receiptIds: [receipt.id], artifacts: [], cancelled: false, awaitingApproval: false };
@@ -2741,6 +2743,7 @@ async function executeP2CapabilityBundle(
     label: "Security resolved",
     summary: resolvedTool.summary,
     deterministic: true,
+    outcome: "completed",
     sourceRefs: resolvedTool.sourceRefs,
   });
 
@@ -2769,6 +2772,7 @@ async function executeP2CapabilityBundle(
     label: "Market data retrieved",
     summary: marketTool.summary,
     deterministic: false,
+    outcome: "completed",
     sourceRefs,
   });
 

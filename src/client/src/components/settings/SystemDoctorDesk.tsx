@@ -53,7 +53,7 @@ export function SystemDoctorDesk() {
     <div className="flex flex-wrap items-start justify-between gap-3">
       <h3 className="inline-flex items-center gap-2 font-ui text-base font-semibold text-foreground"><Activity aria-hidden="true" className="h-4 w-4 text-amber-200"/>System Doctor</h3>
       <button type="button" disabled={busy} onClick={() => void inspect()}
-        className="inline-flex min-h-10 items-center gap-2 rounded-lg border border-border/70 px-3 py-2 font-ui text-sm text-foreground hover:border-amber-300/30 focus-visible:ring-2 focus-visible:ring-amber-300/70 disabled:opacity-45">
+        className="inline-flex min-h-11 items-center gap-2 rounded-lg border border-border/70 px-3 py-2 font-ui text-sm text-foreground hover:border-amber-300/30 focus-visible:ring-2 focus-visible:ring-amber-300/70 disabled:opacity-45">
         <RefreshCw aria-hidden="true" className={"h-4 w-4" + (busy ? " animate-spin" : "")}/>
         {busy ? "Inspecting…" : "Inspect runtime"}
       </button>

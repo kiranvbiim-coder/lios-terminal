@@ -543,3 +543,60 @@ test("C08 errors and interrupted runs only offer read-only reconciliation, never
     event({type:"done",status:"failed"})],{onRetry:noop,onFollowUp:undefined});
   assert.doesNotMatch(noSource,/data-testid="c08-reconcile-run"|data-testid="trace-error-retry"/);
 });
+
+
+test("C08 completed run surfaces a denied individual tool without unsafe replay", () => {
+  const denied = render([planEvent, event({
+    type: "tool_result", stepId: "step-1", label: "Fetch filings",
+    summary: "PRIVATE_TOOL_OUTPUT", deterministic: false, sourceRefs: [], outcome: "denied",
+  }), doneOk], { onInspectRun: noop, onRetry: noop });
+  assert.match(denied, /data-testid="c08-recorded-action-recovery"/);
+  assert.match(denied, /Some individual actions need reconciliation/);
+  assert.match(denied, /data-testid="c08-review-recorded-actions"/);
+  assert.match(denied, /Inspect original run history/);
+  assert.doesNotMatch(denied, /PRIVATE_TOOL_OUTPUT|data-testid="trace-error-retry"/);
+  const completed = render([planEvent, event({
+    type: "tool_result", stepId: "step-1", label: "Fetch filings",
+    summary: "", deterministic: true, sourceRefs: [], outcome: "completed",
+  }), doneOk], { onInspectRun: noop });
+  assert.doesNotMatch(completed, /c08-recorded-action-recovery/);
+  const receiptOnly = render([planEvent, event({
+    type: "receipt", receipt: {
+      id: "77777777-7777-4777-8777-777777777777",
+      requestId: REQUEST_ID, status: "failed",
+    },
+  }), doneOk], { onInspectRun: noop });
+  assert.match(receiptOnly, /data-testid="trace-agent-receipt-warning"/);
+  assert.doesNotMatch(receiptOnly, /data-testid="c08-recorded-action-recovery"/);
+});
+
+test("C06 exact saved revision appears only with a current Chat navigation handler", () => {
+  const draft = {
+    artifactType: "research_brief", title: "Recorded evidence",
+    projectId: 12, persistence: "project_candidate", sourceRefs: [],
+  };
+  const saved = event({ type: "artifact", artifact: draft,
+    persistedArtifact: { id: "artifact:66666666-6666-4666-8666-666666666666", version: 4 } });
+  const visible = render([saved, doneOk], { onOpenSavedArtifact: noop });
+  assert.match(visible, /data-testid="c06-open-recorded-artifact"/);
+  assert.match(visible, /data-testid="c06-open-exact-saved-version"/);
+  assert.match(visible, /Open saved v4/);
+  assert.match(visible, /P4 rechecks current permissions on open/);
+  const unavailable = render([saved, doneOk], { onOpenSavedArtifact: undefined });
+  assert.doesNotMatch(unavailable, /c06-open-recorded-artifact/);
+  const unsaved = render([event({ type: "artifact", artifact: draft }), doneOk], { onOpenSavedArtifact: noop });
+  assert.doesNotMatch(unsaved, /c06-open-recorded-artifact/);
+});
+
+test("C07 draft offer remains opt-in and absent from failed or running turns", () => {
+  const ready = render([planEvent, doneOk], { onPrepareAutomation: noop });
+  assert.match(ready, /data-testid="c07-chat-automation-draft"/);
+  assert.match(ready, /Prepare automation draft/);
+  assert.match(ready, /P9 must separately review activation/);
+  const failed = render([planEvent, event({ type: "done", status: "failed" })], { onPrepareAutomation: noop });
+  assert.doesNotMatch(failed, /c07-chat-automation-draft/);
+  const busy = render([planEvent], { onPrepareAutomation: noop, busy: true });
+  assert.doesNotMatch(busy, /c07-chat-automation-draft/);
+  const notEligible = render([planEvent, doneOk], { onPrepareAutomation: undefined });
+  assert.doesNotMatch(notEligible, /c07-chat-automation-draft/);
+});
