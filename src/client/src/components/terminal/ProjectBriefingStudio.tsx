@@ -55,7 +55,8 @@ export function ProjectBriefingStudio({
     !isReviewedBriefingSourceCurrent(source, byId.get(source.id), projectId));
   const offered = available.filter(item =>
     item.title.toLocaleLowerCase().includes(search.trim().toLocaleLowerCase())
-    || item.kind.toLocaleLowerCase().includes(search.trim().toLocaleLowerCase()));
+    || item.kind.toLocaleLowerCase().includes(search.trim().toLocaleLowerCase())
+    || item.id.toLocaleLowerCase().includes(search.trim().toLocaleLowerCase()));
   const toggle = (id: string) => {
     setError(null);
     if (chosen.some(item => item.id === id)) setPinnedVisuals(current => current.filter(visual => visual.artifactId !== id));
@@ -172,7 +173,7 @@ export function ProjectBriefingStudio({
           <label className="block">
             <span className="sr-only">Search saved Project sources for briefing</span>
             <input type="search" value={search} onChange={event => setSearch(event.target.value)}
-              disabled={busy} placeholder="Find an Artifact by title or type…"
+              disabled={busy} placeholder="Find by saved title, type or Artifact ID…"
               className="min-h-10 w-full rounded-lg border border-border/70 bg-background px-3 text-sm focus-visible:outline focus-visible:outline-2 focus-visible:outline-amber-300" />
           </label>
           {offered.length ? <ul className="max-h-80 space-y-2 overflow-y-auto">
@@ -195,7 +196,7 @@ export function ProjectBriefingStudio({
               </li>;
             })}
           </ul> : <p role="status" className="rounded-lg border border-dashed border-border/60 p-4 text-sm text-muted-foreground">
-            No saved Project sources match. Create or keep a Project Artifact first.
+            No current saved Project sources match this search. Clear it, or create a saved Artifact first.
           </p>}
           {offered.length > 40 && <p className="text-xs text-muted-foreground">Showing 40 of {offered.length}. Narrow the search to find more.</p>}
         </section>
@@ -218,23 +219,23 @@ export function ProjectBriefingStudio({
                   <div className="mt-1 text-xs text-muted-foreground">{source.kind} · exact saved v{source.headVersion}</div>
                   <div className="mt-2 flex flex-wrap gap-1">
                     <button type="button" disabled={busy || index === 0} aria-label={`Move ${source.title} earlier`}
-                      onClick={() => move(index, -1)} className="grid min-h-9 min-w-9 place-items-center rounded border border-border/70 disabled:opacity-35"><ArrowUp className="h-4 w-4" aria-hidden="true" /></button>
+                      onClick={() => move(index, -1)} className="grid min-h-11 min-w-11 place-items-center rounded border border-border/70 disabled:opacity-35"><ArrowUp className="h-4 w-4" aria-hidden="true" /></button>
                     <button type="button" disabled={busy || index === chosen.length - 1} aria-label={`Move ${source.title} later`}
-                      onClick={() => move(index, 1)} className="grid min-h-9 min-w-9 place-items-center rounded border border-border/70 disabled:opacity-35"><ArrowDown className="h-4 w-4" aria-hidden="true" /></button>
+                      onClick={() => move(index, 1)} className="grid min-h-11 min-w-11 place-items-center rounded border border-border/70 disabled:opacity-35"><ArrowDown className="h-4 w-4" aria-hidden="true" /></button>
                     <button type="button" disabled={busy} aria-label={`Remove ${source.title} from briefing`}
-                      onClick={() => toggle(source.id)} className="grid min-h-9 min-w-9 place-items-center rounded border border-border/70 text-rose-200 disabled:opacity-35"><Trash2 className="h-4 w-4" aria-hidden="true" /></button>
+                      onClick={() => toggle(source.id)} className="grid min-h-11 min-w-11 place-items-center rounded border border-border/70 text-rose-200 disabled:opacity-35"><Trash2 className="h-4 w-4" aria-hidden="true" /></button>
                     {(source.kind === "chart" || source.kind === "table") && <button type="button"
                       disabled={busy || Boolean(pinningId) || (!currentVisuals.some(visual => visual.artifactId === source.id) && currentVisuals.length >= 3) ||
                         !isReviewedBriefingSourceCurrent(source, byId.get(source.id), projectId)}
                       aria-pressed={currentVisuals.some(visual => visual.artifactId === source.id)}
                       onClick={() => void pinVisual(source)}
-                      className="min-h-9 rounded border border-amber-300/30 px-3 text-xs text-amber-200 focus-visible:outline focus-visible:outline-2 focus-visible:outline-amber-300 disabled:opacity-40">
+                      className="min-h-11 rounded border border-amber-300/30 px-3 text-sm text-amber-200 focus-visible:outline focus-visible:outline-2 focus-visible:outline-amber-300 disabled:opacity-40">
                       {pinningId === source.id ? "Checking saved visual…" :
                         currentVisuals.some(visual => visual.artifactId === source.id) ? "Remove native visual" : "Include native visual"}
                     </button>}
                     <button type="button" disabled={busy || !isReviewedBriefingSourceCurrent(source, byId.get(source.id), projectId)}
                       aria-expanded={previewId === source.id} onClick={() => setPreviewId(current => current === source.id ? null : source.id)}
-                      className="min-h-9 rounded border border-cyan-300/25 px-3 text-xs text-cyan-200 focus-visible:outline focus-visible:outline-2 focus-visible:outline-amber-300 disabled:opacity-40">
+                      className="min-h-11 rounded border border-cyan-300/25 px-3 text-sm text-cyan-200 focus-visible:outline focus-visible:outline-2 focus-visible:outline-amber-300 disabled:opacity-40">
                       {previewId === source.id ? "Hide exact preview" : "Inspect saved content"}
                     </button>
                   </div>
