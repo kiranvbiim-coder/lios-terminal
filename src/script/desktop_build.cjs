@@ -1,4 +1,5 @@
 const { spawnSync } = require("node:child_process");
+const { requireCleanBetaSourceCommit } = require("./clean_beta_source.cjs");
 const path = require("node:path");
 const { resolveMacPackAppPath, signAdHocMacPack } = require("../desktopMacPackSigning.cjs");
 const { verifyPackagedSandboxRelease } = require("../desktopSandboxImage.cjs");
@@ -21,12 +22,10 @@ const betaVersion = process.env.LIOS_BETA_VERSION;
 // Package metadata carries this immutable commit to the installed self-test.
 let betaSourceCommit = null;
 if (beta) {
-  const cwd = path.join(__dirname, "..");
-  const head = spawnSync("git", ["rev-parse", "--verify", "HEAD"], { cwd, encoding: "utf8" });
-  const dirty = spawnSync("git", ["status", "--porcelain", "--untracked-files=no"], { cwd, encoding: "utf8" });
-  betaSourceCommit = head.status === 0 ? String(head.stdout || "").trim() : null;
-  if (!/^[a-f0-9]{40}$/.test(betaSourceCommit || "") || dirty.status !== 0 || String(dirty.stdout || "").trim()) {
-    console.error("Beta packaging requires a clean tracked Git tree at an exact 40-character commit.");
+  try {
+    betaSourceCommit = requireCleanBetaSourceCommit(path.join(__dirname, ".."));
+  } catch (error) {
+    console.error(error.message);
     process.exit(1);
   }
 }
