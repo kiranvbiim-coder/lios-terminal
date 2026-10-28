@@ -40,6 +40,12 @@ function ui(target) {
       briefingP4ChartAndTableEditable: true, pptxChartAndTableRoundtrip: true,
       sourceRevocationBlocksBriefingSave: true, projectSwitchKeepsSourcesIsolated: true,
       narrow390NoClippedControls: true,
+      c06ExactRunSavedArtifactVersionReopened: true,
+      c06SaveAcknowledgementAndP4ReceiptVerified: true,
+      c07DraftInactiveUntilExplicitActivation: true,
+      c08PartialActionReviewWithoutAutoRetry: true,
+      d04BriefingFocusAndNativePreview: true,
+      d05SystemDoctorReadOnlyPermissions: true,
     }, evidencePaths: ["screenshots/discovery.png", "screenshots/investigation.png", "screenshots/briefing.png", "screenshots/narrow.png", "logs/acceptance.txt"],
     reviewer: "Owner native QA",
   };
@@ -68,7 +74,7 @@ test("beta gate rejects absence of OS protected secret custody, persisted work o
 });
 
 test("beta UX requires exact signed manifest installer and every native acceptance control", () => {
-  assert.equal(checkNativeUX(ui("mac-arm64-dmg"), "mac-arm64-dmg", checksum).checks, 23);
+  assert.equal(checkNativeUX(ui("mac-arm64-dmg"), "mac-arm64-dmg", checksum).checks, 29);
   for (const bad of [
     { assetSha256: "b".repeat(64) },
     { osWarningDisclosure: false },
@@ -183,4 +189,25 @@ test("D08 $0 beta gate reuses native performance ceilings rather than finite-onl
     assert.throws(() => checkNativeSelfTest({ ...original, performance }, "darwin", "arm64"),
       /BLOCKED.*performance/i);
   }
+});
+
+test("D09 beta native acceptance refuses missing source-to-installed C06/C07/C08 and D04/D05 journeys", () => {
+  const target = "mac-arm64-dmg";
+  const report = ui(target);
+  assert.equal(checkNativeUX(report, target, checksum).checks, 29);
+  for (const required of [
+    "c06ExactRunSavedArtifactVersionReopened",
+    "c06SaveAcknowledgementAndP4ReceiptVerified",
+    "c07DraftInactiveUntilExplicitActivation",
+    "c08PartialActionReviewWithoutAutoRetry",
+    "d04BriefingFocusAndNativePreview",
+    "d05SystemDoctorReadOnlyPermissions",
+  ]) {
+    const broken = { ...report, checks: { ...report.checks, [required]: false } };
+    assert.throws(() => checkNativeUX(broken, target, checksum), /BLOCKED.*unverified/);
+    const omitted = { ...report, checks: { ...report.checks } };
+    delete omitted.checks[required];
+    assert.throws(() => checkNativeUX(omitted, target, checksum), /BLOCKED.*missing or unexpected/);
+  }
+  assert.equal(checkNativeUX(ui("win-x64-nsis"), "win-x64-nsis", checksum).checks, 29);
 });
