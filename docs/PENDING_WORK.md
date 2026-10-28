@@ -12,8 +12,8 @@
 
 ### Package 1 — Donor inventory and single-architecture contracts (SI-06/SI-07; existing GM/CA/P13 owners)
 
-- [ ] P1.01 Confirm this repo is `kiranvbiim-coder/lios-terminal`, record exact `main` SHA, owner-fork path/commit and the approved pinned `openclaw/openclaw@c074824a27c96d3983043f9eeb33823cd1772d8c`; never assume a fork's HEAD is approved.
-- [ ] P1.02 Inventory current LiOS Gateway, Home, supervisors, execution, P13 plugin/skills/MCP, AI auth/access, memory, P9 automation, TC chat, P4 Artifacts, connectors and devices; link existing code/tests/PRs and classify landed vs branch-only.
+- [x] P1.01 Confirm this repo is `kiranvbiim-coder/lios-terminal`, record exact `main` SHA, owner-fork path/commit and the approved pinned `openclaw/openclaw@c074824a27c96d3983043f9eeb33823cd1772d8c`; never assume a fork's HEAD is approved.
+- [x] P1.02 Inventory current LiOS Gateway, Home, supervisors, execution, P13 plugin/skills/MCP, AI auth/access, memory, P9 automation, TC chat, P4 Artifacts, connectors and devices; link existing code/tests/PRs and classify landed vs branch-only.
 - [ ] P1.03 Inventory **every relevant useful** upstream channel and capability family, not only chat sending: Telegram, WhatsApp, applicable other channels, sessions, agent/tool orchestration, browser/computer-use, coding, memory, scheduling, media, search, notifications, devices and diagnostics.
 - [ ] P1.04 Decompose candidate upstream packages into reusable mechanisms, related tests, dependencies and source pins; document `DIRECT_REUSE/IMPORT/ADAPT/REPURPOSE/COMBINE/GENERALIZE/INNOVATE/DEFER/REJECT` under the existing donor policy.
 - [ ] P1.05 Produce a specific Telegram and WhatsApp per-feature capability matrix: supported transport/account login, 1:1/groups, inbound/outbound, replies, edits, reactions, media, identity, delivery, state sync, automated responses and platform/API limits.
@@ -23,6 +23,9 @@
 - [ ] P1.09 Agree bounded acceptance tests, R0–R4/V0–V4 validation levels, target Shipping Point, rollback and actual supported user journeys; record PR/issue claim before coding.
 
 **Package 1 proof:** complete owner/fork/upstream source map; channel feature matrix; legal/security findings; existing-code crosswalk; one existing-owner task/PR per integration seam.
+
+**P1.01/P1.02 inventory evidence (source only):** [Blueprint §0.2](technical/OPENCLAW_ASSIMILATION_BLUEPRINT.md#02-package-1-source-inventory-and-integration-constraints--2026-10-28) records main `8ab41b15`, decision PR #392 head `486d2826`, the resolved approved upstream pin/tree, observed owner-fork SHA, existing LiOS owners and test candidates. The isolated supporting service and Telegram/WhatsApp adapters were not located in current main; PR392 is documentation-only. Current strict LEP refusal, conversation-only placement, donor runtime version, channel dependency/rights and account-custody constraints remain open. These checked items attest an inventory, not exercised integration. No tests, installs, builds or new CI runs for the source inventory.
+
 
 ### Package 2 — Supervised isolated supporting service (SI-06; existing GM/Home/Gateway and GM-11/P13 security owners)
 
