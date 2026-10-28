@@ -135,7 +135,7 @@ export function ProjectArtifactGalleryPreview({ artifact, onOpen }: {
           <div className="font-ui text-sm font-semibold text-foreground">Recorded preview · v{artifact.headVersion}</div>
           <p className="font-ui text-xs text-muted-foreground">Only the exact saved version in this Project. No generated thumbnail.</p>
         </div>
-        <button type="button" onClick={onOpen} className="inline-flex min-h-10 items-center gap-2 rounded border border-border/60 px-3 font-ui text-xs text-amber-200 focus-visible:outline focus-visible:outline-2 focus-visible:outline-amber-300">
+        <button type="button" onClick={onOpen} className="inline-flex min-h-11 items-center gap-2 rounded border border-border/60 px-3 font-ui text-xs text-amber-200 focus-visible:outline focus-visible:outline-2 focus-visible:outline-amber-300">
           Open full Artifact <ArrowUpRight className="h-3 w-3" aria-hidden="true" />
         </button>
       </div>
