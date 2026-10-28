@@ -86,6 +86,45 @@ function checkNativeUX(value, target, expectedHash) {
     target + " repeated evidence filenames cannot prove distinct native captures.");
   return { target, checks: UX_CHECKS.length, evidenceEntries: value.evidencePaths.length };
 }
+/** Read the same inode whose local-file identity was checked. A prior lstat
+ * followed by readFileSync(path) could consume a substituted symlink; this
+ * follows the existing WS-65 fd-pinned acceptance pattern. Even on Windows,
+ * where O_NOFOLLOW may be unavailable, both pre-open and post-open identities
+ * must remain a nonlinked regular file. This is local proof inspection only.
+ */
+function readPinnedLocalEvidenceFile(file, maxBytes, label) {
+  const initial = fs.lstatSync(file);
+  assert(initial.isFile() && !initial.isSymbolicLink() &&
+    initial.size > 0 && initial.size <= maxBytes,
+    label + " must be a nonempty, bounded, nonlinked regular file.");
+  let fd;
+  try {
+    fd = fs.openSync(file, fs.constants.O_RDONLY | (fs.constants.O_NOFOLLOW ?? 0));
+  } catch {
+    throw new Error("LiOS beta gate BLOCKED: " + label + " changed or cannot be opened safely.");
+  }
+  try {
+    const opened = fs.fstatSync(fd);
+    assert(opened.isFile() && opened.size > 0 && opened.size <= maxBytes &&
+      initial.dev === opened.dev && initial.ino === opened.ino,
+      label + " changed between file check and open.");
+    const bytes = fs.readFileSync(fd);
+    const after = fs.fstatSync(fd);
+    const current = fs.lstatSync(file);
+    assert(bytes.length === opened.size &&
+      opened.dev === after.dev && opened.ino === after.ino &&
+      opened.size === after.size && opened.mtimeMs === after.mtimeMs &&
+      opened.ctimeMs === after.ctimeMs &&
+      current.isFile() && !current.isSymbolicLink() &&
+      current.dev === opened.dev && current.ino === opened.ino &&
+      current.size === opened.size,
+      label + " changed while it was being inspected.");
+    return bytes;
+  } finally {
+    fs.closeSync(fd);
+  }
+}
+
 /** Verify real captured files, not mere user-typed path claims. Non-symlink files
  * must be inside the report's own directory and under the 30 MB evidence cap.
  * Hashes are returned for review, never treated as cryptographic attestations. */
@@ -105,11 +144,7 @@ function inspectNativeEvidence(uxFile, evidencePaths) {
       const dir = fs.lstatSync(folder);
       assert(dir.isDirectory() && !dir.isSymbolicLink(), "native evidence parent must be an actual local directory.");
     }
-    const stat = fs.lstatSync(full);
-    assert(stat.isFile() && !stat.isSymbolicLink() && stat.size > 0 && stat.size <= 30_000_000,
-      "native evidence file missing, empty, symlinked or oversized.");
-    const bytes = fs.readFileSync(full);
-    assert(bytes.length === stat.size, "native evidence changed during inspection.");
+    const bytes = readPinnedLocalEvidenceFile(full, 30_000_000, "native evidence");
     const extension = path.extname(name).toLowerCase();
     const png = bytes.subarray(0, 8).equals(Buffer.from("89504e470d0a1a0a", "hex"));
     const jpg = bytes.length >= 3 && bytes[0] === 0xff && bytes[1] === 0xd8 && bytes[2] === 0xff;
@@ -143,10 +178,7 @@ function parseFlags(argv) {
 }
 function readJson(file) {
   const absolute = path.resolve(file);
-  const stat = fs.lstatSync(absolute);
-  assert(stat.isFile() && !stat.isSymbolicLink() && stat.size > 0 && stat.size < 2_000_000,
-    "evidence file must be a small regular non-symlink file.");
-  return JSON.parse(fs.readFileSync(absolute, "utf8"));
+  return JSON.parse(readPinnedLocalEvidenceFile(absolute, 1_999_999, "evidence JSON").toString("utf8"));
 }
 async function auditBetaRelease(args) {
   const fields = parseFlags(args);
