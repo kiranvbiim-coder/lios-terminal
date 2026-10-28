@@ -27,6 +27,7 @@ import { presentRuntimeError } from "@/lib/runtimeErrorKit";
 import { reviewEvidenceExceptions, sourceExceptionCaveats } from "@/lib/evidenceExceptions";
 import { followUpPrompts, formatDuration, summarizeRuntimeTrace } from "@/lib/runtimeTraceSummary";
 import { inspectAgentReceiptActivity } from "@/lib/agentReceiptActivity";
+import { inspectRecordedActionRecovery } from "@/lib/recordedActionRecovery";
 import { projectRecordedAgentSteps, RECORDED_AGENT_STEP_LABELS } from "@/lib/recordedAgentStepTruth";
 import { reviewChatArtifactSave, chatArtifactSaveAcknowledgmentKey } from "@/lib/chatArtifactSaveReview";
 import type { ChatArtifactSaveTarget, ChatArtifactSaveOutcome } from "@/lib/chatArtifactSaveReview";
@@ -204,6 +205,7 @@ export default function ConversationRuntimeTrace({
   const observedReceipt = [...events].reverse().find(event => event.type === "receipt");
   const recordedSources = collectCitationSources(events);
   const activity = inspectAgentReceiptActivity(events, requestId);
+  const actionRecovery = inspectRecordedActionRecovery(events, requestId);
   // Quiet by default: ordinary runs show only Working + Stop. Technical execution detail is progressive
   // disclosure; approvals, errors, data gaps, source caveats and review-required items are never hidden.
   const workVisible = showWork;
@@ -599,6 +601,37 @@ export default function ConversationRuntimeTrace({
           </div>
           <p className="mt-2 text-xs text-amber-200">No automatic retry is offered. The Home may have received the original run or performed an external action.</p>
         </div>
+      )}
+      {done?.type === "done" && done.status === "completed" && actionRecovery.needsReconciliation && (
+        <section role="status" data-testid="c08-recorded-action-recovery"
+          className="mb-2 rounded-lg border border-amber-300/25 bg-amber-300/[0.025] p-3 font-ui text-sm">
+          <p className="font-semibold text-amber-200">Review incomplete individual action reports</p>
+          <p className="mt-1 text-xs leading-5 text-muted-foreground">
+            The overall run completion does not override these individual reports:
+            {" "}{actionRecovery.failedToolReports} failed tool(s),
+            {" "}{actionRecovery.deniedToolReports} denied tool(s),
+            {" "}{actionRecovery.unfinishedToolStarts} unfinished tool start(s),
+            {" "}{actionRecovery.failedReceipts} failed receipt(s),
+            {" "}{actionRecovery.cancelledReceipts} cancelled receipt(s),
+            {" "}{actionRecovery.ignoredForeignReceipts} mismatched receipt(s).
+          </p>
+          <p className="mt-2 text-xs leading-5 text-muted-foreground">
+            An external side effect may still have occurred. Check the exact original run and external target before sending any new request. Neither this card nor its review control replays a tool or grants permission.
+          </p>
+          <div className="mt-2">
+            {onInspectRun
+              ? <button type="button" data-testid="c08-receipt-recovery-review" onClick={onInspectRun}
+                  className="min-h-11 rounded-lg border border-amber-300/40 px-3 font-ui text-sm focus-visible:ring-2 focus-visible:ring-amber-300/70">
+                  Inspect original run history
+                </button>
+              : canShowWork
+                ? <button type="button" data-testid="c08-receipt-recovery-review" onClick={() => setShowWork(true)}
+                    className="min-h-11 rounded-lg border border-amber-300/40 px-3 font-ui text-sm focus-visible:ring-2 focus-visible:ring-amber-300/70">
+                    Inspect recorded work
+                  </button>
+                : <p className="text-xs text-muted-foreground">Open the original run history to reconcile this result before retrying.</p>}
+          </div>
+        </section>
       )}
       {summary.status === "completed" && !observedReceipt && (
         <p role="status" data-testid="trace-receipt-missing" className="mb-2 px-2 font-ui text-sm text-muted-foreground">Home reported completion; a separate execution receipt was not received in this view.</p>
