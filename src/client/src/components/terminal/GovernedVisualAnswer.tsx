@@ -24,6 +24,7 @@ class GovernedChartBoundary extends Component<{ children: React.ReactNode }, { f
 
 export function GovernedVisualAnswer({ request }: { request: GovernedVisualAnswerRequest }) {
   const [expanded, setExpanded] = useState(false);
+
   return <section aria-label="Governed visual answer from saved Artifact" data-testid="governed-chat-visual-answer"
     className="mb-2 min-w-0 rounded-xl border border-border/55 bg-card/45 p-3">
     <div className="flex flex-wrap items-center justify-between gap-3">
@@ -91,6 +92,7 @@ function SavedVisual({ request }: { request: GovernedVisualAnswerRequest }) {
             </Suspense>
           </GovernedChartBoundary>}
         </section>}
+
         <details className="rounded border border-border/50 p-2 font-ui text-xs text-muted-foreground">
           <summary className="cursor-pointer text-foreground">Recorded source IDs</summary>
           <ul className="mt-2 max-h-32 space-y-1 overflow-auto">

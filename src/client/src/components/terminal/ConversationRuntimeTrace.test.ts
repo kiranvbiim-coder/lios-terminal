@@ -481,3 +481,35 @@ test("Sprint A live AI activity reports only observed work, not an inferred exec
   assert.match(markup, /data-testid="agent-run-cancel"/);
   assert.match(markup, /data-testid="trace-show-work"/);
 });
+
+test("C04 Show work distinguishes a recorded action from an unconfirmed action without disclosing tool summaries", () => {
+  const unconfirmed = render([planEvent, sourceResult, doneOk], { defaultShowWork: true });
+  assert.match(unconfirmed, /data-testid="c04-agent-step-activity"/);
+  assert.match(unconfirmed, /data-step-state="unconfirmed"/);
+  assert.match(unconfirmed, /No confirmed result/);
+  assert.match(unconfirmed, /not execution receipts/);
+  const reported = render([planEvent, event({
+    type: "tool_result", stepId: "step-1", label: "Fetch filings",
+    summary: "PRIVATE_TOOL_PAYLOAD_NEVER_IN_STEP", deterministic: true,
+    sourceRefs: [], outcome: "completed",
+  }), doneOk], { defaultShowWork: true });
+  assert.match(reported, /data-step-state="reported_complete"/);
+  assert.match(reported, /Reported complete/);
+  assert.doesNotMatch(reported.split('data-testid="c04-agent-step-activity"')[1]?.split("</section>")[0] ?? "", /PRIVATE_TOOL_PAYLOAD_NEVER_IN_STEP/);
+  const denied = render([planEvent, event({
+    type: "tool_result", stepId: "step-1", label: "Fetch filings",
+    summary: "", deterministic: false, sourceRefs: [], outcome: "denied",
+  }), doneOk], { defaultShowWork: true });
+  assert.match(denied, /data-step-state="denied"/);
+  assert.match(denied, /Denied/);
+  assert.doesNotMatch(denied, /data-step-state="reported_complete"/);
+});
+test("C04 Stop request never renders as confirmed cancellation before server reports it", () => {
+  const pending = render([planEvent, event({
+    type: "tool_start", stepId: "step-1", label: "Fetch filings", componentId: "research",
+  })], { busy: true, stopRequested: true, defaultShowWork: true });
+  assert.match(pending, /data-step-state="cancel_requested"/);
+  assert.match(pending, /Stop requested — not confirmed/);
+  const stopped = render([planEvent, event({type:"done", status:"cancelled"})], { defaultShowWork: true });
+  assert.match(stopped, /data-step-state="cancelled"/);
+});

@@ -33,8 +33,7 @@ export function normalizePulseReviewPresentation(
   if (new Set(input.newCardIds as string[]).size !== input.newCardIds.length) return null;
   const visibleIds = new Set(visibleCards.map(card => card.id));
   const ids: string[] = [...new Set(input.newCardIds as string[])];
-  // Duplicate reported IDs are never valid, even when newCount matches the de-duplicated count.
-  if (ids.length !== input.newCardIds.length || ids.length !== input.newCount) return null;
+  if (ids.length !== input.newCount) return null;
   return {
     status: input.status,
     reviewedAt: input.status === "compared" ? input.reviewedAt as string : null,
