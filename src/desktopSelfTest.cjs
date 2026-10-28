@@ -66,6 +66,22 @@ function locatePackagedServer(appPath) {
   return candidates.find((candidate) => fs.existsSync(candidate)) || null;
 }
 
+/** Read-only identity check shared by native self-test and regression fixtures.
+ * Beta has the stricter exact Git source stamp; production's historical
+ * package version and P14 signing path remain unchanged.
+ */
+function validatePackagedAppIdentity(packageVersion, sourceCommit) {
+  if (typeof packageVersion !== "string" ||
+      !/^[0-9]+[.][0-9]+[.][0-9]+(?:[-+][A-Za-z0-9.-]+)?$/.test(packageVersion)) {
+    throw new Error("Packaged application version is missing or malformed.");
+  }
+  const isBeta = /^[0-9]+[.][0-9]+[.][0-9]+-beta[.][1-9][0-9]*$/.test(packageVersion);
+  if (isBeta && (typeof sourceCommit !== "string" || !/^[a-f0-9]{40}$/.test(sourceCommit))) {
+    throw new Error("Beta package is missing its exact reviewed source commit metadata.");
+  }
+  return { packageVersion, sourceCommit: isBeta ? sourceCommit : null };
+}
+
 async function runPackagedDesktopSelfTest(options) {
   const {
     app,
@@ -80,17 +96,8 @@ async function runPackagedDesktopSelfTest(options) {
   if (!app?.isPackaged) throw new Error("Desktop self-test must run from a packaged application.");
   // The beta acceptance gate must not reuse a self-test from an earlier
   // installer. Electron's packaged getVersion() reads the actual app metadata.
-  const packageVersion = app.getVersion?.();
-  const sourceCommit = require("./package.json").liosBuildCommit ?? null;
-  const isBeta = typeof packageVersion === "string" &&
-    /^[0-9]+[.][0-9]+[.][0-9]+-beta[.][1-9][0-9]*$/.test(packageVersion);
-  if (isBeta && (typeof sourceCommit !== "string" || !/^[a-f0-9]{40}$/.test(sourceCommit))) {
-    throw new Error("Beta package is missing its exact reviewed source commit metadata.");
-  }
-  if (typeof packageVersion !== "string" ||
-      !/^[0-9]+[.][0-9]+[.][0-9]+(?:[-+][A-Za-z0-9.-]+)?$/.test(packageVersion)) {
-    throw new Error("Packaged application version is missing or malformed.");
-  }
+  const { packageVersion, sourceCommit } = validatePackagedAppIdentity(
+    app.getVersion?.(), require("./package.json").liosBuildCommit ?? null);
 
   const root = fs.mkdtempSync(path.join(os.tmpdir(), "lios-p2-self-test-"));
   try {
@@ -169,4 +176,5 @@ module.exports = {
   locatePackagedServer,
   performWorkspaceRecoveryProbe,
   runPackagedDesktopSelfTest,
+  validatePackagedAppIdentity,
 };
