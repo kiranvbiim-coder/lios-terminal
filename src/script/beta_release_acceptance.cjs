@@ -35,6 +35,14 @@ const UX_CHECKS = Object.freeze([
   "briefingP4ChartAndTableEditable", "pptxChartAndTableRoundtrip",
   "sourceRevocationBlocksBriefingSave", "projectSwitchKeepsSourcesIsolated",
   "narrow390NoClippedControls",
+  // New C06–C08 and D04–D06 paths on the consolidated product must be
+  // exercised on the actual installed beta; source CI cannot supply proof.
+  "c06ExactRunSavedArtifactVersionReopened",
+  "c06SaveAcknowledgementAndP4ReceiptVerified",
+  "c07DraftInactiveUntilExplicitActivation",
+  "c08PartialActionReviewWithoutAutoRetry",
+  "d04BriefingFocusAndNativePreview",
+  "d05SystemDoctorReadOnlyPermissions",
 ]);
 function assert(condition, message) {
   if (!condition) throw new Error("LiOS beta gate BLOCKED: " + message);
