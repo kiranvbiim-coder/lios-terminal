@@ -11,6 +11,7 @@ import {
 } from "./pythonRuntimeManager";
 import { MANAGED_RUNTIME_MANIFEST } from "./runtimeManifest";
 import { satisfiesRuntimePackageVersion as satisfies } from "./runtimePackageVersion";
+import {windowsRuntimeFs} from "./nativeRuntimeWindowsFs";
 
 const MAX_METADATA_BYTES = 8 * 1024 * 1024;
 const MAX_FILES = 100_000;
@@ -22,12 +23,12 @@ const NO_FOLLOW = fs.constants.O_NOFOLLOW;
 type FileEntry = { path: string; size: number; sha256: string; executable: boolean };
 type BundleManifest = {
   schemaVersion: 1;
-  target: "darwin-arm64";
+  target: "darwin-arm64" | "win32-x64";
   manifestVersion: string;
   pythonVersion: "3.13.16";
-  minimumSystemVersion: "14.0";
+  minimumSystemVersion: "14.0" | "10.0";
   packIds: string[];
-  pythonRelativePath: "bin/python3";
+  pythonRelativePath: "bin/python3" | "python.exe";
   installedPackages: Record<string, string>;
   locks: Array<{ packId: string; sha256: string }>;
   files: FileEntry[];
@@ -35,6 +36,16 @@ type BundleManifest = {
   source: { repository: string; commit: string; archiveSha256: string };
 };
 type DirectoryIdentities = Map<string, fs.Stats>;
+const windowsPins=new WeakMap<DirectoryIdentities,Map<string,unknown>>();
+function releaseWindowsPins(identities:DirectoryIdentities) {
+  const pins=windowsPins.get(identities);
+  if(pins)for(const pin of pins.values())windowsRuntimeFs().releasePin(pin);
+  windowsPins.delete(identities);
+}
+function makeDirectory(directory:string) {
+  if(process.platform==="win32")windowsRuntimeFs().makeDirectory(directory);
+  else fs.mkdirSync(directory,{mode:0o700});
+}
 
 function refuse(detail: string): never {
   throw new Error(`Native runtime bundle refused: ${detail}.`);
@@ -67,6 +78,9 @@ function canonicalPath(value: string): string {
       value.split(path.sep).some((part) => part === "." || part === "..")) {
     refuse("a canonical absolute local path is required");
   }
+  if(process.platform==="win32"&&(!/^[a-z]:\\/i.test(value)||/[<>\"|?*]/.test(value)||value.slice(2).includes(":")||
+      value.split(/[\\/]/).slice(1).some(part=>!part||part.endsWith(".")||part.endsWith(" ")||/^(con|prn|aux|nul|com[1-9]|lpt[1-9])(?:\.|$)/i.test(part))))
+    refuse("unsafe Windows local path");
   let result = path.resolve(value);
   if (process.platform === "darwin") {
     for (const alias of ["/tmp", "/var"]) {
@@ -88,6 +102,10 @@ function checkDirectories(directory: string, identities: DirectoryIdentities, al
     const stat = fs.lstatSync(current, { throwIfNoEntry: false });
     if (!stat && allowMissing) return;
     if (!stat?.isDirectory() || stat.isSymbolicLink()) refuse("unsafe directory ancestor");
+    if(process.platform==="win32"){
+      let pins=windowsPins.get(identities);if(!pins){pins=new Map();windowsPins.set(identities,pins);}
+      if(!pins.has(current))pins.set(current,windowsRuntimeFs().pinDirectories(current));
+    }
     const prior = identities.get(current);
     if (prior && !sameIdentity(prior, stat)) refuse("directory identity changed");
     identities.set(current, stat);
@@ -104,7 +122,7 @@ function ensureDirectories(directory: string, identities: DirectoryIdentities): 
   checkDirectories(current, identities);
   for (const next of missing.reverse()) {
     checkDirectories(path.dirname(next), identities);
-    fs.mkdirSync(next, { mode: 0o700 });
+    makeDirectory(next);
     checkDirectories(next, identities);
   }
 }
@@ -113,7 +131,8 @@ function openRegular(filename: string, maximum: number, identities: DirectoryIde
   checkDirectories(path.dirname(filename), identities);
   const before = fs.lstatSync(filename);
   if (!before.isFile() || before.isSymbolicLink() || before.size > maximum) refuse("unsafe or oversized regular file");
-  const fd = fs.openSync(filename, fs.constants.O_RDONLY | NO_FOLLOW | fs.constants.O_NONBLOCK);
+  const fd = process.platform==="win32" ? windowsRuntimeFs().openFile(filename,false)
+    : fs.openSync(filename, fs.constants.O_RDONLY | NO_FOLLOW | fs.constants.O_NONBLOCK);
   try {
     const stat = fs.fstatSync(fd);
     if (!stat.isFile() || !sameFile(before, stat)) refuse("source file identity changed");
@@ -172,7 +191,8 @@ function relativeFile(value: unknown): string {
     refuse("invalid payload path");
   }
   const parts = value.split("/");
-  if (parts.length > 64 || parts.some((part) => !part || part === "." || part === ".." || part.endsWith(".") || part.endsWith(" "))) {
+  if (parts.length > 64 || parts.some((part) => !part || part === "." || part === ".." || part.endsWith(".") || part.endsWith(" ") ||
+      /[<>\"|?*]/.test(part) || /^(con|prn|aux|nul|com[1-9]|lpt[1-9])(?:\.|$)/i.test(part))) {
     refuse("invalid payload path");
   }
   return value;
@@ -182,19 +202,22 @@ function relativeFile(value: unknown): string {
 function parseManifest(raw: unknown, target: string): BundleManifest {
   const manifest = record(raw);
   keys(manifest, ["schemaVersion", "target", "manifestVersion", "pythonVersion", "minimumSystemVersion", "packIds", "pythonRelativePath", "installedPackages", "locks", "files", "totalBytes", "source"]);
-  if (manifest.schemaVersion !== 1 || manifest.target !== "darwin-arm64" || manifest.target !== target ||
+  const windows=target==="win32-x64";
+  if (manifest.schemaVersion !== 1 || !["darwin-arm64","win32-x64"].includes(target) || manifest.target !== target ||
       !MANAGED_RUNTIME_MANIFEST.supportedPlatforms.includes(target) ||
       manifest.manifestVersion !== MANAGED_RUNTIME_MANIFEST.manifestVersion || manifest.pythonVersion !== "3.13.16" ||
-      !satisfies(manifest.pythonVersion, MANAGED_RUNTIME_MANIFEST.pythonVersion) || manifest.pythonRelativePath !== "bin/python3") {
+      !satisfies(manifest.pythonVersion, MANAGED_RUNTIME_MANIFEST.pythonVersion) || manifest.pythonRelativePath !== (windows?"python.exe":"bin/python3")) {
     refuse("incompatible target or manifest revision");
   }
-  if (manifest.minimumSystemVersion !== "14.0") refuse("unsupported minimum system version");
+  if (manifest.minimumSystemVersion !== (windows?"10.0":"14.0")) refuse("unsupported minimum system version");
   // The selected cp313 NumPy/SciPy wheels require macOS 14 (Darwin 23).
   // Injectable platform/arch qualify fixtures, never bypass the actual OS floor.
   if (process.platform === "darwin") {
     const kernel = os.release();
     if (!/^\d+\.\d+\.\d+$/.test(kernel) || Number(kernel.split(".")[0]) < 23) refuse("native runtime requires macOS 14 or newer");
   }
+  if(process.platform==="win32"&&(!/^\d+\.\d+\.\d+$/.test(os.release())||Number(os.release().split(".")[0])<10))
+    refuse("native runtime requires Windows 10 or newer");
   if (!Array.isArray(manifest.packIds) || manifest.packIds.length !== 1 || manifest.packIds[0] !== "core") refuse("unsupported pack set");
   const inventory = record(manifest.installedPackages);
   const normalizedNames = new Set<string>();
@@ -257,7 +280,7 @@ function parseManifest(raw: unknown, target: string): BundleManifest {
     if (total > MAX_TOTAL_BYTES) refuse("payload exceeds total size limit");
   }
   if (!Number.isSafeInteger(manifest.totalBytes) || manifest.totalBytes !== total) refuse("invalid payload total size");
-  if (!manifest.files.some((file) => file.path === "bin/python3" && file.executable && file.size > 0)) refuse("missing executable Python payload");
+  if (!manifest.files.some((file) => file.path === manifest.pythonRelativePath && file.executable && file.size > 0)) refuse("missing executable Python payload");
   return manifest as unknown as BundleManifest;
 }
 
@@ -302,11 +325,12 @@ function transferFile(source: string, file: FileEntry, identities: DirectoryIden
   const { fd, stat } = openRegular(source, MAX_FILE_BYTES, identities);
   let output: number | undefined;
   try {
-    if (stat.size !== file.size || Boolean(stat.mode & 0o111) !== file.executable) refuse("payload size or executable mode changed");
+    if (stat.size !== file.size || process.platform!=="win32"&&Boolean(stat.mode & 0o111) !== file.executable) refuse("payload size or executable mode changed");
     if (destination) {
       ensureDirectories(path.dirname(destination.filename), destination.identities);
       checkDirectories(path.dirname(destination.filename), destination.identities);
-      output = fs.openSync(destination.filename, fs.constants.O_RDWR | fs.constants.O_CREAT | fs.constants.O_EXCL | NO_FOLLOW, 0o600);
+      output = process.platform==="win32" ? windowsRuntimeFs().openFile(destination.filename,true)
+        : fs.openSync(destination.filename, fs.constants.O_RDWR | fs.constants.O_CREAT | fs.constants.O_EXCL | NO_FOLLOW, 0o600);
     }
     const hash = createHash("sha256");
     let offset = 0;
@@ -327,7 +351,7 @@ function transferFile(source: string, file: FileEntry, identities: DirectoryIden
     checkOpenFile(source, fd, stat, identities);
     if (hash.digest("hex") !== file.sha256) refuse("payload digest mismatch");
     if (output !== undefined && destination) {
-      fs.fchmodSync(output, file.executable ? 0o755 : 0o644);
+      if(process.platform!=="win32")fs.fchmodSync(output, file.executable ? 0o755 : 0o644);
       const copied = fs.fstatSync(output);
       const copiedHash = createHash("sha256");
       let copiedOffset = 0;
@@ -396,7 +420,9 @@ export function createNativeRuntimeBundleAuthority(options: {
   platform?: NodeJS.Platform;
   arch?: string;
 }): StrictProvisioningAuthority {
-  if (!NO_FOLLOW || typeof options.manifestSha256 !== "string" || !SHA256.test(options.manifestSha256)) refuse("a trusted manifest pin and no-follow filesystem support are required");
+  if (process.platform==="win32")windowsRuntimeFs();
+  else if(!NO_FOLLOW)refuse("no-follow filesystem support is required");
+  if(typeof options.manifestSha256 !== "string" || !SHA256.test(options.manifestSha256))refuse("a trusted manifest pin is required");
   const runtimeRoot = canonicalPath(options.runtimeRoot);
   const bundleRoot = canonicalPath(options.bundleRoot);
   if (runtimeRoot === bundleRoot || runtimeRoot.startsWith(`${bundleRoot}${path.sep}`) || bundleRoot.startsWith(`${runtimeRoot}${path.sep}`)) {
@@ -419,7 +445,7 @@ export function createNativeRuntimeBundleAuthority(options: {
       ensureDirectories(runtimeRoot, runtimeIdentities);
       checkDirectories(runtimeRoot, runtimeIdentities);
       if (fs.lstatSync(staging, { throwIfNoEntry: false })) refuse("staging destination is already occupied");
-      fs.mkdirSync(staging, { mode: 0o700 });
+      makeDirectory(staging);
       const owned = fs.lstatSync(staging);
       const stagingIdentities = new Map(runtimeIdentities);
       try {
@@ -443,6 +469,7 @@ export function createNativeRuntimeBundleAuthority(options: {
         }
         throw error;
       }
+      finally { releaseWindowsPins(stagingIdentities); }
     },
   });
 }
