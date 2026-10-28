@@ -27,6 +27,7 @@ import { presentRuntimeError } from "@/lib/runtimeErrorKit";
 import { reviewEvidenceExceptions, sourceExceptionCaveats } from "@/lib/evidenceExceptions";
 import { followUpPrompts, formatDuration, summarizeRuntimeTrace } from "@/lib/runtimeTraceSummary";
 import { inspectAgentReceiptActivity } from "@/lib/agentReceiptActivity";
+import { inspectRecordedActionRecovery } from "@/lib/recordedActionRecovery";
 import { projectRecordedAgentSteps, RECORDED_AGENT_STEP_LABELS } from "@/lib/recordedAgentStepTruth";
 import { reviewChatArtifactSave, chatArtifactSaveAcknowledgmentKey } from "@/lib/chatArtifactSaveReview";
 import type { ChatArtifactSaveTarget, ChatArtifactSaveOutcome } from "@/lib/chatArtifactSaveReview";
@@ -60,6 +61,10 @@ interface Props {
   onKeepArtifact?: (artifact: ConversationArtifactDraft, target: ChatArtifactSaveTarget) => Promise<ChatArtifactSaveOutcome>;
   artifactSaveTarget?: ChatArtifactSaveTarget;
   onInspectRun?: () => void;
+  /** C06: exact recorded P4 saved-revision navigation, not authorization. */
+  onOpenSavedArtifact?: (artifactId: string, version: number, projectId: number | null, requestId: string) => void;
+  /** C07: open existing, inactive-by-default P9 workflow review only. */
+  onPrepareAutomation?: () => void;
   onRecoveryAction?: (action: string) => void;
   /** Prefills the composer with a suggested next request; never sends it. */
   onFollowUp?: (prompt: string, binding?: RecordedClaimReview) => void;
@@ -165,6 +170,8 @@ export default function ConversationRuntimeTrace({
   onKeepArtifact,
   artifactSaveTarget,
   onInspectRun,
+  onOpenSavedArtifact,
+  onPrepareAutomation,
   onRecoveryAction,
   onFollowUp,
   onRetry,
@@ -204,6 +211,7 @@ export default function ConversationRuntimeTrace({
   const observedReceipt = [...events].reverse().find(event => event.type === "receipt");
   const recordedSources = collectCitationSources(events);
   const activity = inspectAgentReceiptActivity(events, requestId);
+  const recovery = inspectRecordedActionRecovery(events, requestId);
   // Quiet by default: ordinary runs show only Working + Stop. Technical execution detail is progressive
   // disclosure; approvals, errors, data gaps, source caveats and review-required items are never hidden.
   const workVisible = showWork;
@@ -259,7 +267,7 @@ export default function ConversationRuntimeTrace({
   const visualAnswerRequest = artifact?.type === "artifact" ? visualRequestFromRuntimeArtifact(artifact) : null;
   const working = busy && !terminal;
   const waitingForApproval = Boolean(legacyApproval || governedApproval);
-  const canShowWork = !!plan || !!observedReceipt || trust?.type === "trust" || recordedSources.length > 0 || activity.receipts.length > 0 || activity.mismatched > 0;
+  const canShowWork = !!plan || !!observedReceipt || trust?.type === "trust" || recordedSources.length > 0 || activity.receipts.length > 0 || activity.mismatched > 0 || recovery.needsReconciliation;
   const canResume = !busy && !!resumableRequestId && !!onResume;
   const stepCount = summary.stepCount || summary.settledSteps;
   const duration = formatDuration(summary.durationMs);
@@ -479,7 +487,40 @@ export default function ConversationRuntimeTrace({
       {activity.hasReceiptProblems && (
         <div role="alert" data-testid="trace-agent-receipt-warning" className="mb-2 rounded-lg border border-amber-300/30 px-3 py-2 font-ui text-[13px] text-amber-200">
           Recorded run receipts require review: {activity.failed} failed, {activity.cancelled} cancelled, {activity.mismatched} ignored because their run identity did not match. Do not assume these operations completed or that an external action succeeded. Open Show work to inspect matching receipts.
+          <p className="mt-1 text-xs leading-5">A failed or cancelled receipt does not establish that an external side effect did not happen. Reconcile original outcomes before repeating any work.</p>
         </div>
+      )}
+
+      {done?.type === "done" && done.status === "completed" &&
+        (recovery.failedToolReports > 0 || recovery.deniedToolReports > 0 ||
+         recovery.skippedToolReports > 0 || recovery.unconfirmedToolReports > 0 ||
+         recovery.unfinishedToolStarts > 0) && (
+        <section role="alert" aria-label="Recorded action reconciliation"
+          data-testid="c08-recorded-action-recovery"
+          className="mb-2 space-y-2 rounded-lg border border-amber-300/30 p-3 font-ui text-sm text-amber-100">
+          <p className="font-semibold text-foreground">Some individual actions were not confirmed successful</p>
+          <p className="text-xs leading-5">
+            {recovery.failedToolReports} failed, {recovery.deniedToolReports} denied,
+            {recovery.skippedToolReports} skipped, {recovery.unconfirmedToolReports} unconfirmed
+            and {recovery.unfinishedToolStarts} started tool action(s) without a final result.
+            Overall run completion does not override these exact tool reports.
+          </p>
+          <p className="text-xs leading-5">Inspect recorded work and the external system before another attempt.
+            This warning cannot prove whether an external side effect happened.</p>
+          <div className="flex flex-wrap gap-2">
+            {canShowWork && <button type="button" data-testid="c08-review-recorded-actions"
+              onClick={() => setShowWork(true)}
+              className="min-h-11 rounded-lg border border-amber-300/40 px-3 py-2 font-ui text-sm focus-visible:ring-2 focus-visible:ring-amber-300/70">
+              Inspect recorded work
+            </button>}
+            {onInspectRun && <button type="button" data-testid="c08-reconcile-partial-actions"
+              onClick={onInspectRun}
+              className="min-h-11 rounded-lg border border-amber-300/40 px-3 py-2 font-ui text-sm focus-visible:ring-2 focus-visible:ring-amber-300/70">
+              Inspect original run history
+            </button>}
+          </div>
+          <p className="text-xs leading-5">No automatic retry, tool execution or permission grant is performed.</p>
+        </section>
       )}
 
       {caveats && (
@@ -609,6 +650,39 @@ export default function ConversationRuntimeTrace({
           {done.status === "failed"
             ? "This run did not complete. Inspect its partial work and receipts before deciding whether to retry."
             : "This run was stopped before it finished. Any partial answer above may be incomplete."}
+        </div>
+      )}
+
+      {artifact?.type === "artifact" && artifact.persistedArtifact && onOpenSavedArtifact && (
+        <section data-testid="c06-open-recorded-artifact" aria-label="Open exact saved Artifact"
+          className="mb-2 flex flex-wrap items-center gap-3 rounded-lg border border-fuchsia-300/20 px-3 py-2.5">
+          <FileBarChart className="h-4 w-4 shrink-0 text-fuchsia-200" aria-hidden="true" />
+          <div className="min-w-0 flex-1">
+            <p className="break-words font-ui text-sm font-medium text-foreground">{artifact.artifact.title}</p>
+            <p className="font-ui text-xs text-muted-foreground">
+              Saved in {artifact.artifact.projectId === null ? "Chat" : "Project"} · exact v{artifact.persistedArtifact.version}.
+              P4 rechecks permissions when opened. This is not an execution receipt.
+            </p>
+          </div>
+          <button type="button" data-testid="c06-open-exact-saved-version"
+            aria-label={`Open exact saved Artifact version ${artifact.persistedArtifact.version} in Chat`}
+            onClick={() => onOpenSavedArtifact(artifact.persistedArtifact!.id, artifact.persistedArtifact!.version, artifact.artifact.projectId, artifact.requestId)}
+            className="min-h-11 rounded-lg border border-fuchsia-300/40 px-3 py-2 font-ui text-sm text-fuchsia-100 focus-visible:outline focus-visible:outline-2 focus-visible:outline-amber-300">
+            Open saved v{artifact.persistedArtifact.version}
+          </button>
+        </section>
+      )}
+
+      {!busy && done?.type === "done" && done.status === "completed" && onPrepareAutomation && (
+        <div data-testid="c07-chat-automation-draft"
+          className="mb-2 flex flex-wrap items-center justify-between gap-2 rounded-lg border border-border/55 px-3 py-2">
+          <p className="font-ui text-xs leading-5 text-muted-foreground">
+            Prepare a draft from this exact Project Chat run. No monitoring starts without a separate P9 activation review.
+          </p>
+          <button type="button" onClick={onPrepareAutomation}
+            className="min-h-11 rounded-lg border border-amber-300/35 px-3 py-2 font-ui text-sm text-foreground focus-visible:outline focus-visible:outline-2 focus-visible:outline-amber-300">
+            Prepare automation draft
+          </button>
         </div>
       )}
 
