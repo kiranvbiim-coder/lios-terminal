@@ -18,7 +18,6 @@ import ResearchSourceList from "./ResearchSourceList";
 import ResearchRunProgress from "./ResearchRunProgress";
 import ResearchCheckpointCard from "./ResearchCheckpointCard";
 import { GovernedVisualAnswer } from "./GovernedVisualAnswer";
-import { visualRequestFromRuntimeArtifact } from "@shared/governedVisualAnswer";
 import type { ResumableCheckpointView } from "@/lib/researchCheckpoint";
 import { collectCitationSources } from "@/lib/chatMarkdown";
 import ProfessionalAssumptionsForm from "./ProfessionalAssumptionsForm";
@@ -203,6 +202,7 @@ export default function ConversationRuntimeTrace({
   const approval = [...events].reverse().find((event) => event.type === "approval_required");
   const latestGovernedApproval = [...events].reverse().find((event) => event.type === "governed_tool_approval_required");
   const artifact = [...events].reverse().find((event) => event.type === "artifact");
+  const visual = [...events].reverse().find(event=>event.type==="visual");
   const mutation = [...events].reverse().find((event) => event.type === "mutation_review");
   const runtimeError = [...events].reverse().find((event) => event.type === "error");
   const dataGap = [...events].reverse().find((event) => event.type === "data_gap");
@@ -264,7 +264,7 @@ export default function ConversationRuntimeTrace({
   const artifactSaveKey = unsavedArtifact ? chatArtifactSaveAcknowledgmentKey(unsavedArtifact.artifact, requestId, artifactSaveTarget) : null;
   const saveReviewed = artifactSaveKey !== null && reviewedSaveKey === artifactSaveKey;
   const saveRequested = artifactSaveKey !== null && requestedSaveKey === artifactSaveKey;
-  const visualAnswerRequest = artifact?.type === "artifact" ? visualRequestFromRuntimeArtifact(artifact) : null;
+  const visualAnswerRequest = visual?.type==="visual" ? visual.visual : null;
   const working = busy && !terminal;
   const waitingForApproval = Boolean(legacyApproval || governedApproval);
   const canShowWork = !!plan || !!observedReceipt || trust?.type === "trust" || recordedSources.length > 0 || activity.receipts.length > 0 || activity.mismatched > 0 || recovery.needsReconciliation;
@@ -682,7 +682,7 @@ export default function ConversationRuntimeTrace({
       )}
 
       {visualAnswerRequest && <GovernedVisualAnswer
-        key={visualAnswerRequest.artifactId + ":" + visualAnswerRequest.version}
+        key={JSON.stringify(visualAnswerRequest)}
         request={visualAnswerRequest} />}
 
       {unsavedArtifact && (

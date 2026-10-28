@@ -1,5 +1,6 @@
 import { resolveArtifactPaneRequestedVersion } from "@/lib/artifactWorkbenchHandoff";
 import AsyncSurfaceNotice from "./AsyncSurfaceNotice";
+import { ArtifactTimeline } from "./ArtifactTimeline";
 import { resolveAsyncSurfaceState } from "@/lib/asyncSurfaceState";
 import { Component, lazy, Suspense, useEffect, useId, useMemo, useRef, useState } from "react";
 import { JsonEditor } from "./ArtifactExpertView";
@@ -425,7 +426,7 @@ function Body({artifactId,contentHash,content,revision,onSave,onDraft,onThesisRe
   </>;
   if(content.kind==="chart") return <ArtifactChartBoundary><Suspense fallback={<p role="status">Loading chart renderer…</p>}><ArtifactChart content={content} artifactSourceRefs={artifactSourceRefs} onSave={onSave}/></Suspense></ArtifactChartBoundary>;
   if(content.kind==="table") return <TableArtifactTable content={content}/>;
-  if(content.kind==="timeline") return <div className="space-y-2">{content.events.slice().reverse().map((e)=><div key={e.id} className="rounded-lg border border-border/50 p-3"><div className="flex gap-2"><span className="font-terminal text-[12px] text-amber-300">{e.type.toUpperCase()}</span><span className="font-ui text-[14px]">{e.title}</span><span className="ml-auto font-terminal text-[12px] text-muted-foreground">{new Date(e.at).toLocaleString()}</span></div><div className="mt-1 font-ui text-[14px] text-muted-foreground">{e.summary}</div></div>)}</div>;
+  if(content.kind==="timeline") return <ArtifactTimeline content={content}/>;
   if(content.kind==="backtest") return <BacktestArtifactView content={content} facts={facts} onSave={onSave} onDirtyChange={onSpreadsheetDirtyChange} disabled={spreadsheetDisabled}/>;
   if(content.kind==="thesis") return <ThesisEditor content={content} revision={revision} onSave={onSave} onRefresh={onThesisRefresh} onPostmortem={onThesisPostmortem} onDirtyChange={onSpreadsheetDirtyChange} disabled={spreadsheetDisabled}/>;
   if(content.kind==="strategy") return <StrategyEditor content={content} revision={revision} onSave={onSave} onDirtyChange={onSpreadsheetDirtyChange} disabled={spreadsheetDisabled}/>;

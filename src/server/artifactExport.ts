@@ -22,6 +22,7 @@ const childBindingSchema = z.object({
 type ExportAuthorityGroup = {
   sourceRefs:string[];dependencyRefs:string[];contentHash:string;refreshSpec:Record<string,unknown>|null;
   modelBindings:z.infer<typeof modelBindingSchema>[];
+  trustManifest?:Record<string,unknown>|null;
 };
 
 /** Select custody identifiers only: never raw cells, embedded sourceContent or model values. */
@@ -36,6 +37,7 @@ async function readExportAuthorityGroups(ctx:TenantContext,artifactId:string,ver
     const [row]=await getDb().select({
       sourceRefs:projectArtifactVersions.sourceRefs,dependencyRefs:projectArtifactVersions.dependencyRefs,
       contentHash:projectArtifactVersions.contentHash,refreshSpec:projectArtifactVersions.refreshSpec,
+      trustManifest:projectArtifactVersions.trustManifest,
       children:sql<unknown>`coalesce((select jsonb_agg(distinct jsonb_build_object(
         'artifactId',item->'sourceArtifactId','version',item->'sourceVersion','contentHash',item->'sourceHash'))
         from jsonb_path_query(${projectArtifactVersions.content},'$.blocks[*].attrs') item
@@ -65,7 +67,7 @@ async function readExportAuthorityGroups(ctx:TenantContext,artifactId:string,ver
   return groups;
 }
 
-async function assertCurrentExportSourceRights(ctx: TenantContext, groups: readonly ExportAuthorityGroup[]) {
+async function assertCurrentExportSourceRights(ctx: TenantContext, groups: readonly ExportAuthorityGroup[], requiredUses:readonly string[]=["display","export","derived_output"]) {
   await getDb().transaction(async tx => {
     const [actor] = await tx.select({id:users.id}).from(users).where(and(eq(users.id,ctx.userId),eq(users.active,true),
       eq(users.role,ctx.role),ctx.organizationId===null?isNull(users.organizationId):eq(users.organizationId,ctx.organizationId))).for("share").limit(1);
@@ -74,9 +76,9 @@ async function assertCurrentExportSourceRights(ctx: TenantContext, groups: reado
     const permit = (policy: Awaited<ReturnType<typeof getEntitlementPolicyById>>) => {
       if (!policy || policy.licenseType === "unknown" || policy.effectiveFrom > now ||
           policy.effectiveTo !== null && policy.effectiveTo <= now ||
-          !["display", "export", "derived_output"].every(use => policy.permittedUses.includes(use)) ||
+          !requiredUses.every(use => policy.permittedUses.includes(use)) ||
           policy.accessScope === "internal_only" && !ctx.role.startsWith("internal_"))
-        throw new ArtifactExportRightsError("Current linked source rights do not permit export of this retained revision.");
+        throw new ArtifactExportRightsError("Current linked source rights do not permit the requested use of this retained revision.");
     };
     for (const group of groups) {
       const refs=[...group.sourceRefs,...group.dependencyRefs];
@@ -123,6 +125,25 @@ function filenameStem(title: string): string {
 
 export class ArtifactExportRightsError extends Error {
   readonly status = 403;
+}
+
+/** Presentation uses the same source groups as export, without granting export. */
+export async function admitArtifactVisualSources(ctx:TenantContext,artifactId:string,version:number,contentHash:string) {
+  await getArtifact(ctx,artifactId);
+  const groups=await readExportAuthorityGroups(ctx,artifactId,version);
+  if (groups[0].contentHash!==contentHash) throw new ArtifactExportRightsError("Exact saved visual hash changed.");
+  for(const group of groups){
+    const trust=group.trustManifest?trustManifestSchema.parse(group.trustManifest):null;
+    if(recordedBlockedArtifactSources(trust)>0||trust?.evidence.some(item=>item.access?.entitlementRequired===true||
+      item.access&&/^(restricted|not_entitled)$/i.test(item.access.state)))
+      throw new ArtifactExportRightsError("A retained visual source records denied or restricted access.");
+  }
+  await assertCurrentExportSourceRights(ctx,groups,["display","derived_output"]);
+}
+
+/** Flat non-Artifact research evidence still uses current canonical dataset/policy owners. */
+export async function admitSourceReferenceDisplay(ctx:TenantContext,refs:readonly string[]) {
+  await assertCurrentExportSourceRights(ctx,[{sourceRefs:[...refs],dependencyRefs:[],contentHash:"",refreshSpec:null,modelBindings:[]}],["display","derived_output"]);
 }
 
 export async function getArtifactExportPlan(ctx: TenantContext, artifactId: string, version?: number) {

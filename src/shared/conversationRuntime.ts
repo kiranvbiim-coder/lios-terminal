@@ -16,6 +16,7 @@ import {
 } from "./runtimeContracts";
 import { p6PersonalFinanceRequestSchema } from "./p6FinanceContracts";
 import { p5GuidedInputsSchema } from "./p5GuidedInputs";
+import { governedVisualAnswerRequestSchema } from "./governedVisualAnswer";
 
 export const conversationExecutionModeSchema = z.enum([
   "deterministic_first",
@@ -418,6 +419,7 @@ export const conversationRuntimeEventSchema = z.discriminatedUnion("type", [
       version: z.number().int().positive(),
     }).strict().optional(),
   }).strict(),
+  baseEventSchema.extend({type:z.literal("visual"),stepId:z.string().max(120),visual:governedVisualAnswerRequestSchema}).strict(),
   baseEventSchema.extend({ type: z.literal("text"), text: z.string().max(200_000), label: z.enum(["deterministic", "observed_source", "ai_derived", "manual"]) }).strict(),
   baseEventSchema.extend({ type: z.literal("receipt"), receipt: runtimeExecutionReceiptSchema }).strict(),
   baseEventSchema.extend({ type: z.literal("data_gap"), gap: conversationDataGapSchema }).strict(),

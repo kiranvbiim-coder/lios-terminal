@@ -1,5 +1,5 @@
 import crypto from "node:crypto";
-import { and, desc, eq, inArray, isNull, lte } from "drizzle-orm";
+import { and, desc, eq, inArray, isNull, lt, lte } from "drizzle-orm";
 import {
   projectIntelligenceDocuments,
   projectIntelligenceDocumentVersions,
@@ -45,6 +45,9 @@ import {
   searchProjectDocuments,
 } from "./p7ProjectIntelligence";
 import { extractStructuredDocument, type P7StructuredDocument } from "./p7StructuredExtraction";
+import {researchSourceForDocument,researchSourceUseBlockReason} from "./researchSourceComposition";
+import {admitArtifactVisualSources,admitSourceReferenceDisplay} from "./artifactExport";
+import {getArtifact} from "./artifactStore";
 
 const SECRET_KEY = /(api[_-]?key|access[_-]?token|refresh[_-]?token|password|secret|credential|authorization|cookie|private[_-]?key)/i;
 const SECRET_REF = /(?:[?&](?:api[_-]?key|access[_-]?token|refresh[_-]?token|token|key|secret|password)=|\\b(?:authorization|bearer)\\s*[:= ]\\s*\\S+)/i;
@@ -564,6 +567,9 @@ async function collectCurrentProjectDocuments(ctx: TenantContext, projectId: num
     const sourceRightsMetadata = {
       ...(typeof metadata.provider === "string" ? { provider: metadata.provider } : {}),
       ...(metadata.researchSource !== undefined ? { researchSource: metadata.researchSource } : {}),
+      ...(typeof metadata.latitude==="number"&&Number.isFinite(metadata.latitude)&&metadata.latitude>=-90&&metadata.latitude<=90&&
+          typeof metadata.longitude==="number"&&Number.isFinite(metadata.longitude)&&metadata.longitude>=-180&&metadata.longitude<=180
+        ? {latitude:metadata.latitude,longitude:metadata.longitude}:{}),
     };
     let attachmentText = "";
     let attachmentProjection: Record<string, unknown> = {};
@@ -873,6 +879,53 @@ export async function getProjectIntelligenceHistoricalState(
     return item;
   });
   return p7HistoricalStateSchema.parse({ snapshot, documents });
+}
+
+/** Reconstruct one exact recorded projection only while every retained input remains current and permitted.
+ * No rebuild, new snapshot, model execution or inferred geography occurs on this read. */
+export async function getAuthorizedProjectSnapshotProjection(ctx:TenantContext,projectId:number,snapshotId:string,expectedHash:string,expectedGraphHash:string) {
+  const snapshot=await getProjectIntelligenceSnapshot(ctx,projectId,snapshotId);
+  if (snapshot.contentHash!==expectedHash || snapshot.graphHash!==expectedGraphHash)
+    throw new Error("Exact Project snapshot identity changed.");
+  const current=await currentPermittedProjectSearchDocuments(ctx,projectId,{readOnly:true});
+  const eligible=new Map(current.map(document=>[document.sourceType+"\n"+document.sourceRef,document.contentHash]));
+  for (const entry of snapshot.manifest) if (eligible.get(entry.sourceType+"\n"+entry.sourceRef)!==entry.contentHash)
+    throw new Error("A recorded Project source is no longer current and permitted; no historical visual was released.");
+  const retainedKeys=new Set(snapshot.manifest.map(entry=>entry.sourceType+"\n"+entry.sourceRef));
+  for(const document of current.filter(item=>retainedKeys.has(item.sourceType+"\n"+item.sourceRef))){
+    const research=researchSourceForDocument(document);
+    if(document.metadata.researchSource!==undefined&&!research||research&&researchSourceUseBlockReason(research,"internal_research"))
+      throw new Error("A retained research source no longer permits internal display.");
+    if(typeof document.metadata.artifactId==="string"){
+      const artifact=await getArtifact(ctx,document.metadata.artifactId);
+      const rawVersion=document.metadata.version??document.metadata.artifactVersion;
+      const version=typeof rawVersion==="number"?rawVersion:artifact.headVersion;
+      const detail=await getArtifactVersion(ctx,artifact.id,version);
+      await admitArtifactVisualSources(ctx,artifact.id,version,detail.contentHash);
+    }else await admitSourceReferenceDisplay(ctx,[document.sourceRef,...document.sourceRefs]);
+  }
+  const historical=await getProjectIntelligenceHistoricalState(ctx,projectId,snapshotId);
+  // Manifest order is source-ref sorted, whereas the recorded graph preserves
+  // canonical collector order. Reconstruct that order, then require its exact hash.
+  const bySource=new Map(historical.documents.map(document=>[document.sourceType+"\n"+document.sourceRef,document]));
+  const documents=current.flatMap(document=>{
+    const retained=bySource.get(document.sourceType+"\n"+document.sourceRef);
+    return retained?[retained]:[];
+  });
+  const graph=buildReactiveContextGraph({projectId,documents,generatedAt:snapshot.generatedAt});
+  const identity=createProjectSnapshot({projectId,graph,documents,id:snapshot.id,generatedAt:snapshot.generatedAt});
+  if (identity.contentHash!==snapshot.contentHash || graph.contentHash!==snapshot.graphHash)
+    throw new Error("Saved Project projection does not match its immutable source identity.");
+  const [predecessor]=await getDb().select().from(projectIntelligenceSnapshots).where(and(
+    eq(projectIntelligenceSnapshots.projectId,projectId),eq(projectIntelligenceSnapshots.ownerUserId,ctx.userId),
+    tenantOrgClause(projectIntelligenceSnapshots.organizationId,ctx),lt(projectIntelligenceSnapshots.generatedAt,new Date(snapshot.generatedAt)),
+  )).orderBy(desc(projectIntelligenceSnapshots.generatedAt)).limit(1);
+  const delta=predecessor?diffProjectSnapshots(rowToSnapshot(predecessor),snapshot):null;
+  const eligibleRefs=new Set(documents.flatMap(document=>[document.sourceRef,...document.sourceRefs]));
+  const lens=retainPermittedProjectInsights(compileDeterministicInsights({projectId,documents,now:snapshot.generatedAt,delta}),eligibleRefs);
+  return {snapshot,graph,lens,
+    timeline:buildUnifiedTimeline(documents),
+    sourceRefs:[...new Set(documents.flatMap(document=>[document.sourceRef,...document.sourceRefs]))].sort()};
 }
 
 export async function projectIntelligenceAsKnownOn(

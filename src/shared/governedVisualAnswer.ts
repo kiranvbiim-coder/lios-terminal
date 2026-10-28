@@ -1,123 +1,116 @@
 import { z } from "zod";
-import { chartArtifactContentSchema, tableArtifactContentSchema } from "./artifactContracts";
+import { artifactComparisonSchema, chartArtifactContentSchema, tableArtifactContentSchema, timelineArtifactContentSchema } from "./artifactContracts";
+import { p8ScenarioComparisonSchema } from "./p8ScenarioContracts";
+import { p7ContextGraphSchema, p7InsightSchema, p7TimelineEventSchema } from "./p7ResearchContracts";
 
-/**
- * AI/runtime events may request a PRESENTATION, never propose data or permission.
- * Only the authenticated saved Artifact endpoint can supply the exact values.
- */
+const artifactId = z.string().regex(/^artifact:[0-9a-f-]{36}$/i);
+const digest = z.string().regex(/^[a-f0-9]{64}$/);
+export const exactVisualArtifactRefSchema = z.object({
+  artifactId, version: z.number().int().positive(), contentHash: digest,
+}).strict();
+const revision = z.object({ version: z.number().int().positive(), contentHash: digest }).strict();
+export const savedArtifactVisualIntentSchema = exactVisualArtifactRefSchema.extend({
+  owner: z.literal("p4"), kind: z.enum(["chart", "table", "table_map", "timeline"]),
+}).strict();
+const projectSnapshot = {
+  owner: z.literal("p7"), snapshotId: z.string().trim().min(1).max(300),
+  snapshotHash: digest, graphHash: digest,
+};
+/** References and presentation selection only. Model data, URLs and renderer code are forbidden. */
+export const governedVisualIntentSchema = z.discriminatedUnion("kind", [
+  savedArtifactVisualIntentSchema,
+  z.object({ owner: z.literal("p4"), kind: z.literal("revision_comparison"), artifactId, left: revision, right: revision }).strict(),
+  z.object({ owner: z.literal("p8"), kind: z.literal("scenario_comparison"),
+    base: exactVisualArtifactRefSchema, branches: z.array(exactVisualArtifactRefSchema).min(1).max(20),
+  }).strict(),
+  z.object({ ...projectSnapshot, kind: z.literal("insight_graph"), insightId: z.string().trim().min(1).max(300) }).strict(),
+  z.object({ ...projectSnapshot, kind: z.literal("insight_map"), insightId: z.string().trim().min(1).max(300) }).strict(),
+  z.object({ ...projectSnapshot, kind: z.literal("project_timeline") }).strict(),
+]);
+export type GovernedVisualIntent = z.infer<typeof governedVisualIntentSchema>;
+export type SavedArtifactVisualIntent = z.infer<typeof savedArtifactVisualIntentSchema>;
+
+/** The server derives owner scope, full source references and projection identity. */
 export const governedVisualAnswerRequestSchema = z.object({
-  artifactId: z.string().regex(/^artifact:[0-9a-f-]{36}$/i),
-  version: z.number().int().positive(),
   projectId: z.number().int().positive().nullable(),
-  kind: z.enum(["chart", "table"]),
-  sourceRefs: z.array(z.string().trim().min(1).max(1_000)).min(1).max(100),
+  chatId: z.number().int().positive(),
+  intent: governedVisualIntentSchema,
+  sourceRefs: z.array(z.string().trim().min(1).max(1_000)).min(1).max(2_000),
+  projectionHash: digest,
 }).strict();
 export type GovernedVisualAnswerRequest = z.infer<typeof governedVisualAnswerRequestSchema>;
 
 const remoteArtifactSchema = z.object({
-  artifact: z.object({
-    id: z.string(),
-    projectId: z.number().int().positive().nullable(),
-    kind: z.string(),
-    title: z.string().trim().min(1).max(300),
-    status: z.string(),
+  artifact: z.object({ id: z.string(), projectId: z.number().int().positive().nullable(),
+    owningChatId: z.number().int().positive().nullable().optional(), kind: z.string(),
+    title: z.string().trim().min(1).max(300), status: z.string(),
   }),
-  version: z.object({
-    artifactId: z.string(),
-    version: z.number().int().positive(),
-    contentHash: z.string().regex(/^[a-f0-9]{64}$/),
-    sourceRefs: z.array(z.string()).max(2000),
-    trustManifest: z.object({
-      evidence: z.array(z.object({
-        sourceRef: z.string(),
-        access: z.object({
-          state: z.string(),
-          entitlementRequired: z.boolean().nullable().optional(),
-        }).passthrough().nullable().optional(),
-      }).passthrough()).max(1_000),
-    }).passthrough().nullable().optional(),
+  version: z.object({ artifactId: z.string(), version: z.number().int().positive(), contentHash: digest,
+    sourceRefs: z.array(z.string()).max(2_000),
+    trustManifest: z.object({ evidence: z.array(z.object({ sourceRef: z.string(),
+      access: z.object({ state: z.string(), entitlementRequired: z.boolean().nullable().optional() }).passthrough().nullable().optional(),
+    }).passthrough()).max(1_000) }).passthrough().nullable().optional(),
     content: z.unknown(),
   }),
 });
 
 export type AuthorizedVisualAnswer =
   | { status: "ready"; kind: "chart"; title: string; version: number; sourceRefs: string[]; content: z.infer<typeof chartArtifactContentSchema> }
-  | { status: "ready"; kind: "table"; title: string; version: number; sourceRefs: string[]; content: z.infer<typeof tableArtifactContentSchema> };
+  | { status: "ready"; kind: "table"; title: string; version: number; sourceRefs: string[]; content: z.infer<typeof tableArtifactContentSchema> }
+  | { status: "ready"; kind: "timeline"; title: string; version: number; sourceRefs: string[]; content: z.infer<typeof timelineArtifactContentSchema> };
 export type GovernedVisualAnswerDecision = AuthorizedVisualAnswer | { status: "blocked"; reason: string };
+const BLOCKED = { status: "blocked", reason: "The saved owner, source scope, exact revision or content hash could not be verified. No visual answer is displayed." } as const;
 
-const BLOCKED = { status: "blocked", reason: "The saved Artifact, source scope, or exact revision could not be verified. No visual answer is displayed." } as const;
-
-/**
- * This is a SECOND gate after the server's authenticated GET. It checks exact
- * identity/version/Project/source lineage and the P4 content schema. It cannot
- * authorize a caller to access something the endpoint itself denied.
- */
-export function resolveGovernedVisualAnswer(
-  rawRequest: unknown,
-  rawServerDetail: unknown,
-): GovernedVisualAnswerDecision {
+/** Secondary identity gate after a fresh canonical authenticated P4 read; never an authorization grant. */
+export function resolveGovernedVisualAnswer(rawRequest: unknown, rawServerDetail: unknown): GovernedVisualAnswerDecision {
   const request = governedVisualAnswerRequestSchema.safeParse(rawRequest);
   const detail = remoteArtifactSchema.safeParse(rawServerDetail);
   if (!request.success || !detail.success) return BLOCKED;
+  const intent = savedArtifactVisualIntentSchema.safeParse(request.data.intent);
+  if (!intent.success) return BLOCKED;
   const { artifact, version } = detail.data;
-  if (artifact.id !== request.data.artifactId || version.artifactId !== artifact.id ||
-    version.version !== request.data.version || artifact.projectId !== request.data.projectId ||
-    artifact.status !== "active" || artifact.kind !== request.data.kind) return BLOCKED;
-
+  const kind = intent.data.kind === "table_map" ? "table" : intent.data.kind;
+  if (artifact.id !== intent.data.artifactId || version.artifactId !== artifact.id ||
+      version.version !== intent.data.version || version.contentHash !== intent.data.contentHash ||
+      artifact.projectId !== request.data.projectId || artifact.status !== "active" || artifact.kind !== kind ||
+      artifact.projectId === null && artifact.owningChatId !== request.data.chatId) return BLOCKED;
   const canonicalRefs = new Set(version.sourceRefs);
   const requestedRefs = new Set(request.data.sourceRefs);
-  // A chart/table renders the WHOLE saved version, not only selected points.
-  // Requiring a subset could hide a denied or stale source used by that version.
   if (!canonicalRefs.size || requestedRefs.size !== canonicalRefs.size ||
       request.data.sourceRefs.some(ref => !canonicalRefs.has(ref))) return BLOCKED;
-
-  // Saved P3 entitlement posture is not a fresh provider authorization; it
-  // can only further RESTRICT an otherwise authenticated P4 read.
-  // If a manifest includes observations, no selected ref may be absent or
-  // explicitly denied; re-auth the Artifact on every click via P4 first.
+  // Historical trust only restricts a read. Current source rights remain server-owned.
   const manifest = version.trustManifest;
-  if (manifest?.evidence.length) {
-    for (const ref of request.data.sourceRefs) {
-      // A later "allowed" observation must NEVER erase a recorded denial for
-      // the same source by overwriting a Map entry. Refuse on any denial.
-      const observations = manifest.evidence.filter(item => item.sourceRef === ref);
-      if (!observations.length || observations.some(({ access }) =>
-        access?.entitlementRequired === true ||
-        (access && /^(blocked|restricted|denied|unauthorized|not_entitled|expired)$/i.test(access.state))
-      )) return BLOCKED;
-    }
+  if (manifest?.evidence.length) for (const ref of request.data.sourceRefs) {
+    const observations = manifest.evidence.filter(item => item.sourceRef === ref);
+    if (!observations.length || observations.some(({ access }) => access?.entitlementRequired === true ||
+        access && /^(blocked|restricted|denied|unauthorized|not_entitled|expired)$/i.test(access.state))) return BLOCKED;
   }
-
-  if (request.data.kind === "chart") {
+  const identity = { status: "ready" as const, title: artifact.title, version: version.version, sourceRefs: request.data.sourceRefs };
+  if (kind === "chart") {
     const parsed = chartArtifactContentSchema.safeParse(version.content);
     if (!parsed.success || parsed.data.series.length > 12 ||
-      parsed.data.series.reduce((sum, series) => sum + series.points.length, 0) > 5_000 ||
-      parsed.data.series.every(series => !series.points.length) ||
-      !["line", "area", "bar", "scatter"].includes(parsed.data.chartType) ||
-      parsed.data.series.some(series => series.points.some(point =>
-        (typeof point.x === "number" && !Number.isFinite(point.x)) || !Number.isFinite(point.y)))) return BLOCKED;
-    return { status: "ready", kind: "chart", content: parsed.data, title: artifact.title,
-      version: version.version, sourceRefs: request.data.sourceRefs };
+        parsed.data.series.reduce((sum, series) => sum + series.points.length, 0) > 5_000 ||
+        parsed.data.series.every(series => !series.points.length) ||
+        !["line", "area", "bar", "scatter"].includes(parsed.data.chartType) ||
+        parsed.data.series.some(series => series.points.some(point =>
+          typeof point.x === "number" && !Number.isFinite(point.x) || !Number.isFinite(point.y)))) return BLOCKED;
+    return { ...identity, kind: "chart", content: parsed.data };
+  }
+  if (kind === "timeline") {
+    const parsed = timelineArtifactContentSchema.safeParse(version.content);
+    if (!parsed.success || !parsed.data.events.length) return BLOCKED;
+    return { ...identity, kind: "timeline", content: parsed.data };
   }
   const parsed = tableArtifactContentSchema.safeParse(version.content);
-  if (!parsed.success || parsed.data.rows.length === 0 || parsed.data.columns.length === 0 ||
+  if (!parsed.success || !parsed.data.rows.length || !parsed.data.columns.length ||
       parsed.data.columns.length > 100 || parsed.data.rows.length > 50_000) return BLOCKED;
-  return { status: "ready", kind: "table", content: parsed.data, title: artifact.title,
-    version: version.version, sourceRefs: request.data.sourceRefs };
+  return { ...identity, kind: "table", content: parsed.data };
 }
 
-/** A visual request may reference exact saved evidence but not submit arbitrary data. */
-export function visualRequestFromRuntimeArtifact(value: {
-  artifact: { artifactType: string; projectId: number | null; sourceRefs: string[] };
-  persistedArtifact?: { id: string; version: number };
-}): GovernedVisualAnswerRequest | null {
-  if (!value.persistedArtifact || !["chart", "table"].includes(value.artifact.artifactType)) return null;
-  const result = governedVisualAnswerRequestSchema.safeParse({
-    artifactId: value.persistedArtifact.id,
-    version: value.persistedArtifact.version,
-    projectId: value.artifact.projectId,
-    kind: value.artifact.artifactType,
-    sourceRefs: value.artifact.sourceRefs,
-  });
-  return result.success ? result.data : null;
-}
+export const governedVisualProjectionSchema = z.discriminatedUnion("kind",[
+  z.object({kind:z.literal("artifact"),detail:remoteArtifactSchema}),
+  z.object({kind:z.literal("revision_comparison"),comparison:artifactComparisonSchema}),
+  z.object({kind:z.literal("scenario_comparison"),comparison:p8ScenarioComparisonSchema}),
+  z.object({kind:z.literal("project"),graph:p7ContextGraphSchema,insight:p7InsightSchema.nullable(),timeline:z.array(p7TimelineEventSchema)}),
+]);
+export type GovernedVisualProjection = z.infer<typeof governedVisualProjectionSchema>;

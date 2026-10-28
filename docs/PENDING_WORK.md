@@ -13,6 +13,11 @@
 - The runtime, Apple state, MapLibre, P10 and finance fixes documented below are integrated in the separate completion branch, not yet a protected-main/native-release claim. The factor/scenario cutover additionally preserves typed factor-policy denials through preview/decomposition instead of reclassifying them as422.
 - Remaining direct requirements include end-to-end typed model visual dispatch, Windows native Core/file custody/AMD64 sandbox, installed accessibility/offline/manual-upgrade journeys, operational beta trust and owner release approval. Strict$0 spending remains; production P14 signing is not bypassed.
 
+### Typed model visual dispatch — 2026-10-28
+
+- Model/runtime `lios.visual.present_saved` is a read-only governed tool taking only exact immutable references (P4 chart/table/table-map/timeline/revision comparison, P7 graph/map/timeline from an exact saved snapshot+hash). The server re-resolves current Chat/Project owner, active actor, exact content hash and current display/derived-output rights; only identifiers and a summary reach the model, never rows, coordinates or renderer code. Chat renders table pages through the existing Artifact table owner, charts/timelines/comparisons through the existing P4 owners and the existing offline map only for source-recorded coordinates. Recorded P7 geography is now projected from explicit source latitude/longitude metadata only.
+- Corrected during review: stale cached visuals are invalidated through the canonical Artifact invalidation hook; a retained trust record denying or restricting a source blocks projection; an old snapshot cannot be re-rendered when a source is no longer current. Actual isolated source UI created a 105-row saved Artifact through real APIs, rendered the Chat typed visual with exact 1-100 / 101-105 paging and a full-precision value, then an actual Artifact archive refused the cached visual. 23 focused behavior tests and typecheck passed. This is source evidence only; installed-app, live-model, accessibility and Windows qualification remain open.
+
 
 ### P10 acceptance contract correction — 2026-10-28
 

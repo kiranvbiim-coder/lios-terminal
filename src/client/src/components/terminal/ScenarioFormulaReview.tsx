@@ -10,6 +10,7 @@ import {
   validateP8Formula,
 } from "@/lib/useP8Scenario";
 import { useInvalidateArtifacts, useProjectArtifacts, type ProjectArtifactRecord } from "@/lib/useArtifacts";
+import { SavedScenarioComparison } from "./SavedScenarioComparison";
 
 function inferKind(artifact: ProjectArtifactRecord, baseId: string): P8ScenarioKind {
   if (artifact.id === baseId) return "base";
@@ -19,11 +20,6 @@ function inferKind(artifact: ProjectArtifactRecord, baseId: string): P8ScenarioK
   return "custom";
 }
 
-function display(value: unknown): string {
-  if (value === null || value === undefined) return "—";
-  if (typeof value === "number") return Number.isInteger(value) ? String(value) : value.toPrecision(6);
-  return String(value);
-}
 
 export function ScenarioFormulaReview(props: {
   projectId: number;
@@ -130,27 +126,7 @@ export function ScenarioFormulaReview(props: {
         <button onClick={() => void compare()} className="flex items-center gap-1 rounded border border-fuchsia-300/20 px-2 py-1 font-ui text-[7px] text-fuchsia-200"><GitCompareArrows className="h-3 w-3" />Compare family</button>
       </div>}
 
-      {comparison && <div className="max-h-72 overflow-auto rounded border border-border/50">
-        <table className="min-w-full">
-          <thead><tr><th className="sticky top-0 bg-[#090909] px-2 py-1.5 text-left font-terminal text-[6px] text-muted-foreground">FIELD</th>
-            {[comparison.base, ...comparison.branches].map((item) => <th key={item.artifactId} className="sticky top-0 bg-[#090909] px-2 py-1.5 text-left font-terminal text-[6px]">{item.scenarioKind.toUpperCase()}</th>)}
-          </tr></thead>
-          <tbody>{comparison.matrix.filter((row) => row.changed).slice(0, 80).map((row) => <tr key={row.section + ":" + row.key}>
-            <td className="border-t border-border/30 px-2 py-1.5 font-terminal text-[6px] text-muted-foreground">{row.section.toUpperCase()} · {row.key}</td>
-            {[comparison.base, ...comparison.branches].map((item) => <td key={item.artifactId} className="border-t border-border/30 px-2 py-1.5 font-terminal text-[7px]">{display(row.values[item.artifactId])}</td>)}
-          </tr>)}</tbody>
-        </table>
-        {comparison.waterfall.length>0&&<div className="border-t border-border/40 p-2">
-          <div className="font-terminal text-[6px] text-muted-foreground">ASSUMPTION WATERFALL · Δ VS BASE</div>
-          <div className="mt-1 grid gap-1 md:grid-cols-2">
-            {comparison.waterfall.slice(0,40).map((item)=><div key={item.branchArtifactId+":"+item.key} className="flex items-center gap-2 rounded border border-border/35 px-2 py-1">
-              <span className="min-w-0 flex-1 truncate font-terminal text-[6px] text-muted-foreground">{item.key}</span>
-              <span className="font-terminal text-[6px]">{display(item.baseValue)} → {display(item.branchValue)}</span>
-              <span className={"font-terminal text-[6px] "+(item.delta>0?"text-emerald-300":item.delta<0?"text-red-300":"text-muted-foreground")}>{item.delta>0?"+":""}{display(item.delta)}</span>
-            </div>)}
-          </div>
-        </div>}
-      </div>}
+      {comparison && <SavedScenarioComparison comparison={comparison}/>}
 
       {modelKind && family.length > 1 && <div className="grid gap-2 rounded border border-border/45 p-2 md:grid-cols-[180px_1fr_auto]">
         <select value={sourceId} onChange={(event) => setSourceId(event.target.value)} className="rounded border border-border/50 bg-[#090909] px-2 py-1.5 font-ui text-[7px]">
