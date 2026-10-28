@@ -34,6 +34,8 @@ export function ProjectBriefingStudio({
   activeProjectRef.current = projectId;
   const visualRequestRef = useRef<AbortController | null>(null);
   useEffect(() => {
+    setTitle("My intelligence briefing");
+    setIntroduction("");
     setSelectedSources([]);
     setPinnedVisuals([]);
     setPreviewId(null);
@@ -59,7 +61,10 @@ export function ProjectBriefingStudio({
     || item.id.toLocaleLowerCase().includes(search.trim().toLocaleLowerCase()));
   const toggle = (id: string) => {
     setError(null);
-    if (chosen.some(item => item.id === id)) setPinnedVisuals(current => current.filter(visual => visual.artifactId !== id));
+    if (chosen.some(item => item.id === id)) {
+      if (pinningId === id) { visualRequestRef.current?.abort(); setPinningId(null); }
+      setPinnedVisuals(current => current.filter(visual => visual.artifactId !== id));
+    }
     setSelectedSources(current => current.some(item => item.id === id) ? current.filter(item => item.id !== id)
       : current.length < MAX_BRIEFING_SOURCES && byId.has(id) ? [...current, { ...byId.get(id)! }] : current);
   };
