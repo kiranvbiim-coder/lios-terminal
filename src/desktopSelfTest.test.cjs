@@ -8,6 +8,7 @@ const {
   listForbiddenPackagedPythonBytecode,
   locatePackagedServer,
   performWorkspaceRecoveryProbe,
+  validatePackagedAppIdentity,
 } = require("./desktopSelfTest.cjs");
 const { P14_PACKAGED_PERFORMANCE_SAFETY_CEILINGS, evaluateP14PackagedPerformance } = require("./p14PerformanceBudget.cjs");
 
@@ -120,4 +121,18 @@ test("P14 packaged performance safety ceilings reject missing or non-finite meas
   });
   assert.equal(evaluation.ok, false);
   assert.ok(evaluation.errors.length >= 2);
+});
+
+test("D10 native self-test binds beta package metadata to a clean 40-hex source commit", () => {
+  const commit = "a".repeat(40);
+  assert.deepEqual(validatePackagedAppIdentity("1.0.0-beta.1", commit),
+    { packageVersion: "1.0.0-beta.1", sourceCommit: commit });
+  for (const invalid of [null, undefined, "", "not-a-commit", "B".repeat(40)]) {
+    assert.throws(() => validatePackagedAppIdentity("1.0.0-beta.1", invalid),
+      /missing its exact reviewed source commit/);
+  }
+  assert.deepEqual(validatePackagedAppIdentity("1.0.0", null),
+    { packageVersion: "1.0.0", sourceCommit: null });
+  assert.throws(() => validatePackagedAppIdentity("dev", commit), /version is missing or malformed/);
+  assert.throws(() => validatePackagedAppIdentity(null, commit), /version is missing or malformed/);
 });
