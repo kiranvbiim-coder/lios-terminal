@@ -81,6 +81,12 @@ async function runPackagedDesktopSelfTest(options) {
   // The beta acceptance gate must not reuse a self-test from an earlier
   // installer. Electron's packaged getVersion() reads the actual app metadata.
   const packageVersion = app.getVersion?.();
+  const sourceCommit = require("./package.json").liosBuildCommit ?? null;
+  const isBeta = typeof packageVersion === "string" &&
+    /^[0-9]+[.][0-9]+[.][0-9]+-beta[.][1-9][0-9]*$/.test(packageVersion);
+  if (isBeta && (typeof sourceCommit !== "string" || !/^[a-f0-9]{40}$/.test(sourceCommit))) {
+    throw new Error("Beta package is missing its exact reviewed source commit metadata.");
+  }
   if (typeof packageVersion !== "string" ||
       !/^[0-9]+[.][0-9]+[.][0-9]+(?:[-+][A-Za-z0-9.-]+)?$/.test(packageVersion)) {
     throw new Error("Packaged application version is missing or malformed.");
@@ -114,6 +120,7 @@ async function runPackagedDesktopSelfTest(options) {
     return {
       version: 1,
       packageVersion,
+      sourceCommit,
       generatedAt: new Date().toISOString(),
       platform: process.platform,
       arch: process.arch,
