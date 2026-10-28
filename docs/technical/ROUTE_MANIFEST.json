@@ -4930,6 +4930,18 @@
    "unprobed": false
   },
   {
+   "method": "POST",
+   "path": "/api/project-chats/:chatId/visual",
+   "reachableBy": [
+    "client_user",
+    "client_admin",
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
    "method": "DELETE",
    "path": "/api/project-sessions/:sessionId",
    "reachableBy": [
