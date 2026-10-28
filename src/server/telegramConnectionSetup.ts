@@ -1,6 +1,7 @@
 import crypto from "node:crypto";
 import { and, eq, isNull } from "drizzle-orm";
 import { telegramConnectInputSchema } from "@shared/telegramConnection";
+import { telegramPollingStatus } from "./telegramPollingRuntime";
 import {
   channelIngressCursors, projectChats, projects, sourceConnections, userDataConsents,
   type SourceConnection, type User,
@@ -42,6 +43,8 @@ export interface TelegramConnectionSummary {
   consentActive: boolean;
   credentialPresent: boolean;
   nextOffset: number;
+  /** Redacted Home loop state; null when Home is not running a loop (disabled, just saved, or runtime stopped). */
+  polling: { state: string; consecutiveFailures: number; lastFailure: string | null; lastAdoptedAt: string | null } | null;
   updatedAt: string;
 }
 
@@ -126,12 +129,16 @@ export async function connectTelegram(user: SetupUser, rawInput: unknown): Promi
 async function summarize(user: Pick<User, "organizationId">, source: SourceConnection, consentActive: boolean): Promise<TelegramConnectionSummary> {
   const policy = parseTelegramSourceConfig(source.config);
   const [cursor] = await getDb().select().from(channelIngressCursors).where(eq(channelIngressCursors.sourceConnectionId, source.id)).limit(1);
+  const live = policy.enabled ? telegramPollingStatus(source.id) : null;
   return {
     connectionId: source.id, name: source.name, enabled: policy.enabled, projectId: policy.projectId, chatId: policy.chatId,
     allowedConversationIds: policy.allowedConversationIds, allowedUpdateTypes: policy.allowedUpdateTypes,
     retentionDays: policy.retentionDays, allowAiTransmission: policy.allowAiTransmission, allowOutbound: false,
     consentActive, credentialPresent: await credentialPresent(user, telegramCredentialName(source.userId, policy.accountBindingId)),
     nextOffset: cursor?.nextOffset ?? 0, updatedAt: source.updatedAt.toISOString(),
+    polling: policy.enabled
+      ? { state: live?.state ?? "waiting", consecutiveFailures: live?.consecutiveFailures ?? 0, lastFailure: live?.lastFailure ?? null, lastAdoptedAt: live?.lastAdoptedAt ?? null }
+      : null,
   };
 }
 

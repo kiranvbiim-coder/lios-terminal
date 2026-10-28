@@ -16,6 +16,7 @@ interface TelegramConnectionSummary {
   consentActive: boolean;
   credentialPresent: boolean;
   nextOffset: number;
+  polling: { state: string; consecutiveFailures: number; lastFailure: string | null; lastAdoptedAt: string | null } | null;
 }
 
 const QUERY_KEY = ["/api/setup/telegram-connections"];
@@ -28,7 +29,15 @@ const field = "mt-1 block min-h-11 w-full rounded-md border border-border bg-bac
 function state(connection: TelegramConnectionSummary): { label: string; tone: string } {
   if (!connection.enabled) return { label: "Disconnected", tone: "text-muted-foreground" };
   if (!connection.consentActive || !connection.credentialPresent) return { label: "Needs attention", tone: "text-amber-300" };
-  return { label: "Connected", tone: "text-emerald-400" };
+  switch (connection.polling?.state) {
+    case "polling": return { label: "Connected — importing", tone: "text-emerald-400" };
+    case "backoff": return { label: "Connected — retrying after a temporary problem", tone: "text-amber-300" };
+    case "refused": return { label: "Stopped — authority or consent changed; reconnect to resume", tone: "text-rose-300" };
+    case "provider_blocked": return { label: "Stopped — Telegram rejected the bot token or another process is polling it; reconnect with a valid token", tone: "text-rose-300" };
+    case "exhausted": return { label: "Stopped after repeated failures; disconnect and reconnect to retry", tone: "text-rose-300" };
+    case "stopped": return { label: "Stopped", tone: "text-amber-300" };
+    default: return { label: "Connected — starting", tone: "text-emerald-400" };
+  }
 }
 
 /**
@@ -113,7 +122,7 @@ export default function TelegramConnectionPanel() {
               </div>
               <dl className="mt-2 grid grid-cols-1 gap-x-4 gap-y-1 font-ui text-sm text-muted-foreground sm:grid-cols-2">
                 <div><dt className="inline">Allowed chat IDs: </dt><dd className="inline text-foreground">{connection.allowedConversationIds.join(", ")}</dd></div>
-                <div><dt className="inline">Retention policy: </dt><dd className="inline text-foreground">{connection.retentionDays} days (not yet enforced automatically)</dd></div>
+                <div><dt className="inline">Retention: </dt><dd className="inline text-foreground">imported messages older than {connection.retentionDays} days are removed hourly</dd></div>
                 <div><dt className="inline">AI can read imported text: </dt><dd className="inline text-foreground">{connection.allowAiTransmission ? "Yes" : "No"}</dd></div>
                 <div><dt className="inline">Replies to Telegram: </dt><dd className="inline text-foreground">Off</dd></div>
               </dl>

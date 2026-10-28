@@ -121,4 +121,27 @@ test("Telegram adoption commits Chat, replay custody, minimal Ledger and cursor 
     assert.equal((await f.receipts()).length, 0);
     assert.equal((await f.messages()).length, 0);
   });
+
+  await t.test("retention removes only expired imported text for its own source and keeps custody", async () => {
+    const a = await fixture(), b = await fixture();
+    await a.adopt(await a.poll(body([{ update_id: 50, message: message(1, "old imported") }, { update_id: 51, message: message(2, "recent imported") }])));
+    await b.adopt(await b.poll(body([{ update_id: 50, message: message(1, "other source imported") }])));
+    const ordinary = await chats.addProjectChatMessage(a.context, a.chat.id, { role: "user", content: "ordinary turn", metadata: {} });
+    const day = 86_400_000;
+    const [oldest] = (await a.messages()).filter(m => m.content === "old imported");
+    const [other] = (await b.messages());
+    await db.update(schema.projectChatMessages).set({ createdAt: new Date(Date.now() - 40 * day) }).where(eq(schema.projectChatMessages.id, oldest.id));
+    await db.update(schema.projectChatMessages).set({ createdAt: new Date(Date.now() - 40 * day) }).where(eq(schema.projectChatMessages.id, ordinary.id));
+    await db.update(schema.projectChatMessages).set({ createdAt: new Date(Date.now() - 10 * day) }).where(eq(schema.projectChatMessages.id, other.id));
+    await db.update(schema.sourceConnections).set({ config: policyModule.telegramSourceConfig({ ...policyModule.parseTelegramSourceConfig(a.source.config), retentionDays: 30 }) }).where(eq(schema.sourceConnections.id, a.source.id));
+    await db.update(schema.sourceConnections).set({ config: policyModule.telegramSourceConfig({ ...policyModule.parseTelegramSourceConfig(b.source.config), retentionDays: 7 }) }).where(eq(schema.sourceConnections.id, b.source.id));
+    const removed = await service.purgeExpiredTelegramMessages();
+    assert.ok(removed >= 2, "the 40-day source-a text and 10-day source-b text (7-day policy) expire");
+    assert.deepEqual((await a.messages()).map(m => m.content).sort(), ["ordinary turn", "recent imported"], "ordinary old Chat turns are never retention-purged");
+    assert.equal((await b.messages()).length, 0);
+    const custody = await a.receipts();
+    assert.equal(custody.length, 2, "replay custody survives content retention");
+    assert.equal(custody.find(r => Number(r.updateId) === 50)?.chatMessageId, null);
+    assert.notEqual(custody.find(r => Number(r.updateId) === 51)?.chatMessageId, null);
+  });
 });

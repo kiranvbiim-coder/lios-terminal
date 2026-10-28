@@ -1,6 +1,6 @@
 import { appendLedgerEventInTransaction } from "./ledgerStore";
 import { normalizeTelegramPollBody } from "./telegramPollNormalizer";
-import { and, eq, isNull } from "drizzle-orm";
+import { and, eq, isNull, lt, sql } from "drizzle-orm";
 import {
   channelIngressCursors, channelIngressUpdates, organizations, projectChatMessages, projectChats, projects,
   sourceConnections, userDataConsents, users,
@@ -314,4 +314,26 @@ export async function listEnabledTelegramPollingTargets(): Promise<Array<{ conte
     } catch { /* malformed or inconsistent metadata is not pollable and is never repaired here */ }
   }
   return targets;
+}
+
+/**
+ * Enforce each source's stored retention policy on imported Chat text, including disconnected sources. Only messages
+ * carrying that source's `channelIngress` marker are removed; ordinary Chat turns, replay custody and the minimal Ledger
+ * disposition (which never contains message text) are untouched. Returns the number of messages deleted.
+ */
+export async function purgeExpiredTelegramMessages(now: Date = new Date()): Promise<number> {
+  const db: any = getDb();
+  const rows = await db.select().from(sourceConnections).where(and(eq(sourceConnections.connectorId, "telegram"), eq(sourceConnections.sourceType, "private_api")));
+  let deleted = 0;
+  for (const source of rows) {
+    let retentionDays: number;
+    try { retentionDays = parseTelegramSourceConfig(source.config).retentionDays; } catch { continue; }
+    const cutoff = new Date(now.getTime() - retentionDays * 86_400_000);
+    const removed = await db.delete(projectChatMessages).where(and(
+      sql`${projectChatMessages.metadata}->'channelIngress'->>'sourceConnectionId' = ${String(source.id)}`,
+      lt(projectChatMessages.createdAt, cutoff),
+    )).returning({ id: projectChatMessages.id });
+    deleted += removed.length;
+  }
+  return deleted;
 }
