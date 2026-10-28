@@ -1,5 +1,5 @@
 import * as React from "react";
-import { Component, lazy, Suspense, useEffect, useState } from "react";
+import { Component, lazy, Suspense, useEffect, useRef, useState } from "react";
 import type { GovernedVisualAnswerRequest, GovernedVisualAnswerDecision } from "@shared/governedVisualAnswer";
 import { resolveGovernedVisualAnswer } from "@shared/governedVisualAnswer";
 import { projectSavedTableGeography } from "@/lib/governedTableGeography";
@@ -28,6 +28,8 @@ function recordedValue(value: unknown): string {
 export function GovernedVisualAnswer({ request }: { request: GovernedVisualAnswerRequest }) {
   const [expanded, setExpanded] = useState(false);
   const [mapOpen, setMapOpen] = useState(false);
+  const [readRevision, setReadRevision] = useState(0);
+  const activeReadRef = useRef<AbortController | null>(null);
   const [state, setState] = useState<{ phase: "idle" | "loading" | "ready" | "blocked"; signature?: string; decision?: GovernedVisualAnswerDecision }>({ phase: "idle" });
   const signature = JSON.stringify([request.artifactId, request.version, request.projectId, request.kind, request.sourceRefs]);
   useEffect(() => { setMapOpen(false); }, [signature]);
@@ -35,6 +37,7 @@ export function GovernedVisualAnswer({ request }: { request: GovernedVisualAnswe
   useEffect(() => {
     if (!expanded) return;
     const controller = new AbortController();
+    activeReadRef.current = controller;
     setState({ phase: "loading", signature });
     void (async () => {
       try {
@@ -50,8 +53,11 @@ export function GovernedVisualAnswer({ request }: { request: GovernedVisualAnswe
         if (!controller.signal.aborted) setState({ phase: "blocked", signature });
       }
     })();
-    return () => { controller.abort(); };
-  }, [expanded, signature]);
+    return () => {
+      controller.abort();
+      if (activeReadRef.current === controller) activeReadRef.current = null;
+    };
+  }, [expanded, signature, readRevision]);
 
   const current: typeof state = state.signature === signature ? state : { phase: "loading" };
   const decision = current.decision?.status === "ready" ? current.decision : null;
@@ -67,6 +73,11 @@ export function GovernedVisualAnswer({ request }: { request: GovernedVisualAnswe
         className="min-h-10 rounded-lg border border-border/65 px-3 font-ui text-sm text-foreground focus-visible:ring-2 focus-visible:ring-amber-300/70">
         {expanded ? "Hide visual" : "View visual"}
       </button>
+      {expanded && current.phase !== "loading" && <button type="button"
+        onClick={() => { activeReadRef.current?.abort(); setState({ phase: "loading", signature }); setMapOpen(false); setReadRevision(value => value + 1); }}
+        className="min-h-11 rounded-lg border border-amber-300/40 px-3 py-2 font-ui text-sm text-foreground focus-visible:outline focus-visible:outline-2 focus-visible:outline-amber-300">
+        Recheck current source permissions
+      </button>}
     </div>
     {expanded && <div className="mt-3 space-y-3" data-testid="governed-chat-visual-content">
       {current.phase === "loading" && <p role="status" className="font-ui text-sm text-muted-foreground">Checking the saved source-backed revision…</p>}
@@ -74,6 +85,7 @@ export function GovernedVisualAnswer({ request }: { request: GovernedVisualAnswe
         {current.decision?.status === "blocked" ? current.decision.reason : "Authorization or saved revision is unavailable. No visual answer is displayed."}
       </p>}
       {decision && <>
+        <p className="font-ui text-xs leading-5 text-amber-200">This saved snapshot was rechecked when opened. Access can change: select “Recheck current source permissions” for a fresh authenticated read before relying on it.</p>
         <p className="break-words font-ui text-sm font-semibold text-foreground">{decision.title}</p>
         <p className="font-ui text-xs text-muted-foreground">
           Recorded source IDs: {decision.sourceRefs.length}. Saved v{decision.version}. These are retained references, not independent verification or redistribution rights.

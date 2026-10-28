@@ -116,3 +116,30 @@ test("P3 saved trust observation explicitly denying a selected source blocks P4 
     ...detail(),version:{...detail().version,trustManifest:{evidence:[{sourceRef:"filing:official",access:{state:123}}]}},
   }).status,"blocked");
 });
+
+
+test("C01 saved Chart/Table display rejects subset and duplicate model-request source identity", () => {
+  const multiple = { ...detail(), version: {
+    ...detail().version, sourceRefs: ["filing:official", "feed:restricted"],
+  } };
+  assert.equal(resolveGovernedVisualAnswer(request, multiple).status, "blocked",
+    "A one-source runtime request must not display a full saved version using two sources");
+  assert.equal(resolveGovernedVisualAnswer({
+    ...request, sourceRefs: ["filing:official", "filing:official"],
+  }, multiple).status, "blocked");
+  assert.equal(resolveGovernedVisualAnswer({
+    ...request, sourceRefs: ["filing:official", "feed:restricted"],
+  }, multiple).status, "ready", "Correct exact full set remains displayable after authenticated GET");
+});
+
+test("C01 any recorded denied source observation blocks a visual, regardless of observation order", () => {
+  const denied = { sourceRef: "filing:official", access: { state: "denied", entitlementRequired: false } };
+  const allowed = { sourceRef: "filing:official", access: { state: "allowed", entitlementRequired: false } };
+  for (const observations of [[denied, allowed], [allowed, denied]]) {
+    const remote = { ...detail(), version: {
+      ...detail().version, trustManifest: { evidence: observations },
+    } };
+    assert.equal(resolveGovernedVisualAnswer(request, remote).status, "blocked",
+      "Last-write-wins entitlement maps must never silently erase a recorded denial");
+  }
+});

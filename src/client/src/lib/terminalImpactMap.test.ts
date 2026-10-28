@@ -41,3 +41,18 @@ test("impact map preserves only explicit object dependency links", () => {
   assert.equal(map.explicitObjectLinks.length, 1);
   assert.equal(map.explicitObjectLinks[0].relation, "affects");
 });
+
+test("C02 visible scenario impact coverage excludes inputs with mismatched model units", () => {
+  const saved = createScenario({
+    name: "Different units", kind: "custom", scope: "global",
+    assumptions: [{ key: "revenue", label: "Revenue", value: 500, unit: "EUR" }],
+  });
+  const offered = [
+    binding({ id: "revenue-USD", key: "revenue", label: "Revenue", value: 400, unit: "USD" }),
+  ];
+  const view = buildScenarioImpactMap(saved, offered, []);
+  assert.equal(view.matchedAssumptionCount, 0);
+  assert.equal(view.bindingMatches.length, 0);
+  assert.deepEqual(view.unmatchedAssumptions, ["revenue"]);
+  assert.equal(view.coveragePct, 0);
+});

@@ -55,9 +55,17 @@ export function reviewRecordedConsequences(projectId: number, graph: P7ContextGr
 /** The existing Project Chat must independently recheck permission and require approval before acting. */
 export function consequenceReviewPrompt(projectId: number, graphHash: string, insight: P7Insight, target: ConsequenceTarget): string {
   const paths = target.steps.map(s => s.from + " " + s.relation + " " + s.to + " [edge:" + s.id + ", " + (s.forward ? "forward" : "reverse inspection") + ", refs:" + s.evidenceRefs.map(v => JSON.stringify(v.slice(0, 180))).join(", ") + "]").join("; ");
+  // Explicit source IDs are review input, not automatically verified citations.
+  // Preserve the exact insight-vs-path distinction and never infer exposure.
+  const insightSourceIds = [...new Set(insight.sourceRefs)].slice(0, 30).map(ref => JSON.stringify(ref.slice(0, 180))).join(", ");
+  const pathSourceIds = [...new Set(target.steps.flatMap(step => step.evidenceRefs))].slice(0, 30)
+    .map(ref => JSON.stringify(ref.slice(0, 180))).join(", ");
   return "Review this saved P7 Project " + projectId + " evidence path from graph hash " + graphHash + ". Insight " + JSON.stringify(insight.title.slice(0, 200)) +
     ". Target " + target.kind + " " + JSON.stringify(target.label.slice(0, 200)) + ". Stored path: " + paths.slice(0, 1200) +
-    ". Recheck current ownership, source permission, freshness, contradictory evidence, and actual decision relevance. " +
+    ". Insight source IDs (recorded, not independently verified): " + insightSourceIds +
+    ". Traversed edge source IDs (recorded, not independently verified): " + pathSourceIds +
+    ". Treat reverse links as navigation only; do not assert a causal effect or current holdings. " +
+    "Recheck current ownership, source permission, source dates, freshness, contradictory evidence, and actual decision relevance. " +
     "Shared graph references do not prove causality, portfolio holdings, quantified exposure or financial effect. " +
     "Offer reviewable options only; do not run tools, save Artifacts, send communications or launch automations without explicit approval.";
 }

@@ -20,6 +20,11 @@ export function ProjectConsequenceReview({ projectId, insight, review, onInvesti
       {review.status === "ready" && !review.targets.length && <p role="status">No source-backed decision or exposure reference was recorded within two links.</p>}
       {review.targets.map(target => <article key={target.id} className="space-y-2 rounded-lg border border-border/45 p-3">
         <h5 className="text-sm font-semibold">{kindLabel[target.kind]}: {target.label}</h5>
+        <p className="font-ui text-xs leading-5 text-muted-foreground">
+          {target.steps.length} saved adjacency link{target.steps.length === 1 ? "" : "s"} ·
+          {" "}{new Set(target.steps.flatMap(step => step.evidenceRefs)).size} distinct recorded edge source ID(s).
+          These are references for review, not verified impact, portfolio ownership or an approved action.
+        </p>
         <ol className="space-y-2">{target.steps.map((step, idx) => <li key={step.id + ":" + idx} className="break-words text-xs text-muted-foreground">
           {idx + 1}. {step.from} → {step.to} · {step.relation}{!step.forward && " (reverse inspection)"}
           <div className="mt-1 break-all font-mono text-[11px]">Stored edge {step.id} · refs: {step.evidenceRefs.join(", ")}</div>
@@ -29,7 +34,7 @@ export function ProjectConsequenceReview({ projectId, insight, review, onInvesti
           onClick={() => onInvestigate(consequenceReviewPrompt(projectId, review.graphHash!, insight, target))}>Review path in Chat</button>}
       </article>)}
       {review.omitted > 0 && <p role="status" className="text-xs text-muted-foreground">{review.omitted} additional recorded targets omitted from this bounded view.</p>}
-      {review.targets.length > 0 && <p className="text-xs text-muted-foreground">Recheck current source rights and evidence in Chat. This view never executes an action.</p>}
+      {review.targets.length > 0 && <p className="font-ui text-xs leading-5 text-muted-foreground">Chat must independently revalidate the current Project, source rights, dates and contradictory evidence. Any proposed tool call, trade, communication or automation requires its own user approval. This view never executes an action.</p>}
     </div>
   </details>;
 }

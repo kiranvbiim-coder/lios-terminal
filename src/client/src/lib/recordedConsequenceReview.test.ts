@@ -50,3 +50,16 @@ test("targets and omissions are bounded, stable and do not leak external node me
   assert.deepEqual(result,reviewRecordedConsequences(7,next,insight,4));
   assert.equal(result.targets.some(t=>t.id.includes("secret")),false);
 });
+
+test("C03 consequence-to-Chat review retains source identity without claiming verified exposure or executing actions", () => {
+  const result = reviewRecordedConsequences(7, graph, insight);
+  const prompt = consequenceReviewPrompt(7, h, insight, result.targets[0]);
+  assert.match(prompt, /Insight source IDs \(recorded, not independently verified\): "src:filing"/);
+  assert.match(prompt, /Traversed edge source IDs \(recorded, not independently verified\):/);
+  assert.match(prompt, /"src:filing"/);
+  assert.match(prompt, /"src:decision"/);
+  assert.match(prompt, /reverse links as navigation only/);
+  assert.match(prompt, /current ownership, source permission, source dates/);
+  assert.match(prompt, /without explicit approval/);
+  assert.doesNotMatch(prompt, /You should buy|automatic trade|guaranteed impact/);
+});
