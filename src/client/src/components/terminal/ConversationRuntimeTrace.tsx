@@ -432,7 +432,7 @@ export default function ConversationRuntimeTrace({
         )}
 
         {workVisible && trust?.type === "trust" && (
-          <ConversationTrustPanel manifest={trust.manifest} onRecoveryAction={recover} />
+          <ConversationTrustPanel manifest={trust.manifest} onRecoveryAction={recover} onReviewDecision={onFollowUp} />
         )}
 
         {workVisible && artifact?.type === "artifact" && artifact.persistedArtifact && (
