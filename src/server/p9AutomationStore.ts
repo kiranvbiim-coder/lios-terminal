@@ -5,6 +5,7 @@ import {
   projectAutomationNotifications,
   projectAutomationRuns,
   projectAutomationWorkflows,
+  projects,
   type ProjectAutomationNotification,
   type ProjectAutomationRun,
   type ProjectAutomationWorkflow,
@@ -596,6 +597,19 @@ export async function listP9Notifications(
     notificationTenantFilter(ctx),
     eq(projectAutomationNotifications.projectId, projectId),
   )).orderBy(desc(projectAutomationNotifications.createdAt)).limit(Math.min(Math.max(limit, 1), 500));
+}
+
+/** Current owner's delivered inbox across active Projects; not a tenant-wide broadcast. */
+export async function listOwnedP9Notifications(ctx: TenantContext, limit = 100): Promise<ProjectAutomationNotification[]> {
+  const rows = await getDb().select({ notification: projectAutomationNotifications })
+    .from(projectAutomationNotifications)
+    .innerJoin(projects, eq(projects.id, projectAutomationNotifications.projectId))
+    .where(and(notificationTenantFilter(ctx),
+      eq(projects.ownerUserId, ctx.userId), orgClause(projects.organizationId, ctx),
+      eq(projects.status, "active"), isNull(projects.trashedAt),
+      eq(projectAutomationNotifications.status, "delivered"), isNull(projectAutomationNotifications.readAt),
+    )).orderBy(desc(projectAutomationNotifications.createdAt)).limit(Math.min(Math.max(limit, 1), 500));
+  return rows.map(row => row.notification);
 }
 
 export async function markP9NotificationRead(

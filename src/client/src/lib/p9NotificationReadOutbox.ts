@@ -116,9 +116,9 @@ export function clearNotificationReadOutbox(): void {
 
 /**
  * Replay only after a fresh /api/auth/me confirms the SAME server-issued owner.
- * HTTP 401/403/404/409/5xx and network failures stop replay without marking
- * the pending item as delivered; the server validates project/notification
- * ownership on each POST. Nothing is replayed automatically while offline.
+ * HTTP401/403 and transient/network failures stop replay. Missing/deleted404/410
+ * intents remain unconfirmed but do not block independent later items.
+ * Server ownership checks remain authoritative on every POST.
  */
 export function replayNotificationReads(fetcher: FetchLike = fetch): Promise<ReplayResult> {
   if (pendingReplay) return pendingReplay;
@@ -132,6 +132,7 @@ export function replayNotificationReads(fetcher: FetchLike = fetch): Promise<Rep
   abortReplay = controller;
   const work = (async (): Promise<ReplayResult> => {
     let confirmed = 0;
+    let blocked = false;
     const owned = () => !controller.signal.aborted && activeKey === key && generation === currentGeneration;
     try {
       const identity = await fetcher("/api/auth/me", { credentials: "same-origin", signal: controller.signal, cache: "no-store" });
@@ -146,14 +147,18 @@ export function replayNotificationReads(fetcher: FetchLike = fetch): Promise<Rep
           `/api/projects/${intent.projectId}/automation/notifications/${encodeURIComponent(intent.notificationId)}/read`,
           { method: "POST", credentials: "same-origin", signal: controller.signal },
         );
-        if (!response.ok || !owned()) return { confirmed, remaining: loadFor(key).length, blocked: true };
+        if (!owned()) return { confirmed, remaining: loadFor(key).length, blocked: true };
+        if (!response.ok) {
+          if (response.status === 404 || response.status === 410) { blocked = true; continue; }
+          return { confirmed, remaining: loadFor(key).length, blocked: true };
+        }
         const remaining = loadFor(key).filter((row) =>
           row.projectId !== intent.projectId || row.notificationId !== intent.notificationId
         );
         if (!saveFor(key, remaining)) return { confirmed, remaining: loadFor(key).length, blocked: true };
         confirmed += 1;
       }
-      return { confirmed, remaining: loadFor(key).length, blocked: false };
+      return { confirmed, remaining: loadFor(key).length, blocked };
     } catch {
       return { confirmed, remaining: loadFor(key).length, blocked: true };
     }

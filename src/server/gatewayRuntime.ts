@@ -10,7 +10,6 @@ import type { GatewayInvalidationTopic } from "@shared/gatewayProtocol";
 export const gatewayHub = new GatewayHub({
   version: process.env.LIOS_PUBLIC_VERSION ?? "dev",
   authorizeRequest: async (connection, scope) => {
-    if (!connection.identity.deviceId) return;
     // Lazy import avoids the deviceRuntime ↔ gatewayRuntime init cycle.
     const { requireCurrentGatewayUser } = await import("./gatewayDeviceContinuity");
     await requireCurrentGatewayUser(connection, scope);

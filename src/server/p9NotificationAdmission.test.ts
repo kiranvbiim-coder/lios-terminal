@@ -5,14 +5,15 @@ import os from "node:os";
 import path from "node:path";
 import test from "node:test";
 
+import { eq } from "drizzle-orm";
 const root = fs.mkdtempSync(path.join(os.tmpdir(), "lios-notification-admission-"));
 process.env.LIOS_DATA_ROOT = root;
 process.env.LIMURIA_DATA_DIR = root;
 delete process.env.DATABASE_URL;
 const { initDb, closeDb, getDb } = await import("./db");
-const { users } = await import("@shared/schema");
+const { users, projects } = await import("@shared/schema");
 const { createProject } = await import("./projectStore");
-const { createP9Workflow, replaceP9Workflow, listP9Notifications } = await import("./p9AutomationStore");
+const { createP9Workflow, replaceP9Workflow, listP9Notifications, listOwnedP9Notifications, markP9NotificationRead } = await import("./p9AutomationStore");
 const { executeP9Workflow } = await import("./p9AutomationService");
 
 const definition = () => ({
@@ -58,5 +59,21 @@ test("workflow notifications honor current mute and serialize cooldown admission
     const outcomes = await Promise.all([first, second].map(workflow => executeP9Workflow({ ctx, workflow, triggerType: "manual" })));
     assert.deepEqual(outcomes.map(outcome => outcome.notification?.status), ["delivered", "delivered"]);
     assert.notEqual(outcomes[0]!.notification!.workflowId, outcomes[1]!.notification!.workflowId);
+  });
+
+  await t.test("owner inbox discovers an unopened Project and excludes other owners, read rows and archived Projects", async () => {
+    const unopened = await createProject(ctx, { name:"Never selected by the client" });
+    const workflow = await createP9Workflow(ctx, unopened.id, definition());
+    const outcome = await executeP9Workflow({ ctx, workflow, triggerType:"manual" });
+    assert.equal(outcome.notification?.status,"delivered");
+    const id=outcome.notification!.id;
+    assert.ok((await listOwnedP9Notifications(ctx)).some(row=>row.id===id));
+    const [foreign]=await getDb().insert(users).values({name:"Another owner",email:crypto.randomUUID()+"@example.test",passwordHash:"unused",role:"internal_admin"}).returning();
+    assert.equal((await listOwnedP9Notifications({userId:foreign.id,organizationId:null,role:foreign.role})).length,0);
+    await getDb().update(projects).set({status:"archived"}).where(eq(projects.id,unopened.id));
+    assert.equal((await listOwnedP9Notifications(ctx)).some(row=>row.id===id),false);
+    await getDb().update(projects).set({status:"active"}).where(eq(projects.id,unopened.id));
+    await markP9NotificationRead(ctx,unopened.id,id);
+    assert.equal((await listOwnedP9Notifications(ctx)).some(row=>row.id===id),false);
   });
 });

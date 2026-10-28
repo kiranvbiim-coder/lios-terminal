@@ -138,6 +138,33 @@ describe("Gateway hub", () => {
     assert.equal(checks, 4);
   });
 
+  it("direct conversation streams fence each ordered event against current account authority", async () => {
+    let current = true;
+    let checks = 0;
+    const { hub, url } = await startHub({ authorizeRequest: () => {
+      checks++;
+      if (!current) throw new Error("private authority detail");
+    } });
+    const { c } = await connected(url);
+    const conn = hub.readyConnections()[0]!;
+    conn.emit("tick", { ts: 1 });
+    conn.emit("tick", { ts: 2 });
+    const first = await c.next(frame => frame.type === "event" && frame.event === "tick");
+    const second = await c.next(frame => frame.type === "event" && frame.event === "tick");
+    assert.ok(first.type === "event" && second.type === "event");
+    assert.deepEqual([first.payload, second.payload], [{ ts: 1 }, { ts: 2 }]);
+    assert.ok(first.seq! < second.seq!);
+    assert.equal(checks, 2);
+    const afterRevocation: GatewayFrame[] = [];
+    c.socket.on("message", raw => afterRevocation.push(gatewayFrameSchema.parse(JSON.parse(raw.toString()))));
+    current = false;
+    conn.emit("tick", { ts: 3 });
+    const [code] = await c.closed;
+    assert.equal(code, 4001);
+    assert.deepEqual(afterRevocation, []);
+    assert.equal(hub.readyConnections().length, 0);
+  });
+
   it("answers connect with a schema-valid hello-ok listing only reachable methods", async () => {
     const { url, hub } = await startHub();
     const { res } = await connected(url);

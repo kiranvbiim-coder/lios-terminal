@@ -6,6 +6,12 @@
 
 ## Active work — public production readiness
 
+### SI-06 current delivery and notification continuity — 2026-10-28
+
+- Canonical Gateway outbound delivery now checks current account/device authority for direct feature subscriptions and broadcasts, preserves event ordering, bounds queued bytes and detaches unauthorized sockets. It reuses the existing Home authority, not a second grant store. Actual production-hub/PGlite/WebSocket smoke delivered event1, disabled the owner, then observed close4001 with zero later events; scratch removed.
+- P9 desktop discovery uses the current owner's unread delivered inbox across active owned Projects, not only the selected Project. Existing notification invalidation refreshes the owner inbox and Project histories; no implicit OS permission request. Deleted404/410 offline-read intents remain explicitly unconfirmed while independent later intents can reconcile;401/403/transient failures still stop replay.
+- Typecheck,35 focused Gateway/P9/queue/invalidation behaviors and902-route manifest passed (14 anonymous, no unprobed guard). Native OS banner, device restart/background delivery and physical Apple/Android qualification remain separate.
+
 ### Late contributor/release deltas — 2026-10-28
 
 - Separate from frozen #364: normally reconciled #384's exact saved-revision, individual-action recovery and source-run-bound P9 eligibility, plus later Briefing live-title/request-lifetime fixes and inactive/manual workflow defaults. Preserved typed C05 local review, exact P4 target/outcome consent and existing read-only recovery/P9 authorities. #381's implementation-test repin is intentionally superseded by deleting that obsolete suite, not adopted.

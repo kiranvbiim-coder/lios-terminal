@@ -96,10 +96,16 @@ test("D5 production Gateway revocation, account restrictions and device scopes a
   // The socket has a previous subscription and remains connected after
   // refusal. Outbound broadcasts must still revalidate current device
   // authority, deliver no quote, and drop the stale connection.
+  active.emit("conversation.event", {
+    requestId: "22222222-2222-4222-8222-222222222222", runSeq: 1,
+    event: { type: "text", requestId: "22222222-2222-4222-8222-222222222222", at: new Date().toISOString(), text: "private text after role change", label: "manual" },
+  });
   publishQuoteUpdate([{ symbol: "TEST", price: 3, change: 0, changePercent: 0 }]);
   const [closeCode] = await closed;
   assert.equal(closeCode, 4001);
   assert.equal(frames.some(frame => frame.type === "event" && frame.event === "quotes.update"), false,
     "an old paired quote subscription cannot leak data after role/device revocation");
+  assert.equal(frames.some(frame => frame.type === "event" && frame.event === "conversation.event"), false,
+    "direct conversation subscriptions must use the same fresh authority fence as broadcasts");
   client.terminate();
 });

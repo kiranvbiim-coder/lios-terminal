@@ -101,6 +101,8 @@ class Connection implements GatewayConnection {
   readonly nonce = crypto.randomBytes(24).toString("base64url");
   seq = 0;
   handshakeTimer: ReturnType<typeof setTimeout> | null = null;
+  private outbound: Promise<void> = Promise.resolve();
+  private queuedBytes = 0;
 
   /** Set at attach for session connections, and after a successful device authentication otherwise. */
   identity!: GatewayIdentity;
@@ -112,23 +114,54 @@ class Connection implements GatewayConnection {
     private readonly maxBufferedBytes: number,
     readonly authenticator: GatewayAuthenticator | null,
     readonly remoteAddress: string | undefined,
+    private readonly authorizeEvent?: (connection: GatewayConnection) => Promise<void>,
   ) {
     if (identity) this.identity = identity;
   }
 
   send(frame: GatewayFrame): void {
+    this.sendSerialized(JSON.stringify(frame));
+  }
+
+  private sendSerialized(frame: string): void {
     if (this.socket.readyState !== this.socket.OPEN) return;
-    if (this.socket.bufferedAmount > this.maxBufferedBytes) {
-      // A client that cannot keep up must reconnect and resync rather than buffer unboundedly in the Home.
+    if (this.socket.bufferedAmount + this.queuedBytes > this.maxBufferedBytes) {
       this.socket.close(1013, "Backpressure limit exceeded");
       return;
     }
-    this.socket.send(JSON.stringify(frame));
+    this.socket.send(frame);
   }
 
   emit<E extends GatewayEventName>(event: E, payload: z.input<(typeof GATEWAY_EVENTS)[E]>): void {
     if (!this.ready) return;
-    this.send({ type: "event", event, payload, seq: this.seq++ });
+    const frame = JSON.stringify({ type: "event", event, payload, seq: this.seq++ });
+    if (!this.authorizeEvent) { this.sendSerialized(frame); return; }
+    const bytes = Buffer.byteLength(frame);
+    if (this.queuedBytes + bytes + this.socket.bufferedAmount > this.maxBufferedBytes) {
+      this.ready = false;
+      this.socket.close(1013, "Backpressure limit exceeded");
+      return;
+    }
+    this.queuedBytes += bytes;
+    this.outbound = this.outbound.then(async () => {
+      try {
+        if (!this.ready || this.socket.readyState !== this.socket.OPEN) return;
+        await this.authorizeEvent!(this);
+        if (this.ready && this.socket.readyState === this.socket.OPEN) this.sendSerialized(frame);
+      } catch {
+        this.ready = false;
+        this.socket.close(4001, "Current account or device authorization revoked");
+      } finally { this.queuedBytes -= bytes; }
+    });
+  }
+
+  async drainEvents(timeoutMs: number): Promise<void> {
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    try {
+      await Promise.race([this.outbound, new Promise<void>(resolve => {
+        timer = setTimeout(resolve, timeoutMs);
+      })]);
+    } finally { if (timer) clearTimeout(timer); }
   }
 }
 
@@ -207,31 +240,12 @@ export class GatewayHub {
     this.closeListeners.push(listener);
   }
 
-  /**
-   * Outbound delivery also needs current authority: revocation must prevent
-   * an already-connected paired device from receiving quote / automation /
-   * decision invalidations. Existing session sockets retain synchronous
-   * delivery; paired devices are checked against Home state before emit.
-   */
+  /** Every outbound event, including direct feature subscriptions, is fenced by Connection.emit. */
   publish<E extends GatewayEventName>(event: E, select: (connection: GatewayConnection) => z.input<(typeof GATEWAY_EVENTS)[E]> | null): void {
     for (const connection of this.connections) {
-      if (!connection.ready) continue;
-      const deliver = () => {
-        if (!this.isReadyConnection(connection)) return;
-        const payload = select(connection);
-        if (payload !== null) connection.emit(event, payload);
-      };
-      if (!connection.identity.deviceId || !this.options.authorizeRequest) {
-        deliver();
-        continue;
-      }
-      // A downgraded paired device must reconnect and obtain fresh scopes,
-      // not silently retain a broader connection's event stream.
-      const scope: GatewayScope = connection.scopes.includes("admin") ? "admin"
-        : connection.scopes.includes("write") ? "write" : "read";
-      void this.assertCurrentRequestAuthority(connection, scope).then(deliver).catch(() => {
-        if (this.isReadyConnection(connection)) connection.socket.close(4001, "Current device authorization revoked");
-      });
+      if (!this.isReadyConnection(connection)) continue;
+      const payload = select(connection);
+      if (payload !== null) connection.emit(event, payload);
     }
   }
 
@@ -249,17 +263,26 @@ export class GatewayHub {
     this.tickTimer = null;
     const payload = restartExpectedMs === undefined ? { reason } : { reason, restartExpectedMs };
     this.publish("shutdown", () => payload);
+    await Promise.all([...this.connections].map(connection => connection.drainEvents(this.policy.handshakeTimeoutMs)));
     for (const connection of [...this.connections]) connection.socket.close(1001, "Gateway shutting down");
   }
 
+  private authorizeEvent = async (connection: GatewayConnection): Promise<void> => {
+    const scope: GatewayScope = connection.scopes.includes("admin") ? "admin"
+      : connection.scopes.includes("write") ? "write" : "read";
+    await this.assertCurrentRequestAuthority(connection, scope);
+  };
+
   /** Attaches a socket whose identity was already established (the HTTP session at upgrade). */
   attach(socket: WebSocket, identity: GatewayIdentity): void {
-    this.attachConnection(new Connection(crypto.randomUUID(), identity, socket, this.policy.maxBufferedBytes, null, undefined));
+    this.attachConnection(new Connection(crypto.randomUUID(), identity, socket, this.policy.maxBufferedBytes, null, undefined,
+      this.options.authorizeRequest ? this.authorizeEvent : undefined));
   }
 
   /** Attaches a socket with no identity yet: sends a challenge and lets `authenticator` decide on `connect`. */
   attachUnauthenticated(socket: WebSocket, authenticator: GatewayAuthenticator, remoteAddress: string | undefined): void {
-    const connection = new Connection(crypto.randomUUID(), null, socket, this.policy.maxBufferedBytes, authenticator, remoteAddress);
+    const connection = new Connection(crypto.randomUUID(), null, socket, this.policy.maxBufferedBytes, authenticator, remoteAddress,
+      this.options.authorizeRequest ? this.authorizeEvent : undefined);
     this.attachConnection(connection);
     connection.send({ type: "event", event: "connect.challenge", payload: { nonce: connection.nonce } });
   }
