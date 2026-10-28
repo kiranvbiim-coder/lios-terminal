@@ -466,6 +466,7 @@ export default function ProjectExperienceShell({
   const [lastSubmittedMessage, setLastSubmittedMessage] = useState("");
   const [lastWorkflowRequest, setLastWorkflowRequest] = useState<Omit<ConversationRequest, "requestId" | "continuationOf"> | null>(null);
   const [lastWorkflowSourceRequestId, setLastWorkflowSourceRequestId] = useState<string | null>(null);
+  const [lastWorkflowOrigin, setLastWorkflowOrigin] = useState<{projectId: number | null; chatId: number | null} | null>(null);
   const [showSaveWorkflow, setShowSaveWorkflow] = useState(false);
   const composerToolsTrigger = useRef<HTMLButtonElement>(null);
   const pendingComposerDialog = useRef<"workflow" | "resource" | "plugins" | null>(null);
@@ -758,6 +759,7 @@ export default function ProjectExperienceShell({
     setLastSubmittedMessage("");
     setLastWorkflowRequest(null);
     setLastWorkflowSourceRequestId(null);
+    setLastWorkflowOrigin(null);
     setVoiceTranscripts([]);
     setVoiceTranscriptReviewed(false);
     setPendingAttachmentFiles([]);
@@ -1589,6 +1591,7 @@ export default function ProjectExperienceShell({
     if (!override?.continuationOf && chatMode === "project" && !payload.recordedClaimReview) {
       const projectApprovals = approvals.filter((grant) => grant.scope === "project");
       setLastWorkflowSourceRequestId(requestId);
+      setLastWorkflowOrigin({ projectId: selection.projectId, chatId: selection.chatId });
       setLastWorkflowRequest({
         message,
         sourceScope,
@@ -1601,6 +1604,7 @@ export default function ProjectExperienceShell({
       });
     } else if (!override?.continuationOf) {
       setLastWorkflowSourceRequestId(null);
+      setLastWorkflowOrigin(null);
       setLastWorkflowRequest(null);
     }
 
@@ -2098,6 +2102,8 @@ export default function ProjectExperienceShell({
     projectId: selection.projectId,
     chatId: selection.chatId,
     activeChatScope: activeChat?.scope ?? null,
+    originProjectId: lastWorkflowOrigin?.projectId ?? null,
+    originChatId: lastWorkflowOrigin?.chatId ?? null,
     sourceRequestId: lastWorkflowSourceRequestId,
     currentRequestId: runtimeRequestId ?? runtimeEvents.at(-1)?.requestId ?? null,
     hasSavedRequest: Boolean(lastWorkflowRequest),
@@ -2692,6 +2698,8 @@ export default function ProjectExperienceShell({
                     projectId: sandboxSelectionRef.current.projectId,
                     chatId: sandboxSelectionRef.current.chatId,
                     activeChatScope: activeChat?.scope ?? null,
+                    originProjectId: lastWorkflowOrigin?.projectId ?? null,
+                    originChatId: lastWorkflowOrigin?.chatId ?? null,
                     sourceRequestId: lastWorkflowSourceRequestId,
                     currentRequestId: runtimeHandoffRequestIdRef.current,
                     hasSavedRequest: Boolean(lastWorkflowRequest),

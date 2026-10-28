@@ -44,10 +44,14 @@ test("Integrated C07 gates same run before opening one existing inactive P9 revi
   assert.match(shell, /setLastWorkflowSourceRequestId\(requestId\)/);
   assert.match(shell, /setLastWorkflowSourceRequestId\(null\)/);
   assert.match(shell, /sourceRequestId: lastWorkflowSourceRequestId/);
+  assert.match(shell, /setLastWorkflowOrigin\(\{ projectId: selection\.projectId, chatId: selection\.chatId \}\)/);
+  assert.match(shell, /originProjectId: lastWorkflowOrigin\?\.projectId \?\? null/);
+  assert.match(shell, /originChatId: lastWorkflowOrigin\?\.chatId \?\? null/);
   assert.match(shell, /currentRequestId: runtimeHandoffRequestIdRef\.current/);
   assert.match(shell, /onPrepareAutomation=\{canPrepareChatAutomation/);
   assert.match(shell, /showSaveWorkflow && canPrepareChatAutomation/);
   assert.match(guard, /sourceRequestId !== currentRequestId/);
+  assert.match(guard, /originProjectId !== projectId \|\| originChatId !== chatId/);
   assert.match(guard, /inspectRecordedActionRecovery\(runEvents, currentRequestId\)/);
   assert.match(dialog, /enabled: activationReviewed/);
   assert.match(dialog, /data-testid="c07-automation-activation-review"/);

@@ -5,6 +5,9 @@ export interface ProjectAutomationDraftFacts {
   mode: "project" | "quick" | "temporary";
   projectId: number | null;
   chatId: number | null;
+  /** Project and Chat captured with the original submit. */
+  originProjectId: number | null;
+  originChatId: number | null;
   activeChatScope: string | null;
   sourceRequestId: string | null;
   currentRequestId: string | null;
@@ -20,11 +23,11 @@ export interface ProjectAutomationDraftFacts {
  */
 export function canPrepareProjectAutomationDraft(facts: ProjectAutomationDraftFacts): boolean {
   const {
-    mode, projectId, chatId, activeChatScope,
+    mode, projectId, chatId, originProjectId, originChatId, activeChatScope,
     sourceRequestId, currentRequestId, hasSavedRequest, busy, events,
   } = facts;
   if (mode !== "project" || !projectId || !chatId ||
-      activeChatScope !== "project" || !hasSavedRequest || busy ||
+      activeChatScope !== "project" || originProjectId !== projectId || originChatId !== chatId || !hasSavedRequest || busy ||
       !sourceRequestId || !currentRequestId || sourceRequestId !== currentRequestId) return false;
   const runEvents = events.filter(event => event.requestId === currentRequestId);
   if (!runEvents.length || runEvents.some(event => event.type === "error")) return false;

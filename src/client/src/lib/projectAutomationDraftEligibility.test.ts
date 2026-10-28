@@ -8,7 +8,7 @@ const event = (type: string, fields: Record<string, unknown> = {}, requestId = R
   ({ type, requestId, at: "2026-10-28T04:00:00Z", ...fields }) as unknown as ConversationRuntimeEvent;
 const completed = event("done", { status: "completed" });
 const original: ProjectAutomationDraftFacts = {
-  mode: "project", projectId: 12, chatId: 10, activeChatScope: "project",
+  mode: "project", projectId: 12, chatId: 10, originProjectId: 12, originChatId: 10, activeChatScope: "project",
   sourceRequestId: R, currentRequestId: R, hasSavedRequest: true, busy: false,
   events: [event("plan", { plan: { steps: [] } }), completed],
 };
@@ -21,6 +21,9 @@ test("C07 offers read-only P9 draft review only for matching completed Project C
   assert.equal(canPrepareProjectAutomationDraft({ ...original, mode: "temporary" }), false);
   assert.equal(canPrepareProjectAutomationDraft({ ...original, projectId: null }), false);
   assert.equal(canPrepareProjectAutomationDraft({ ...original, chatId: null }), false);
+  assert.equal(canPrepareProjectAutomationDraft({ ...original, originProjectId: 15 }), false);
+  assert.equal(canPrepareProjectAutomationDraft({ ...original, originChatId: 11 }), false);
+  assert.equal(canPrepareProjectAutomationDraft({ ...original, originChatId: null }), false);
   assert.equal(canPrepareProjectAutomationDraft({ ...original, activeChatScope: "quick" }), false);
   assert.equal(canPrepareProjectAutomationDraft({ ...original, hasSavedRequest: false }), false);
   assert.equal(canPrepareProjectAutomationDraft({ ...original, busy: true }), false);
