@@ -206,6 +206,45 @@ function readJson(file) {
   const absolute = path.resolve(file);
   return JSON.parse(readPinnedLocalEvidenceFile(absolute, 1_999_999, "evidence JSON").toString("utf8"));
 }
+/**
+ * One release gate for the signed root manifest AND physically present
+ * numbered parts. The source test passes a smaller mock per-asset ceiling
+ * to exercise the same integration without creating multi-GB fixtures.
+ * The actual CLI never overrides MAX_RELEASE_ASSET_BYTES.
+ */
+async function verifyBetaMultipartTransport({
+  verified, multipartDir = null, trustedPublicKey,
+  maxDirectBytes = MAX_RELEASE_ASSET_BYTES,
+}) {
+  assert(verified?.verified === true &&
+    verified?.qualification === "release_asset_integrity_only" &&
+    Array.isArray(verified.assetHashes) &&
+    maxDirectBytes > 0 && maxDirectBytes <= MAX_RELEASE_ASSET_BYTES,
+    "only an authenticated beta root manifest can authorize multipart transport.");
+  // The full assembled installer stays in owner staging for exact root hashing.
+  // Free hosting distributes signed numbered parts, each <=2 GB.
+  const oversized = verified.assetHashes.filter(asset => asset.bytes > maxDirectBytes);
+  assert(Boolean(multipartDir) === (oversized.length > 0),
+    "multipart directory is required exactly when local installers exceed the free per-asset limit.");
+  const multiparts = [];
+  for (const item of oversized) {
+    assert(item.target === "mac-arm64-dmg" || item.target === "mac-arm64-zip",
+      "only Mac assembled installers may use the approved multipart path.");
+    const directory = path.resolve(multipartDir);
+    const index = readJson(path.join(directory, item.name + ".parts.json"));
+    const checked = await verifyInstallerParts({
+      manifest: index, partsDir: directory, trustedPublicKey,
+    });
+    assert(checked.name === item.name && checked.bytes === item.bytes &&
+      checked.sha256 === item.sha256 && checked.partCount >= 2 &&
+      checked.qualification === "authenticated_transport_only",
+      "signed multipart transport does not match the exact reviewed installer manifest.");
+    multiparts.push({target:item.target, partCount:checked.partCount, bytes:checked.bytes,
+      sha256:checked.sha256, verified:true});
+  }
+  return multiparts;
+}
+
 async function auditBetaRelease(args) {
   const fields = parseFlags(args);
   const independentKey = readPinnedLocalEvidenceFile(path.resolve(fields["trusted-key"]),
@@ -223,29 +262,9 @@ async function auditBetaRelease(args) {
   const mac = verified.assetHashes.find(row => row.name.includes("-mac-arm64-beta.dmg"));
   const win = verified.assetHashes.find(row => row.name.includes("-win-x64-beta.exe"));
   assert(mac && win && byName.size === 3, "canonical DMG, ZIP and NSIS installers are required.");
-  // The full assembled installer stays in owner staging for integrity checks.
-  // Free hosting distributes ONLY its signed numbered parts, each <=2 GB.
-  // A root manifest without matching, independently signed real part bytes
-  // is not an approved publishable release when an installer exceeds 2 GB.
-  const oversized = verified.assetHashes.filter(asset => asset.bytes > MAX_RELEASE_ASSET_BYTES);
-  assert(Boolean(fields["multipart-dir"]) === (oversized.length > 0),
-    "multipart directory is required exactly when local installers exceed the free per-asset limit.");
-  const multiparts = [];
-  for (const item of oversized) {
-    assert(item.target === "mac-arm64-dmg" || item.target === "mac-arm64-zip",
-      "only Mac assembled installers may use the approved multipart path.");
-    const multipartDir = path.resolve(fields["multipart-dir"]);
-    const index = readJson(path.join(multipartDir, item.name + ".parts.json"));
-    const checked = await verifyInstallerParts({
-      manifest: index, partsDir: multipartDir, trustedPublicKey: independentKey,
-    });
-    assert(checked.name === item.name && checked.bytes === item.bytes &&
-      checked.sha256 === item.sha256 && checked.partCount >= 2 &&
-      checked.qualification === "authenticated_transport_only",
-      "signed multipart transport does not match the exact reviewed installer manifest.");
-    multiparts.push({target:item.target, partCount:checked.partCount, bytes:checked.bytes,
-      sha256:checked.sha256, verified:true});
-  }
+  const multiparts = await verifyBetaMultipartTransport({
+    verified, multipartDir: fields["multipart-dir"] || null, trustedPublicKey: independentKey,
+  });
   const selfTests = [
     checkNativeSelfTest(readJson(fields["mac-self-test"]), "darwin", "arm64", verified.version, verified.commit),
     checkNativeSelfTest(readJson(fields["win-self-test"]), "win32", "x64", verified.version, verified.commit),
@@ -281,4 +300,4 @@ if (require.main === module) {
     process.exitCode = 1;
   });
 }
-module.exports = { checkNativeSelfTest, checkNativeUX, inspectNativeEvidence, parseFlags, auditBetaRelease };
+module.exports = { checkNativeSelfTest, checkNativeUX, inspectNativeEvidence, parseFlags, auditBetaRelease, verifyBetaMultipartTransport };
