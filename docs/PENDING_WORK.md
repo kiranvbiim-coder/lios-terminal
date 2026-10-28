@@ -18,9 +18,9 @@
 - [ ] P1.04 Decompose candidate upstream packages into reusable mechanisms, related tests, dependencies and source pins; document `DIRECT_REUSE/IMPORT/ADAPT/REPURPOSE/COMBINE/GENERALIZE/INNOVATE/DEFER/REJECT` under the existing donor policy.
 - [x] P1.05 Produce a specific Telegram and WhatsApp per-feature capability matrix: supported transport/account login, 1:1/groups, inbound/outbound, replies, edits, reactions, media, identity, delivery, state sync, automated responses and platform/API limits.
 - [ ] P1.06 Review exact source licenses, notices, external API terms, redistribution rights, auth method, data retention, user privacy, dependencies and known security issues before selecting imported code.
-- [ ] P1.07 Map each mechanism to exactly one existing LiOS owner and stable interface; identify high-conflict files/migrations, active PRs and implementation ownership before parallel work.
+- [x] P1.07 Map each mechanism to exactly one existing LiOS owner and stable interface; identify high-conflict files/migrations, active PRs and implementation ownership before parallel work.
 - [x] P1.08 Define versioned typed request/event/error/receipt and attachment contracts for existing LiOS Gateway ↔ isolated service, without parallel Project/Chat/Artifact/permission/secret/auth/automation authorities.
-- [ ] P1.09 Agree bounded acceptance tests, R0–R4/V0–V4 validation levels, target Shipping Point, rollback and actual supported user journeys; record PR/issue claim before coding.
+- [x] P1.09 Agree bounded acceptance tests, R0–R4/V0–V4 validation levels, target Shipping Point, rollback and actual supported user journeys; record PR/issue claim before coding.
 
 **Package 1 proof:** complete owner/fork/upstream source map; channel feature matrix; legal/security findings; existing-code crosswalk; one existing-owner task/PR per integration seam.
 
@@ -29,6 +29,9 @@
 **P1.03/P1.05 inventory evidence (source only):** the same blueprint §0.2 now includes the approved-pin family/channel breadth register and per-feature Telegram/WhatsApp matrix, with `PARTIAL`/`NOT_INSPECTED`, `ADAPT_REQUIRED`, explicit unknown/deferred features and rights gates. These inventory checkmarks do not attest that all bodies/dependencies/tests are audited, imported or supported. P1.04 still owns selected-package/fork dependency and test disposition; P1.06 still owns full rights/security review. Telegram MiniApp/native commands and the remaining feature-specific unknowns remain visible, not silently excluded.
 
 **P1.08 contract evidence (not service acceptance):** `shared/supportingServiceContracts.ts` defines bounded internal Home/worker frames, generation/account/session binding and provider outcome/attachment facts; canonical LiOS authorization and receipts remain separate. Six focused boundary tests, typecheck and an actual process-stdin parser smoke passed. No service is launched or exposed; no channel/provider support is credited. See blueprint §0.2 for runtime enforcement still required.
+
+**P1.07/P1.09 assignment and acceptance definition:** blueprint §0.2 assigns each selected mechanism to its existing GM/Home/P13/P2/P4/P9/TC/P10 owner, single shared-core writer, concrete file boundary and prerequisite; live open-PR inspection found only documentation #392 at this point. It records R0–R4/V0–V4 selection, the bounded SP-06 inbound/Chat/Artifact/authorized-outbound/restart journey and disable/rollback requirements. These checkmarks attest the work/acceptance definition, not implementation, external reviewer signoff or SP acceptance. P1.04 exact selected-package closure and P1.06 full rights/security review remain open before enabling affected imports or providers.
+
 
 
 
