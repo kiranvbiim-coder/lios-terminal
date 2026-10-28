@@ -9,6 +9,11 @@ import type { ExternalMcpServerConfig } from "./externalMcpClient";
 import { currentConversationSignal, linkAbortSignal } from "./exec/execution-scope";
 import { resolveCredential } from "./credentialVault";
 import { fetchWithEndpointPolicy, isDesktopMcpLoopbackEndpoint, validateMcpSourceEndpoint } from "./sourceConnectionPolicy";
+import { createHash } from "node:crypto";
+import { getRequestIdentity } from "./requestContext";
+import { providerCredentialRevision } from "./providerCredentialRevision";
+import { homeMcpStartupBackoff, McpStartupBackoffError } from "./mcpStartupBackoff";
+import { organizationCredentialRevision } from "./organizationCredentialVault";
 
 export const LIOS_MCP_SDK_VERSION = "2.3.1";
 export const MCP_MAX_RESPONSE_BYTES = 10 * 1024 * 1024;
@@ -120,14 +125,30 @@ export async function withOfficialMcpClient<T>(
   });
   try {
     if (controller.signal.aborted) throw new Error("MCP request cancelled.");
-    await client.connect(transport, {
+    const connect = () => client.connect(transport, {
       signal: controller.signal,
       timeout: Math.min(30_000, Math.max(1_000, config.policy.healthTimeoutMs)),
     });
+    const identity = getRequestIdentity();
+    if (identity?.userId != null) {
+      // Only a known canonical request identity may share negative startup state.
+      // Credentials never enter the key; mutation revisions and policy/endpoint identity fence old observations.
+      const key = createHash("sha256").update(JSON.stringify({
+        userId: identity.userId, organizationId: identity.organizationId,
+        endpoint: policy.normalizedEndpoint, policy: config.policy,
+        credentialRevision: providerCredentialRevision(),
+        organizationCredentialRevision: identity.organizationId === null ? 0 : organizationCredentialRevision(identity.organizationId),
+      })).digest("hex");
+      await homeMcpStartupBackoff.connect(key, controller.signal, connect);
+    } else {
+      // Standalone trusted callers lack an owner key; do not create global cross-tenant cooldown state.
+      await connect();
+    }
     if (controller.signal.aborted) throw new Error("MCP request cancelled.");
     return await operation(client, controller.signal);
   } catch (error) {
     if (controller.signal.aborted) throw new Error("MCP request cancelled or timed out.");
+    if (error instanceof McpStartupBackoffError) throw error;
     // Never pass remote SDK error bodies or endpoint credentials to Chat.
     if (error instanceof Error && /MCP (transport|source|response)/.test(error.message)) throw error;
     throw new Error("MCP server request failed or returned an unsupported response.");

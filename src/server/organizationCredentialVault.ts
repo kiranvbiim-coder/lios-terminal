@@ -12,11 +12,11 @@ const VERSION = "v1";
 
 const snapshotVersions = new WeakMap<object, { organizationId: number; versions: Map<string, string> }>();
 const credentialRevisions = new Map<number, number>();
-function credentialRevision(organizationId: number): number {
+export function organizationCredentialRevision(organizationId: number): number {
   return credentialRevisions.get(organizationId) ?? 0;
 }
 function advanceCredentialRevision(organizationId: number): void {
-  credentialRevisions.set(organizationId, credentialRevision(organizationId) + 1);
+  credentialRevisions.set(organizationId, organizationCredentialRevision(organizationId) + 1);
 }
 function encryptedVersion(value: string): string {
   return crypto.createHash("sha256").update(value).digest("hex");
@@ -145,13 +145,13 @@ export async function assertOrganizationCredentialSnapshotCurrent(
   const snapshot = credentials ? snapshotVersions.get(credentials) : undefined;
   const expected = snapshot?.organizationId === organizationId ? snapshot.versions.get(name) : undefined;
   if (!expected) throw new Error("The organization credential snapshot is unavailable. Reload the current connection.");
-  const revision = credentialRevision(organizationId);
+  const revision = organizationCredentialRevision(organizationId);
   const encrypted = await readEncryptedOrganizationCredential(organizationId, name);
-  if (!encrypted || encryptedVersion(encrypted) !== expected || revision !== credentialRevision(organizationId)) {
+  if (!encrypted || encryptedVersion(encrypted) !== expected || revision !== organizationCredentialRevision(organizationId)) {
     throw new Error("The organization credential changed or was revoked. Reload the current connection.");
   }
   return () => {
-    if (revision !== credentialRevision(organizationId)) throw new Error("The organization credential changed before dispatch.");
+    if (revision !== organizationCredentialRevision(organizationId)) throw new Error("The organization credential changed before dispatch.");
   };
 }
 

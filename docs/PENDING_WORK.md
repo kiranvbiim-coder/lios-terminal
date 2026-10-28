@@ -101,6 +101,8 @@
 
 **Optional-add-on boundary:** the owner's user-installed WhatsApp packaging choice does not establish copyright compliance, provider terms eligibility or permitted automated use. Those checks still precede distribution guidance/enablement; moving installation to the user is not treated as a legal or security bypass.
 
+**MCP reliability adaptation (local, not pushed during PR validation):** the approved startup-backoff mechanism now composes into the existing official SDK connect/initialize path. Known owner/org + endpoint/policy + local/organization credential revision keys isolate negative state; caller identity is never inferred from a URL. Startup is serialized, starts at15s cooling after failure and caps at10min/1024 states, with no raw upstream diagnostics or automatic tool replay. Healthy clients remain independent; callers without an owner key do not share cooldown state. Twelve focused cooldown/official-SDK/HTTP behaviors passed; four credential-snapshot/real-HTTP behaviors and typecheck passed after organization-revision integration. Actual official-SDK/local-HTTP smoke observed one failing startup, zero repeat network requests for the same owner during cooldown, and an independent attempt for another owner; zero tool invocations. Full MCP/skills/plugin/ACP family depth remains open.
+
 
 
 
