@@ -6,6 +6,10 @@
 
 ## Active work — public production readiness
 
+### Windows native Core custody source — 2026-10-28
+
+- Added an app-owned `native-runtime-fs` N-API addon (handle-based directory pins and exclusive no-follow file creation on Windows x64), a Windows-safe path/manifest contract (win32-x64 target, `python.exe`, Windows 10 floor, reserved-name and ADS refusal) and the exact verified cp313 Windows Core wheel pins (24 wheels, hashes verified from bytes). macOS behavior is unchanged (typecheck and the 21 native runtime bundle tests pass). NOT qualified: no Windows host was available here, the addon was never compiled, the Windows builder/installer/sandbox image path is not implemented or exercised, and no Windows acceptance is claimed. The next step requires the owner-selected local Windows runner.
+
 ### Landed source consolidation and current completion branch — 2026-10-28
 
 - Protected #364 landed as `7c4cb8cde873695a3105c2a8b5e4296471c231ed`; exact head `dc0790d4db4236b3b40a2e8a899d484592287c85` passed Source/Linux, macOS and Windows in run40640288614. Landed tree equality was checked before successor disposition. Main was synchronized without changing the installed Desktop app or owner Home.
