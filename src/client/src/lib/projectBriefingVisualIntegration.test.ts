@@ -15,7 +15,8 @@ test("D1 runs inside the existing saved-Artifact storyboard, not a replaced Proj
   assert.match(studio, /activeProjectRef\.current !== inspectedProject/);
   assert.match(studio, /credentials: "same-origin", cache: "no-store"/);
   assert.match(studio, /onSave\(chosen, title, introduction, currentVisuals\)/);
-  assert.match(studio, /visual\.projectId === projectId/);
+  assert.match(studio, /currentProjectBriefingVisuals\(pinnedVisuals, chosen, byId, projectId\)/);
+  assert.match(storyboard, /visual\.projectId === projectId/);
   assert.match(owner, /verifyCurrentPinnedVisual\(visual, detail\)/);
   assert.match(owner, /assertSavedBriefingArtifact\(created, projectId, draft\.content, draft\.dependencyRefs, draft\.sourceRefs\)/);
   assert.match(owner, /createArtifact\(projectId, draft\)/);
