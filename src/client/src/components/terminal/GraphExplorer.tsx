@@ -7,8 +7,22 @@ import { GraphExplorerCompactList } from "./GraphExplorerCompactList";
 import { loadIntelligenceObjects, subscribeIntelligenceObjects, type IntelligenceObject } from "@/lib/terminalIntelligenceObjects";
 import { actionsForIntelligenceObject, requestIntelligenceObjectAction } from "@/lib/terminalObjectActions";
 import { safePublicSourceUrl } from "@shared/publicSourceUrl";
+import { recordedGraphDomainCounts } from "@/lib/recordedGraphDomainCounts";
 
 interface Props { activeSymbol?: string; onClose: () => void }
+
+const RecordedGraphTreemap = React.lazy(() => import("./RecordedGraphTreemap"));
+class GraphTreemapErrorBoundary extends React.Component<
+  { children: React.ReactNode }, { failed: boolean }
+> {
+  state = { failed: false };
+  static getDerivedStateFromError() { return { failed: true }; }
+  render() {
+    return this.state.failed ? <p role="alert" className="font-ui text-xs text-amber-200">
+      Optional object treemap unavailable. Source counts remain available in the list below.
+    </p> : this.props.children;
+  }
+}
 
 const DOMAIN_ORDER: CrossDomainNodeDomain[] = ["finance", "market", "macro", "policy", "supply-chain", "sustainability", "portfolio", "research"];
 const DOMAIN_LABEL: Record<CrossDomainNodeDomain, string> = {
@@ -38,6 +52,7 @@ export default function GraphExplorer({ activeSymbol, onClose }: Props) {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [symbolOnly, setSymbolOnly] = useState(Boolean(activeSymbol));
   const [bridgesOnly, setBridgesOnly] = useState(false);
+  const [showTreemap, setShowTreemap] = useState(false);
   const [relation, setRelation] = useState<CrossDomainEdge["relation"] | "">("");
   const [neighborsOnly, setNeighborsOnly] = useState(false);
   const [query, setQuery] = useState("");
@@ -115,6 +130,7 @@ export default function GraphExplorer({ activeSymbol, onClose }: Props) {
     (!bridgesOnly || graph.nodes.find(n => n.objectId === link.otherId)?.domain !==
       graph.nodes.find(n => n.objectId === selected.id)?.domain)
   ) : [], [graph, selected, relation, bridgesOnly]);
+  const treemapCounts = useMemo(() => recordedGraphDomainCounts(presentation.nodes), [presentation.nodes]);
   const relationCounts = useMemo(() => summarizeRecordedGraphLinks({
     nodes: presentation.nodes, edges: presentation.edges,
   }), [presentation.nodes, presentation.edges]);
@@ -230,6 +246,48 @@ export default function GraphExplorer({ activeSymbol, onClose }: Props) {
               {!relationCounts.length && <li className="font-ui text-xs text-muted-foreground">No recorded edges match the current filters.</li>}
             </ul>
           </details>
+          <section data-testid="recorded-graph-treemap" aria-label="Recorded object inventory treemap"
+            className="rounded-lg border border-border/60 px-3 py-2">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <div>
+                <h3 className="font-ui text-xs font-semibold text-foreground">Recorded object inventory</h3>
+                <p className="mt-1 font-ui text-xs leading-5 text-muted-foreground">
+                  Object counts grouped into inferred display labels, not measured sector exposures.
+                  Only {presentation.nodes.length} currently visible saved objects are represented.
+                </p>
+              </div>
+              <button type="button" onClick={() => setShowTreemap(value => !value)}
+                aria-expanded={showTreemap} aria-controls="lios-graph-recorded-domain-treemap"
+                className="min-h-11 rounded-lg border border-border/65 px-3 font-ui text-xs text-foreground focus-visible:ring-2 focus-visible:ring-amber-300/70">
+                {showTreemap ? "Hide recorded object treemap" : "Show recorded object treemap"}
+              </button>
+            </div>
+            {showTreemap && <div id="lios-graph-recorded-domain-treemap" className="mt-3 space-y-2">
+              {treemapCounts.length > 0 ? <>
+                <div className="h-48 min-w-0 overflow-hidden rounded-lg bg-background/60 sm:h-60">
+                  <GraphTreemapErrorBoundary>
+                    <React.Suspense fallback={<p role="status" className="p-3 font-ui text-xs text-muted-foreground">
+                      Loading recorded object inventory…
+                    </p>}>
+                      <RecordedGraphTreemap counts={treemapCounts}/>
+                    </React.Suspense>
+                  </GraphTreemapErrorBoundary>
+                </div>
+                <ul aria-label="Accessible recorded object counts by inferred domain" className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+                  {treemapCounts.map(({domain,count})=><li key={domain}
+                    className="flex justify-between gap-2 rounded-md border border-border/50 p-2 font-ui text-xs">
+                    <span>{DOMAIN_LABEL[domain]}</span><span className="tabular-nums">{count}</span>
+                  </li>)}
+                </ul>
+              </> : <p role="status" className="font-ui text-xs text-muted-foreground">
+                No recorded objects match the active graph filters.
+              </p>}
+              <p className="font-ui text-xs leading-5 text-muted-foreground">
+                Areas encode object counts, never stored strengths, likelihood, influence or causal magnitude.
+                The accompanying list is the accessible source of exact counts.
+              </p>
+            </div>}
+          </section>
           <details className="rounded-lg border border-border/60 px-3 py-2" data-testid="recorded-cross-domain-bridge-inspector">
             <summary className="min-h-9 cursor-pointer font-ui text-xs font-medium text-foreground focus-visible:outline focus-visible:outline-2 focus-visible:outline-amber-300">
               Inspect cross-domain bridge links ({bridgeRows.length})

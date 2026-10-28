@@ -7,7 +7,7 @@ test("B06 Market Data Fabric exposes retained as-known-on comparison with two re
   for(const key of [
     'b06-market-evidence-time-machine',
     'asKnownDay',
-    'marketCaptureKnownOn(snapshots, upper, asKnownDay)',
+    'useRecordedAsOfSnapshot<PointInTimeMarketSnapshot>',
     'latestMarketCapture(snapshots, upper)',
     'type="date"',
     'Compare recorded versions',
@@ -27,4 +27,11 @@ test("B06 blocks stale issuer revisions, cross-symbol requests and concurrent ol
   assert.match(source,/result\.current\.contentHash !== current\.contentHash/);
   assert.match(source,/credentials: "same-origin", cache: "no-store"/);
   assert.doesNotMatch(source,/fakeHistorical|generateHistorical|Math\.random/);
+});
+
+test("B06 old market snapshots use the indexed saved server as-of route beyond the 25-row list",()=>{
+  assert.match(source,/\/api\/data-snapshots\/markets\/\$\{encodeURIComponent\(upper\)\}\/as-of/);
+  assert.match(source,/day:asKnownDay,revision:current\?\.id/);
+  assert.match(source,/lookup\.status === "loading"/);
+  assert.match(source,/lookup\.status === "unavailable"/);
 });
