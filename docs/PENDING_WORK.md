@@ -6,6 +6,11 @@
 
 ## Active work — public production readiness
 
+### Native macOS beta qualification on landed main — 2026-10-28
+
+- Built ad-hoc-signed `1.0.0-beta.4` from exact main `f0c3d5fb`; the packaged self-test returned `verified` with OS-protected secret custody, workspace recovery, bundled Python 3.13.5 known answers and immutable packaged resources. Actual native journey on an isolated profile (owner created, Project and coordinate-bearing evidence via the real API, Investigation → recorded insight → Geography) showed the P7 source-coordinate projection working end to end but the offline map UNAVAILABLE: the app calls `disableHardwareAcceleration()`, which removes WebGL, so MapLibre could never render natively. Verified `--enable-unsafe-swiftshader` restores software WebGL without enabling the GPU path, then fixed `main.cjs` and rebuilt `1.0.0-beta.5`: with no extra flag the packaged app renders the bundled Natural Earth map, the single pin at the recorded coordinate, keyboard-accessible location list and provenance, with zero external resource requests and no console errors.
+- Scope: this is one actual native journey on one isolated profile (macOS arm64). Not shown: VoiceOver, full-suite native journeys, manual upgrade from a prior installed build, Windows, production signing/P14, or owner release approval. The user's installed Desktop app and data were untouched; test profiles are synthetic.
+
 ### Windows native Core custody source — 2026-10-28
 
 - Added an app-owned `native-runtime-fs` N-API addon (handle-based directory pins and exclusive no-follow file creation on Windows x64), a Windows-safe path/manifest contract (win32-x64 target, `python.exe`, Windows 10 floor, reserved-name and ADS refusal) and the exact verified cp313 Windows Core wheel pins (24 wheels, hashes verified from bytes). macOS behavior is unchanged (typecheck and the 21 native runtime bundle tests pass). NOT qualified: no Windows host was available here, the addon was never compiled, the Windows builder/installer/sandbox image path is not implemented or exercised, and no Windows acceptance is claimed. The next step requires the owner-selected local Windows runner.
