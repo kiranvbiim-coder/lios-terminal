@@ -1,6 +1,6 @@
 import crypto from "node:crypto";
 import { and, eq, isNull } from "drizzle-orm";
-import { z } from "zod";
+import { telegramConnectInputSchema } from "@shared/telegramConnection";
 import {
   channelIngressCursors, projectChats, projects, sourceConnections, userDataConsents,
   type SourceConnection, type User,
@@ -27,22 +27,6 @@ export class TelegramSetupError extends Error {
     this.name = "TelegramSetupError";
   }
 }
-
-const UPDATE_TYPES = ["message", "edited_message", "channel_post", "edited_channel_post"] as const;
-export const telegramConnectInputSchema = z.object({
-  name: z.string().trim().min(1).max(100),
-  // Held only for this request, then moved into the protected vault; never stored in source config or returned.
-  botToken: z.string().regex(/^[0-9]{1,20}:[A-Za-z0-9_-]{1,256}$/),
-  projectId: z.number().int().positive().safe(),
-  chatId: z.number().int().positive().safe(),
-  allowedConversationIds: z.array(z.string().regex(/^-?[1-9][0-9]{0,19}$/)).min(1).max(100),
-  allowedUpdateTypes: z.array(z.enum(UPDATE_TYPES)).min(1).max(UPDATE_TYPES.length).default(["message"]),
-  retentionDays: z.number().int().min(1).max(365).default(30),
-  allowAiTransmission: z.boolean().default(false),
-  // Explicit, versioned data-use consent: Telegram content imported into this Chat, optionally AI-visible per policy.
-  consent: z.literal(true),
-}).strict();
-export type TelegramConnectInput = z.infer<typeof telegramConnectInputSchema>;
 
 export interface TelegramConnectionSummary {
   connectionId: number;

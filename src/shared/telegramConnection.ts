@@ -57,3 +57,20 @@ export function channelMessageExcludedFromAi(metadata: unknown): boolean {
   if (channel === undefined) return false;
   return typeof channel !== "object" || channel === null || (channel as Record<string, unknown>).aiTransmissionAllowed !== true;
 }
+
+export const TELEGRAM_UPDATE_TYPES = ["message", "edited_message", "channel_post", "edited_channel_post"] as const;
+/** Shared by the setup form and server; the server remains the sole authority and re-validates everything. */
+export const telegramConnectInputSchema = z.object({
+  name: z.string().trim().min(1).max(100),
+  // Held only for one request, then moved into the protected vault; never stored in source config or returned.
+  botToken: z.string().regex(/^[0-9]{1,20}:[A-Za-z0-9_-]{1,256}$/),
+  projectId: z.number().int().positive().safe(),
+  chatId: z.number().int().positive().safe(),
+  allowedConversationIds: z.array(conversationId).min(1).max(100),
+  allowedUpdateTypes: z.array(z.enum(TELEGRAM_UPDATE_TYPES)).min(1).max(TELEGRAM_UPDATE_TYPES.length).default(["message"]),
+  retentionDays: z.number().int().min(1).max(365).default(30),
+  allowAiTransmission: z.boolean().default(false),
+  // Explicit, versioned data-use consent: Telegram content imported into this Chat, optionally AI-visible per policy.
+  consent: z.literal(true),
+}).strict();
+export type TelegramConnectInput = z.infer<typeof telegramConnectInputSchema>;

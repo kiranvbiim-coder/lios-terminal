@@ -9,7 +9,7 @@
   "controlledForkCount": 10,
   "sourceSnapshot": {
     "baselineSha": "ad77f2d53189a7d98583e9d9996d532b79e4686d",
-    "componentsSha": "5cc1317c3e63931e863fb750c5f902f0052b4004",
+    "componentsSha": "7d534f5aad73431e87b3a9d3e0d32ed04662accd",
     "upstreamPinsSha": "bfafe1ddf251fb05fd99b75864a3d4436a7550cb",
     "controlledForkSha": "142ff14c5e6b5d6804b20a346d5e31435db2f33b"
   },
@@ -2211,6 +2211,8 @@
         "server/telegramPollNormalizer.ts",
         "server/telegramPollingController.ts",
         "server/telegramPollingRuntime.ts",
+        "server/telegramConnectionSetup.ts",
+        "server/telegramConnectionRoutes.ts",
         "server/exec/bounded-buffer.test.ts",
         "server/exec/utf8-truncate.test.ts",
         "server/exec/pipe-output.test.ts",

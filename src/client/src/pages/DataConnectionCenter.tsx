@@ -25,6 +25,7 @@ import LicenseSettings from "@/components/settings/LicenseSettings";
 import BackupSettings from "@/components/settings/BackupSettings";
 import DevicesSettings from "@/components/settings/DevicesSettings";
 import DataFolderSettings from "@/components/settings/DataFolderSettings";
+import TelegramConnectionPanel from "@/components/connections/TelegramConnectionPanel";
 
 // ── Types ──────────────────────────────────────────────────────────────────
 
@@ -1701,6 +1702,8 @@ export default function DataConnectionCenter({ session, onComplete, onLogout, em
           </button>
         </div>
         {advancedOpen && <div id="advanced-connection-tools" className="space-y-4">
+
+        <TelegramConnectionPanel />
 
         <section className="border border-border bg-[#070707] p-3" aria-label="Advanced source registry" data-testid="connection-advanced-source-registry">
         <DataSourcesPanel

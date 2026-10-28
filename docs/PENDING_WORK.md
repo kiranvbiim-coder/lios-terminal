@@ -85,6 +85,9 @@
 
 **Home polling lifecycle progress (P2.01/P2.05 partial):** attempt-fenced, joined-stop polling controller wired into existing Home start/shutdown, inert unless an enabled source exists; typed terminal authority/credential/conflict refusals, capped backoff, pacing floor and non-evadable crash-loop ceiling. Five behaviors/typecheck and an actual Home boot/SIGTERM smoke passed. Health/diagnostic UI, packaged-restart, crash-loop recovery policy beyond exhaustion, provider operation and native proof remain open; P2 checkboxes unchanged.
 
+**Telegram setup surface progress (P4.02 partial):** owner-scoped `GET/POST/DELETE /api/setup/telegram-connections` (route manifest updated, no anonymous route) plus a `TelegramConnectionPanel` in the existing Connections advanced area. Connect requires explicit consent, an owned active Project Chat and non-empty chat-ID allow-list; AI inclusion is opt-in and outbound is hard-off; the bot token goes only into the protected vault (refused without the OS-protected/configured secret or, in organization mode, an organization account). Disconnect disables polling, revokes consent and deletes the token while retaining replay custody/imported Chat content. Generic source-connection list/test/fetch/discover/edit/delete paths now exclude channel sources. 24+7 directly relevant server/client behaviors and typecheck passed; actual scratch-Home real-Chromium journey (sign in → Connections → connect with validation gate → card → confirm disconnect → owner API state) passed and neither vault file nor server log contained the synthetic token. Source/desktop-browser proof only: no installed-app, accessibility-audit, narrow-viewport, native-secret-storage or live-provider acceptance; retention is policy-only, failure/health detail UI and Chat-originated discovery remain open.
+
+
 
 
 
