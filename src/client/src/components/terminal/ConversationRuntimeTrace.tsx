@@ -27,6 +27,7 @@ import { presentRuntimeError } from "@/lib/runtimeErrorKit";
 import { reviewEvidenceExceptions, sourceExceptionCaveats } from "@/lib/evidenceExceptions";
 import { followUpPrompts, formatDuration, summarizeRuntimeTrace } from "@/lib/runtimeTraceSummary";
 import { inspectAgentReceiptActivity } from "@/lib/agentReceiptActivity";
+import { inspectRecordedActionRecovery } from "@/lib/recordedActionRecovery";
 import { projectRecordedAgentSteps, RECORDED_AGENT_STEP_LABELS } from "@/lib/recordedAgentStepTruth";
 import { reviewChatArtifactSave, chatArtifactSaveAcknowledgmentKey } from "@/lib/chatArtifactSaveReview";
 import type { ChatArtifactSaveTarget, ChatArtifactSaveOutcome } from "@/lib/chatArtifactSaveReview";
@@ -59,6 +60,10 @@ interface Props {
   onMutationCancel: (action: ConversationActionName) => void;
   onKeepArtifact?: (artifact: ConversationArtifactDraft, target: ChatArtifactSaveTarget) => Promise<ChatArtifactSaveOutcome>;
   artifactSaveTarget?: ChatArtifactSaveTarget;
+  /** Navigate to an exact recorded P4 version; P4 rechecks rights independently. */
+  onOpenSavedArtifact?: (artifactId: string, version: number, projectId: number | null, requestId: string) => void;
+  /** Opens existing inactive P9 review; never activates a workflow. */
+  onPrepareAutomation?: () => void;
   onInspectRun?: () => void;
   onRecoveryAction?: (action: string) => void;
   /** Prefills the composer with a suggested next request; never sends it. */
@@ -164,6 +169,8 @@ export default function ConversationRuntimeTrace({
   onMutationCancel,
   onKeepArtifact,
   artifactSaveTarget,
+  onOpenSavedArtifact,
+  onPrepareAutomation,
   onInspectRun,
   onRecoveryAction,
   onFollowUp,
@@ -204,6 +211,7 @@ export default function ConversationRuntimeTrace({
   const observedReceipt = [...events].reverse().find(event => event.type === "receipt");
   const recordedSources = collectCitationSources(events);
   const activity = inspectAgentReceiptActivity(events, requestId);
+  const recovery = inspectRecordedActionRecovery(events, requestId);
   // Quiet by default: ordinary runs show only Working + Stop. Technical execution detail is progressive
   // disclosure; approvals, errors, data gaps, source caveats and review-required items are never hidden.
   const workVisible = showWork;
@@ -482,6 +490,33 @@ export default function ConversationRuntimeTrace({
         </div>
       )}
 
+      {done?.type === "done" && done.status === "completed" && recovery.needsReconciliation && (
+        <section role="alert" aria-label="Recorded action reconciliation" data-testid="c08-recorded-action-recovery"
+          className="mb-2 space-y-2 rounded-lg border border-amber-300/30 p-3 font-ui text-sm text-amber-100">
+          <p className="font-semibold text-foreground">Some individual actions need reconciliation</p>
+          <p className="text-xs leading-5">
+            {recovery.failedToolReports} failed, {recovery.deniedToolReports} denied,
+            {recovery.skippedToolReports} skipped, {recovery.unconfirmedToolReports} unconfirmed,
+            {recovery.unfinishedToolStarts} unfinished tool starts,
+            {recovery.failedReceipts} failed receipts, {recovery.cancelledReceipts} cancelled receipts
+            and {recovery.ignoredForeignReceipts} mismatched receipts.
+            Overall run completion does not override these recorded individual outcomes.
+          </p>
+          <p className="text-xs leading-5">An external side effect might still have occurred. Inspect the original Home history and external target before another request. No tool is replayed or approved here.</p>
+          {onInspectRun
+            ? <button type="button" data-testid="c08-review-recorded-actions" onClick={onInspectRun}
+                className="min-h-11 rounded-lg border border-amber-300/40 px-3 py-2 text-sm font-medium focus-visible:ring-2 focus-visible:ring-amber-300/70">
+                Inspect original run history
+              </button>
+            : canShowWork
+              ? <button type="button" data-testid="c08-review-recorded-actions" onClick={() => setShowWork(true)}
+                  className="min-h-11 rounded-lg border border-amber-300/40 px-3 py-2 text-sm font-medium focus-visible:ring-2 focus-visible:ring-amber-300/70">
+                  Inspect recorded work
+                </button>
+              : <p className="text-xs">No local history is available; verify the original run before retrying.</p>}
+        </section>
+      )}
+
       {caveats && (
         <div className="mb-2 rounded-lg border border-amber-300/20 bg-amber-300/[0.025] px-3 py-2.5" role="note" data-testid="trace-source-caveats">
           <div className="font-ui text-[13px] font-semibold text-foreground">Source limitations</div>
@@ -610,6 +645,36 @@ export default function ConversationRuntimeTrace({
             ? "This run did not complete. Inspect its partial work and receipts before deciding whether to retry."
             : "This run was stopped before it finished. Any partial answer above may be incomplete."}
         </div>
+      )}
+
+      {artifact?.type === "artifact" && artifact.persistedArtifact && onOpenSavedArtifact &&
+        /^artifact:[0-9a-f-]{36}$/i.test(artifact.persistedArtifact.id) &&
+        Number.isSafeInteger(artifact.persistedArtifact.version) && artifact.persistedArtifact.version > 0 && (
+        <section data-testid="c06-open-recorded-artifact" className="mb-2 flex flex-wrap items-center gap-3 rounded-lg border border-fuchsia-300/20 px-3 py-2.5">
+          <div className="min-w-0 flex-1">
+            <p className="break-words font-ui text-sm font-semibold">{artifact.artifact.title}</p>
+            <p className="text-xs text-muted-foreground">
+              Saved exact v{artifact.persistedArtifact.version} · P4 rechecks current permissions on open. This is not an execution receipt.
+            </p>
+          </div>
+          <button type="button" data-testid="c06-open-exact-saved-version"
+            onClick={() => onOpenSavedArtifact(artifact.persistedArtifact!.id, artifact.persistedArtifact!.version, artifact.artifact.projectId, artifact.requestId)}
+            className="min-h-11 rounded-lg border border-fuchsia-300/40 px-3 text-sm focus-visible:ring-2 focus-visible:ring-amber-300/70">
+            Open saved v{artifact.persistedArtifact.version}
+          </button>
+        </section>
+      )}
+
+      {!busy && done?.type === "done" && done.status === "completed" && onPrepareAutomation && (
+        <section data-testid="c07-chat-automation-draft" className="mb-2 flex flex-wrap items-center justify-between gap-3 rounded-lg border border-border/55 p-3">
+          <p className="text-xs text-muted-foreground">
+            Prepare a paused automation from this exact completed Project run. P9 must separately review activation.
+          </p>
+          <button type="button" onClick={onPrepareAutomation}
+            className="min-h-11 rounded-lg border border-amber-300/35 px-3 text-sm focus-visible:ring-2 focus-visible:ring-amber-300/70">
+            Prepare automation draft
+          </button>
+        </section>
       )}
 
       {visualAnswerRequest && <GovernedVisualAnswer
