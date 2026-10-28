@@ -48,7 +48,7 @@ test("C06 delayed confirmation cannot cross a Project, Chat or newer run boundar
 
 test("C06 chat-scoped saved version stays chat-scoped and never becomes a Project pointer", () => {
   const quick = {
-    ...savedEvent, artifact: { ...savedEvent.artifact, projectId: null },
+    ...savedEvent, artifact: { projectId: null, title: "Recorded evidence", artifactType: "research_brief" },
   };
   const result = exactRuntimeSavedArtifact(quick, { requestId: REQUEST, projectId: null, chatId: 10 });
   assert.equal(result?.projectId, null);
