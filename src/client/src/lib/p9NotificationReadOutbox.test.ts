@@ -130,6 +130,22 @@ test("SI-06.22 server authorization failure leaves receipt queued and stops furt
   });
 });
 
+test("a deleted notification stays unconfirmed without blocking an independent read intent", async () => {
+  await inBrowser(async () => {
+    queueNotificationRead(8, NOTIFICATION);
+    queueNotificationRead(8, SECOND);
+    const visited: string[] = [];
+    const result = await replayNotificationReads(async url => {
+      if (url === "/api/auth/me") return new Response(JSON.stringify({ authState: session() }));
+      visited.push(url);
+      return new Response("{}", { status: url.includes(encodeURIComponent(NOTIFICATION)) ? 404 : 200 });
+    });
+    assert.deepEqual(result, { confirmed: 1, remaining: 1, blocked: true });
+    assert.equal(visited.length, 2);
+    assert.equal(pendingNotificationReadCount(), 1);
+  });
+});
+
 test("SI-06.22 corrupted, expired or malformed local intents are ignored", async () => {
   await inBrowser(async ({ items }) => {
     const stale = Date.now() - 8 * 24 * 60 * 60 * 1000;

@@ -12,6 +12,7 @@ import type {
   ArtifactModelMaintenanceApplyRequest, ArtifactModelMaintenanceReview, ArtifactModelMaintenanceResult,
 } from "@shared/artifactModelMaintenance";
 import { apiRequest, queryClient } from "./queryClient";
+import { governedVisualAnswerRequestSchema, governedVisualProjectionSchema, type GovernedVisualAnswerRequest } from "@shared/governedVisualAnswer";
 
 export interface ProjectArtifactRecord {
   id: string; projectId: number | null; owningChatId?: number | null; ownerUserId: number; organizationId: number | null;
@@ -132,6 +133,26 @@ export function useArtifact(artifactId: string | null, version?: number | null, 
     // Permission and version are rechecked by the authenticated GET.
   });
 }
+
+/** One canonical saved-owner query, with fresh current source admission on every opening. */
+export function useConversationVisual(request:GovernedVisualAnswerRequest) {
+  return useQuery({
+    queryKey:["/api/project-chats",request.chatId,"visual",request],
+    staleTime:0,refetchOnMount:"always",
+    queryFn:async({signal})=>{
+      const response=await fetch(`/api/project-chats/${request.chatId}/visual`,{
+        method:"POST",signal,credentials:"same-origin",cache:"no-store",headers:{"Content-Type":"application/json"},
+        body:JSON.stringify(request),
+      });
+      if(!response.ok)throw new Error("Current saved visual/source admission failed.");
+      const raw=await response.json();
+      const returned=governedVisualAnswerRequestSchema.parse(raw.request);
+      if(JSON.stringify(returned)!==JSON.stringify(governedVisualAnswerRequestSchema.parse(request)))
+        throw new Error("Saved visual identity changed.");
+      return {request:returned,projection:governedVisualProjectionSchema.parse(raw.projection)};
+    },
+  });
+}
 export function useArtifactVersions(artifactId: string | null) {
   return useQuery<ProjectArtifactVersionRecord[]>({
     queryKey: ["/api/artifacts", artifactId, "versions"],
@@ -157,6 +178,7 @@ export function useInvalidateArtifacts() {
   const qc = useQueryClient();
   return useCallback((projectId?: number | null, artifactId?: string | null) => {
     qc.invalidateQueries({ queryKey: ["/api/artifacts"] });
+    qc.invalidateQueries({queryKey:["/api/project-chats"],predicate:query=>query.queryKey[2]==="visual"});
     qc.invalidateQueries({ queryKey: ["/api/chats"] });
     if (projectId) {
       qc.invalidateQueries({ queryKey: ["/api/projects", projectId, "artifacts"] });

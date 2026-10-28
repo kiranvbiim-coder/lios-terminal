@@ -1,4 +1,5 @@
 import { terminalArtifactTool } from "./terminalArtifactTool";
+import { governedVisualAnswerTool, governedVisualToolResultSchema } from "./governedVisualAnswer";
 import { z } from "zod";
 import { bindConversationExecutionSignal, linkAbortSignal } from "./exec/execution-scope";
 import { deadlineSignal } from "./deadlineSignal";
@@ -1144,6 +1145,7 @@ function registerBuiltinConversationTools(): void {
   registerConversationTool(saveResearchComparisonTool);
   registerConversationTool(researchReportFromArtifactTool);
   registerConversationTool(artifactInspectTool);
+  registerConversationTool(governedVisualAnswerTool);
   registerConversationTool(artifactMaintenanceTool);
   registerConversationTool(terminalArtifactTool);
   registerConversationTool(webResearchArtifactTool);
@@ -4879,6 +4881,10 @@ async function executeAgentLoop(
           result.summary = "Recorded a bounded connected-source preview. Private observations require a current rights check before AI review; after restart inspect this source again.";
         }
         if (step.toolId === "lios.memory.inspect") ownerMemoryInspection.text = JSON.stringify(result.output);
+        if (step.toolId === governedVisualAnswerTool.id) {
+          const visual = governedVisualToolResultSchema.parse(result).output.visual;
+          await emit(input,{...eventBase(request.requestId),type:"visual",stepId:step.id,visual});
+        }
         const publishesArtifact = step.toolId === terminalArtifactTool.id
           || step.toolId === "lios.research.save_comparison" || step.toolId === "lios.research.to_report";
         if (publishesArtifact && result.output && typeof result.output === "object") {

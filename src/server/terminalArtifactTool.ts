@@ -21,6 +21,10 @@ import { economicSnapshotContentHash } from "./economicDatasetStore";
 import { factorRiskSnapshotContentHash, buildFactorAttributionInput, validateDecomposeWeights, factorRiskDecomposeRequestSchema, type FactorRiskSnapshot } from "./factorRiskModel";
 import { stableSnapshotHash } from "./pointInTimeDatasetStore";
 
+export class TerminalSourceAccessError extends Error {
+  constructor(public readonly status: 403 | 404 | 409, message: string) { super(message); }
+}
+
 /** Explicit adapter for the ORIGINAL captured factor estimator, not the Python factor optimizer. */
 async function admitOriginalFactorSources(ctx: TenantContext, provenance: ResolvedAdvancedQuantInputProvenance, parameters: Record<string, unknown>, db: Pick<DrizzleDb, "select">, lock: boolean, requiredUses: readonly string[]): Promise<string[]> {
   const binding = provenance.sourceBindings?.[0];
@@ -35,25 +39,27 @@ async function admitOriginalFactorSources(ctx: TenantContext, provenance: Resolv
     const query = db.select().from(datasetSnapshots).where(eq(datasetSnapshots.id, id));
     const [row] = await (lock ? query.for("share") : query).limit(1);
     const now = new Date();
-    if (!row || row.organizationId !== ctx.organizationId || !canAccessDatasetSnapshot(row, ctx)
-      || row.contentHash !== expectedHash || row.provider !== provider || row.availableAt > now
-      || row.expiresAt !== null && row.expiresAt <= now) throw new Error("Factor source snapshot is unavailable, expired, hash-mismatched or outside the current tenant.");
+    if (!row || row.organizationId !== ctx.organizationId || !canAccessDatasetSnapshot(row, ctx))
+      throw new TerminalSourceAccessError(404, "Factor source snapshot is unavailable in the current tenant.");
+    if (row.contentHash !== expectedHash || row.provider !== provider || row.availableAt > now ||
+        row.expiresAt !== null && row.expiresAt <= now)
+      throw new TerminalSourceAccessError(409, "Factor source snapshot is expired, unavailable or hash-mismatched.");
     const policy = row.entitlementPolicyId ? await getEntitlementPolicyById(row.entitlementPolicyId, db, lock) : null;
     if (!policy || policy.licenseType === "unknown" || policy.provider !== row.provider || policy.dataClass !== row.dataClass
       || policy.effectiveFrom > now || policy.effectiveTo !== null && policy.effectiveTo <= now
       || policy.accessScope === "internal_only" && !ctx.role.startsWith("internal_")
-      || !requiredUses.every(use => policy.permittedUses.includes(use))) throw new Error(`Factor source ${id} requires a current authoritative entitlement policy permitting ${requiredUses.join(", ")}; cache availability is not a licence.`);
+      || !requiredUses.every(use => policy.permittedUses.includes(use))) throw new TerminalSourceAccessError(403, `Factor source ${id} requires a current authoritative entitlement policy permitting ${requiredUses.join(", ")}; cache availability is not a licence.`);
     refs.push(`dataset-snapshot:${row.id}`, `dataset-content-sha256:${row.contentHash}`, `entitlement-policy:${policy.id}`);
     return row;
   };
   const source = await load(binding.snapshot.id, binding.snapshot.contentHash, binding.provider);
-  if (source.dataClass !== "factor_risk" || source.createdByUserId !== ctx.userId) throw new Error("Captured factor model must belong to the current author.");
+  if (source.dataClass !== "factor_risk" || source.createdByUserId !== ctx.userId) throw new TerminalSourceAccessError(404, "Captured factor model must belong to the current author.");
   const snapshot = source.payload as unknown as FactorRiskSnapshot;
   if (snapshot.snapshotId !== source.id || snapshot.contentHash !== source.contentHash
     || source.id !== `factor-risk-${source.contentHash.slice(0, 24)}`
     || snapshot.request.scope !== (ctx.organizationId === null ? "local" : `organization:${ctx.organizationId}`)
     || binding.asOf !== `${snapshot.request.asOf}T00:00:00.000Z` || binding.retrievedAt !== snapshot.capturedAt
-    || factorRiskSnapshotContentHash(snapshot) !== source.contentHash) throw new Error("Captured factor model does not match its original immutable content identity.");
+    || factorRiskSnapshotContentHash(snapshot) !== source.contentHash) throw new TerminalSourceAccessError(409, "Captured factor model does not match its original immutable content identity.");
   const request = { snapshotId: source.id, portfolioWeights: parameters.portfolioWeights, benchmarkWeights: parameters.benchmarkWeights, scenario: parameters.scenario };
   const parsed = factorRiskDecomposeRequestSchema.parse(request);
   const securityIds = snapshot.securities.map(security => security.securityId);
@@ -76,12 +82,12 @@ async function admitOriginalFactorSources(ctx: TenantContext, provenance: Resolv
       if (upstream.transformations.length || upstream.snapshot.id === source.id) throw new Error("Factor upstream dependency requires an admitted untransformed immutable source, not another model or self-reference.");
       const row = await load(upstream.snapshot.id, upstream.snapshot.contentHash, upstream.provider);
       if (upstream.sourceReference !== `dataset-snapshot:${row.id}` || upstream.retrievedAt !== row.retrievedAt.toISOString()
-        || row.availableAt.getTime() > Date.parse(snapshot.capturedAt)) throw new Error("Factor upstream reference/timing does not match the immutable source available to the original capture.");
+        || row.availableAt.getTime() > Date.parse(snapshot.capturedAt)) throw new TerminalSourceAccessError(409, "Factor upstream reference/timing does not match the immutable source available to the original capture.");
       if (row.dataClass === "factor_risk") throw new Error("Factor upstream dependency cannot substitute another derived factor capture.");
       const expected = row.dataClass === "economic_series" || row.dataClass === "yield_curve"
         ? economicSnapshotContentHash(row.payload, row.lineage)
         : hashLedgerValue({ payload: row.payload, provider: row.provider, lineage: row.lineage });
-      if (expected !== row.contentHash) throw new Error("Factor upstream source does not match its immutable content hash.");
+      if (expected !== row.contentHash) throw new TerminalSourceAccessError(409, "Factor upstream source does not match its immutable content hash.");
     }
   }
   return [...new Set(refs)];

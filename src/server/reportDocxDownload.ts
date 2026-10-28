@@ -47,10 +47,8 @@ export async function prepareReportDocxDownload(
   if (expected !== artifact.headVersion) {
     throw new Error("Report revision changed; reopen its current revision before downloading Word.");
   }
-  const [plan, saved] = await Promise.all([
-    getArtifactExportPlan(ctx, artifactId, expected),
-    getArtifactVersion(ctx, artifactId, expected),
-  ]);
+  const plan = await getArtifactExportPlan(ctx, artifactId, expected);
+  const saved = await getArtifactVersion(ctx, artifactId, expected);
   if (plan.artifactId !== artifact.id || plan.version !== saved.version
     || plan.contentHash !== saved.contentHash || plan.kind !== "report"
     || !plan.formats.includes("docx")) {
@@ -80,6 +78,7 @@ export async function prepareReportDocxDownload(
   if ((await getArtifact(ctx, artifactId)).headVersion !== expected) {
     throw new Error("Report changed while generating Word; reopen and export again.");
   }
+  await getArtifactExportPlan(ctx, artifactId, expected);
   return {
     filename: generated.filename,
     bytes: generated.bytes,

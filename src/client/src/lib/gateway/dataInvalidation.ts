@@ -18,8 +18,8 @@ export function invalidateTopics(queryClient: QueryClient, topics: readonly Gate
     if (topic === "quantlab") continue; // Quant Lab keeps its own local state and subscribes to the event directly.
     if (topic === "notifications") {
       void queryClient.invalidateQueries({
-        predicate: ({ queryKey }) => queryKey[0] === "/api/projects"
-          && queryKey[2] === "automation" && queryKey[3] === "notifications",
+        predicate: ({ queryKey }) => queryKey[0] === "/api/automation/notifications" || (queryKey[0] === "/api/projects"
+          && queryKey[2] === "automation" && queryKey[3] === "notifications"),
       });
       continue;
     }

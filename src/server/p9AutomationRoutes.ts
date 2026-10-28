@@ -10,6 +10,7 @@ import {
   findP9ManualRunReceipt,
   getP9Workflow,
   listP9Notifications,
+  listOwnedP9Notifications,
   listP9Runs,
   listP9Workflows,
   markP9NotificationRead,
@@ -64,6 +65,12 @@ const savedConversationRequestSchema = conversationRequestSchema.omit({
 });
 
 export function registerP9AutomationRoutes(app: Express): void {
+  app.get("/api/automation/notifications", requireAuth, async (req, res) => {
+    try {
+      res.setHeader("Cache-Control", "no-store");
+      res.json(await listOwnedP9Notifications(ctx(req), z.coerce.number().int().min(1).max(500).parse(req.query.limit ?? 100)));
+    } catch (error) { fail(res, error); }
+  });
   app.use("/api/projects/:projectId/automation", requireAuth);
 
   app.get("/api/projects/:projectId/automation/runtime", async (req, res) => {

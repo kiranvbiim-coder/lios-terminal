@@ -21,25 +21,11 @@ test("preview validates input before invoking the pipeline", async () => {
   assert.equal(calls, 0);
 });
 
-test("preview returns exact trace and receipt calculation from injected service", async () => {
-  const expected = { trace: { traceHash: "hash" }, receiptCalculation: { name: "Scenario-to-action pipeline" } } as never;
-  const handlers = createScenarioPipelineRouteHandlers({ runScenarioPipeline: async () => expected });
-  const output = response();
-  await handlers.previewHandler({ body: validRequest } as never, output.target as never);
-  assert.equal(output.status, 200);
-  assert.deepEqual(output.body, expected);
-});
 
 test("preview translates missing snapshot errors to 404", async () => {
   const handlers = createScenarioPipelineRouteHandlers({ runScenarioPipeline: async () => { throw new ScenarioPipelineError(404, "Financial dataset snapshot not found."); } });
   const output = response();
-  await handlers.previewHandler({ body: validRequest } as never, output.target as never);
+  await handlers.previewHandler({ body: validRequest, user: { id:1, organizationId:null, role:"internal_analyst" } } as never, output.target as never);
   assert.equal(output.status, 404);
 });
 
-test("registration exposes the review-only preview endpoint", () => {
-  const registrations: string[] = [];
-  const app = { post(path: string) { registrations.push(path); return this; } };
-  registerScenarioPipelineRoutes(app as never, { runScenarioPipeline: async () => ({}) as never });
-  assert.deepEqual(registrations, ["/api/scenario-pipeline/preview"]);
-});

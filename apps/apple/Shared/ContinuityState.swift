@@ -1,7 +1,7 @@
 import Foundation
 
 /// One observed run, never a replayable start request. Set before sending start.
-struct RunCursor {
+struct RunCursor: Codable {
     private(set) var requestId: String?
     private(set) var sequence = -1
     mutating func begin(_ id: String) { requestId = id; sequence = -1 }
@@ -15,6 +15,26 @@ struct RunCursor {
     }
     mutating func subscribed(_ id: String, status: String) {
         if requestId == id && status == "finished" { clear() }
+    }
+}
+
+/// Identifier-only observation checkpoint. It can reattach, never replay a start/write.
+struct RunObservation: Codable {
+    let home: HomeConfiguration
+    let deviceId: String
+    let homeId: String
+    let userId: Int
+    let projectId: Int
+    let chatId: Int
+    let cursor: RunCursor
+    func validate() throws {
+        let normalized = try HomeConfiguration.validated(address: home.address, fingerprint: home.fingerprint)
+        guard normalized == home, UUID(uuidString: homeId) != nil, userId > 0, projectId > 0, chatId > 0,
+              deviceId.count == 32, deviceId.allSatisfy({ $0.isASCII && $0.isHexDigit }), cursor.sequence >= -1,
+              cursor.sequence <= 9_007_199_254_740_991,
+              cursor.requestId == nil || UUID(uuidString: cursor.requestId!) != nil else {
+            throw ClientFailure(message: "Invalid saved run observation.")
+        }
     }
 }
 

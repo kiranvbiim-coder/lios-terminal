@@ -1,7 +1,9 @@
 import { createHash } from "node:crypto";
-import { getFundamentals, getOHLCV, type OHLCVBar } from "./marketData";
+import { getFundamentals, getOHLCVWithProvenance, type OHLCVBar } from "./marketData";
 import { createFactorRiskSnapshotStore, type FactorRiskSnapshotStore } from "./factorRiskSnapshotStore";
 import { getRequestIdentity } from "./requestContext";
+import { captureFactorInput, assertCurrentFactorActor, assertFactorCaptureInputsCurrent, FactorRiskAccessError } from "./factorRiskInputCapture";
+import { resolveMarketDataScope } from "./marketDataScope";
 import { buildFactorExposures, type SecurityRawInputs } from "../shared/factorExposureModel";
 import { estimateFactorReturns, type FactorReturnEstimationResult, type PeriodReturns } from "../shared/factorReturnEstimation";
 import { calculateFactorAttribution, type FactorAttributionResult, type FactorDefinition, type FactorScenario, type SecurityFactorExposure } from "../shared/factorAttribution";
@@ -128,7 +130,7 @@ export class FactorRiskSnapshotNotFoundError extends Error {
 const CACHE_TTL_MS = 5 * 60 * 1000;
 const MAX_CACHE_ENTRIES = 32;
 const MAX_CONCURRENT_PROVIDER_REQUESTS = 8;
-const cache = new Map<string, { snapshot: FactorRiskSnapshot; expiresAt: number }>();
+const cache = new Map<string, { snapshot: FactorRiskSnapshot; expiresAt: number; ownerUserId: number | null }>();
 let snapshotStore: FactorRiskSnapshotStore = createFactorRiskSnapshotStore();
 
 /** Replace the durable store for isolated tests or an embedded data directory. */
@@ -276,44 +278,58 @@ function ensureExactWeights(weights: Readonly<Record<string, number>>, securityI
   if (issues.length) throw new FactorRiskValidationError(issues);
 }
 
-function cacheSnapshot(key: string, snapshot: FactorRiskSnapshot): Promise<void> {
+async function cacheSnapshot(key: string, snapshot: FactorRiskSnapshot): Promise<void> {
   const expiresAt = Date.now() + CACHE_TTL_MS;
-  cache.set(key, { snapshot: clone(snapshot), expiresAt });
+  await snapshotStore.save(snapshot as unknown as Record<string, unknown>, key, expiresAt);
+  cache.set(key, { snapshot: clone(snapshot), expiresAt, ownerUserId: getRequestIdentity()?.userId ?? null });
   while (cache.size > MAX_CACHE_ENTRIES) {
     const oldest = cache.keys().next().value as string | undefined;
     if (oldest) cache.delete(oldest); else break;
   }
-  return snapshotStore.save(snapshot as unknown as Record<string, unknown>, key, expiresAt);
 }
 function cacheSnapshotWithoutPersistence(key: string, snapshot: FactorRiskSnapshot, expiresAt: number): void {
-  cache.set(key, { snapshot: clone(snapshot), expiresAt });
+  cache.set(key, { snapshot: clone(snapshot), expiresAt, ownerUserId: getRequestIdentity()?.userId ?? null });
   while (cache.size > MAX_CACHE_ENTRIES) {
     const oldest = cache.keys().next().value as string | undefined;
     if (oldest) cache.delete(oldest); else break;
   }
 }
 export async function captureFactorRiskSnapshot(request: FactorRiskCaptureRequest): Promise<FactorRiskCaptureResult> {
+  await assertCurrentFactorActor();
   const normalized = normalizeRequest(request);
-  const requestHash = hash(normalized);
+  const requestHash = hash({ request: normalized, ownerUserId: getRequestIdentity()?.userId ?? null, providerScope: resolveMarketDataScope().key });
   const cached = cache.get(requestHash);
   if (cached) {
-    if (cached.expiresAt > Date.now()) return { snapshot: clone(cached.snapshot), cache: "hit" };
+    if (cached.expiresAt > Date.now()) {
+      await assertFactorCaptureInputsCurrent(cached.snapshot);
+      return { snapshot: clone(cached.snapshot), cache: "hit" };
+    }
     cache.delete(requestHash);
   }
   const persisted = await snapshotStore.getByRequestKey(requestHash);
   if (persisted) {
     const snapshot = persisted.snapshot as unknown as FactorRiskSnapshot;
+    await assertFactorCaptureInputsCurrent(snapshot);
     cacheSnapshotWithoutPersistence(requestHash, snapshot, persisted.expiresAt);
     return { snapshot: clone(snapshot), cache: "hit" };
   }
   const retrievalStartedAt = new Date().toISOString();
   let benchmarkBars: OHLCVBar[];
+  let benchmarkBinding: QuantInputSourceBinding | null = null;
+  let benchmarkProvider = "unknown";
   try {
-    benchmarkBars = await getOHLCV(normalized.benchmarkSymbol, normalized.range, "1d");
+    const capture = await getOHLCVWithProvenance(normalized.benchmarkSymbol, normalized.range, "1d");
+    benchmarkBars = capture.bars;
+    benchmarkProvider = capture.provenance.providerIds.length === 1 ? capture.provenance.providerIds[0] : "unknown";
+    benchmarkBinding = await captureFactorInput({ field:"ohlcv",symbol:normalized.benchmarkSymbol,provider:benchmarkProvider,
+      payload:{bars:benchmarkBars},asOf:normalized.asOf,retrievedAt:new Date().toISOString(),sourceRefs:capture.provenance.sourceRefs });
   } catch (error) {
+    if (error instanceof FactorRiskAccessError) throw error;
     throw new FactorRiskValidationError([`benchmark ${normalized.benchmarkSymbol} could not be retrieved: ${error instanceof Error ? error.message : "provider error"}`]);
   }
   const benchmarkSource = sourceMetadata(normalized.benchmarkSymbol, normalized, new Date().toISOString(), benchmarkBars.length, undefined, benchmarkBars.length ? "available" : "unavailable");
+  benchmarkSource.provider = benchmarkProvider;
+  if (benchmarkBinding) benchmarkSource.sourceBindings = [benchmarkBinding];
   if (!benchmarkBars.length) throw new FactorRiskValidationError([`benchmark ${normalized.benchmarkSymbol} returned no OHLCV data; supply a benchmark symbol with available history`]);
   const benchmarkMonthly = monthlyReturns(benchmarkBars, normalized.asOf);
   if (benchmarkMonthly.length < 12) throw new FactorRiskValidationError([`benchmark ${normalized.benchmarkSymbol} has fewer than 12 monthly returns in the requested history`]);
@@ -321,12 +337,19 @@ export async function captureFactorRiskSnapshot(request: FactorRiskCaptureReques
   const fetched = await mapWithConcurrency(normalized.symbols, async (symbol) => {
     const retrievedAt = new Date().toISOString();
     try {
-      const [bars, fundamentals] = await Promise.all([getOHLCV(symbol, normalized.range, "1d"), getFundamentals(symbol)]);
+      const [history, fundamentals] = await Promise.all([getOHLCVWithProvenance(symbol, normalized.range, "1d"), getFundamentals(symbol)]);
+      const bars = history.bars;
       const source = sourceMetadata(symbol, normalized, retrievedAt, bars.length, fundamentals !== null, bars.length ? "available" : "unavailable", fundamentals ? "marketData provider/cache" : "marketData provider/cache; fundamentals unavailable");
+      source.provider = history.provenance.providerIds.length === 1 ? history.provenance.providerIds[0] : "unknown";
       if (!bars.length) return { symbol, source, raw: null as SecurityRawInputs | null, returns: [] as MonthlyReturnPoint[], reason: "OHLCV provider returned no history" };
       if (!fundamentals) return { symbol, source, raw: null, returns: [], reason: "fundamentals provider returned no data" };
       const sector = fundamentals.sector?.trim();
       if (!sector) return { symbol, source, raw: null, returns: [], reason: "fundamentals did not provide a sector classification" };
+      const bindings = await Promise.all([
+        captureFactorInput({field:"ohlcv",symbol,provider:source.provider,payload:{bars},asOf:normalized.asOf,retrievedAt,sourceRefs:history.provenance.sourceRefs}),
+        captureFactorInput({field:"fundamentals",symbol,provider:"yahoo_finance",payload:{fundamentals},asOf:normalized.asOf,retrievedAt,sourceRefs:[`yahoo_finance:fundamentals:${symbol}`]}),
+      ]);
+      source.sourceBindings = bindings.filter((binding): binding is QuantInputSourceBinding => binding !== null);
       const benchmarkPeriods = new Map(benchmarkMonthly.map((point) => [point.periodEnd.slice(0, 7), point.periodEnd]));
       const returns = monthlyReturns(bars, normalized.asOf)
         .filter((point) => benchmarkPeriods.has(point.periodEnd.slice(0, 7)))
@@ -338,6 +361,7 @@ export async function captureFactorRiskSnapshot(request: FactorRiskCaptureReques
       };
       return { symbol, source, raw, returns, reason: null as string | null };
     } catch (error) {
+      if (error instanceof FactorRiskAccessError) throw error;
       return { symbol, source: sourceMetadata(symbol, normalized, retrievedAt, 0, false, "error", `marketData provider/cache error: ${error instanceof Error ? error.message : "provider error"}`), raw: null, returns: [] as MonthlyReturnPoint[], reason: `provider retrieval failed: ${error instanceof Error ? error.message : "provider error"}` };
     }
   }, MAX_CONCURRENT_PROVIDER_REQUESTS);
@@ -384,19 +408,26 @@ export async function captureFactorRiskSnapshot(request: FactorRiskCaptureReques
     factors: exposureResult.factors, securities: exposureResult.securities, estimation, estimator: estimation, excluded, limitations,
   };
   await cacheSnapshot(requestHash, snapshot);
+  await assertFactorCaptureInputsCurrent(snapshot);
   return { snapshot: clone(snapshot), cache: "miss" };
 }
 
 export async function getFactorRiskSnapshot(snapshotId: string): Promise<FactorRiskSnapshot | null> {
+  await assertCurrentFactorActor();
   const now = Date.now();
   for (const [key, entry] of cache.entries()) {
     if (entry.expiresAt <= now) { cache.delete(key); continue; }
-    if (entry.snapshot.snapshotId === snapshotId) return snapshotIsInRequestScope(entry.snapshot) ? clone(entry.snapshot) : null;
+    if (entry.snapshot.snapshotId === snapshotId) {
+      if (!snapshotIsInRequestScope(entry.snapshot) || entry.ownerUserId !== (getRequestIdentity()?.userId ?? null)) return null;
+      await assertFactorCaptureInputsCurrent(entry.snapshot);
+      return clone(entry.snapshot);
+    }
   }
   const persisted = await snapshotStore.getBySnapshotId(snapshotId, now);
   if (!persisted) return null;
   const snapshot = persisted.snapshot as unknown as FactorRiskSnapshot;
   if (!snapshotIsInRequestScope(snapshot)) return null;
+  await assertFactorCaptureInputsCurrent(snapshot);
   cacheSnapshotWithoutPersistence(persisted.requestKey, snapshot, persisted.expiresAt);
   return clone(snapshot);
 }

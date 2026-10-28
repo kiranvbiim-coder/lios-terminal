@@ -115,6 +115,18 @@ export function buildReactiveContextGraph(input: {
         metadata: {},
       });
     }
+    const latitude=doc.metadata.latitude,longitude=doc.metadata.longitude;
+    if(typeof latitude==="number"&&Number.isFinite(latitude)&&latitude>=-90&&latitude<=90&&
+       typeof longitude==="number"&&Number.isFinite(longitude)&&longitude>=-180&&longitude<=180){
+      const locationId="geography:"+doc.id;
+      if(!seenNodes.has(locationId)){
+        nodes.push({id:locationId,kind:"geography",label:doc.title,sourceRef:doc.sourceRef,
+          occurredAt:doc.occurredAt,contentHash:doc.contentHash,metadata:{latitude,longitude,coordinateAuthority:"recorded_source"}});
+        seenNodes.add(locationId);
+        edges.push({id:"edge:"+p7Hash({from:nodeId,to:locationId,type:"references"}).slice(0,32),
+          from:nodeId,to:locationId,type:"references",evidenceRefs:[doc.sourceRef],metadata:{}});
+      }
+    }
 
     const dimensionEntries = Object.entries(doc.contextRefs) as Array<[keyof typeof doc.contextRefs, string[]]>;
     for (const [dimension, refs] of dimensionEntries) {

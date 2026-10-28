@@ -48,10 +48,8 @@ export async function prepareReportPdfDownload(
   if (currentVersion !== artifact.headVersion) {
     throw new Error("Report revision changed; reopen the current revision before downloading PDF.");
   }
-  const [plan, saved] = await Promise.all([
-    getArtifactExportPlan(ctx, artifactId, currentVersion),
-    getArtifactVersion(ctx, artifactId, currentVersion),
-  ]);
+  const plan = await getArtifactExportPlan(ctx, artifactId, currentVersion);
+  const saved = await getArtifactVersion(ctx, artifactId, currentVersion);
   if (plan.artifactId !== artifactId || plan.version !== saved.version
     || plan.contentHash !== saved.contentHash || plan.kind !== "report"
     || !plan.formats.includes("pdf")) {
@@ -78,6 +76,7 @@ export async function prepareReportPdfDownload(
   if (refreshed.status !== "active" || refreshed.headVersion !== currentVersion) {
     throw new Error("Report changed while generating PDF; reopen and export the current revision.");
   }
+  await getArtifactExportPlan(ctx, artifactId, currentVersion);
   return {
     filename: generated.filename,
     bytes: generated.bytes,

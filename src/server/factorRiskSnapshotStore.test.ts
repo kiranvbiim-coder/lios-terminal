@@ -20,7 +20,7 @@ const {
 const { createFactorRiskSnapshotStore } = await import("./factorRiskSnapshotStore");
 const { runWithRequestIdentity } = await import("./requestContext");
 const { initDb, closeDb, getDb } = await import("./db");
-const { organizations } = await import("@shared/schema");
+const { organizations, users } = await import("@shared/schema");
 
 function sampleSnapshot(): Record<string, unknown> {
   return {
@@ -130,15 +130,19 @@ test("durable factor risk snapshot store", async (t) => {
   });
 
   await t.test("organization scope prevents cross-tenant snapshot reads", async () => {
+    const [owner, outsider] = await getDb().insert(users).values([
+      {email:"factor-store-owner@example.test",name:"Synthetic store owner",passwordHash:"fixture",role:"internal_analyst",organizationId:orgSeventyThree.id},
+      {email:"factor-store-outsider@example.test",name:"Synthetic outsider",passwordHash:"fixture",role:"internal_analyst",organizationId:orgEighty.id},
+    ]).returning();
     const snapshot = {
       ...sampleSnapshot(),
       snapshotId: "factor-risk-org-scoped",
       contentHash: "07".repeat(32),
       request: { ...sampleSnapshot().request, scope: `organization:${orgSeventyThree.id}` },
     };
-    await createFactorRiskSnapshotStore().save(snapshot, "org-request-key", Date.now() + 60_000);
-    configureFactorRiskSnapshotStore(createFactorRiskSnapshotStore());
-    assert.equal(await runWithRequestIdentity({ userId: 8, organizationId: orgEighty.id }, () => getFactorRiskSnapshot(String(snapshot.snapshotId))), null);
-    assert.deepEqual(await runWithRequestIdentity({ userId: 7, organizationId: orgSeventyThree.id }, () => getFactorRiskSnapshot(String(snapshot.snapshotId))), snapshot);
+    const store = createFactorRiskSnapshotStore();
+    await runWithRequestIdentity({userId:owner.id,organizationId:orgSeventyThree.id},()=>store.save(snapshot,"org-request-key",Date.now()+60_000));
+    assert.equal(await runWithRequestIdentity({userId:outsider.id,organizationId:orgEighty.id},()=>store.getBySnapshotId(String(snapshot.snapshotId))),null);
+    assert.deepEqual((await runWithRequestIdentity({userId:owner.id,organizationId:orgSeventyThree.id},()=>store.getBySnapshotId(String(snapshot.snapshotId))))?.snapshot,snapshot);
   });
 });

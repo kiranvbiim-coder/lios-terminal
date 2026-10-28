@@ -25,6 +25,9 @@ import { tenantContext } from "./tenantContext";
 import { getConversationExecutionJournal } from "./exec/execution-scope";
 import type { ExecutionJournalRecord } from "./exec/execution-journal";
 import { executionRecordView, isRestartResumable } from "./executionRecordView";
+import { governedVisualAnswerRequestSchema } from "@shared/governedVisualAnswer";
+import { resolveConversationVisual, GovernedVisualAccessError } from "./governedVisualAnswer";
+import { ArtifactExportRightsError } from "./artifactExport";
 
 /**
  * HTTP/SSE door to the Conversation Runtime, kept for scripted clients, tests and MCP. The UI uses the Gateway
@@ -100,6 +103,18 @@ async function resumableFlag(req: Request, chatId: number, record: ExecutionJour
 }
 
 export function registerProjectConversationRoutes(app: Express): void {
+  app.post("/api/project-chats/:chatId/visual",requireAuth,async(req,res)=>{
+    const chatId=z.coerce.number().int().positive().safeParse(req.params.chatId);
+    const request=governedVisualAnswerRequestSchema.safeParse(req.body);
+    if(!chatId.success||!request.success||request.data.chatId!==chatId.data){res.status(400).json({error:"An exact saved visual request for this Chat is required."});return;}
+    try{
+      const result=await resolveConversationVisual(tenantContext(req.user!),chatId.data,request.data.intent,request.data);
+      res.setHeader("Cache-Control","private, no-store");res.json(result);
+    }catch(error){
+      const status=error instanceof GovernedVisualAccessError||error instanceof ArtifactExportRightsError?403:409;
+      res.status(status).json({error:"The exact saved visual or its current owner/source permission is unavailable. Nothing was displayed."});
+    }
+  });
   // GM-11a: approvals are recorded by the server and are the only grants a run can use. A request body never carries one.
   app.post("/api/conversation/approvals", requireAuth, async (req: Request, res: Response) => {
     const body = approvalBodySchema.safeParse(req.body);

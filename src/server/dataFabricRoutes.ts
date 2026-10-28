@@ -393,7 +393,7 @@ export function registerDataFabricRoutes(app: Express): void {
   });
 
   app.post("/api/data-snapshots/:id/entitlement", requireRole("internal_admin", "internal_compliance"), async (req, res) => {
-    const id = z.string().uuid().safeParse(req.params.id);
+    const id = z.union([z.string().uuid(), z.string().regex(/^factor-risk-[a-f0-9]{24}$/)]).safeParse(req.params.id);
     const input = z.object({ contentHash: z.string().regex(/^[a-f0-9]{64}$/), policyId: z.string().trim().min(1).max(240) }).strict().safeParse(req.body);
     if (!id.success || !input.success) return res.status(400).json({ error: "An exact snapshot hash and explicit existing policy are required." });
     const ctx = tenantContext(req.user!);

@@ -38,6 +38,8 @@ import UserNotifications
     private var selectedArtifact: String?
     private var configuredHome: HomeConfiguration?
     private var replayingReads = false
+    private var observationOwner: (homeId: String, userId: Int)?
+    private var persistedRunSequence = -1
 
     init() {
         do {
@@ -47,6 +49,15 @@ import UserNotifications
                 let home = try JSONDecoder().decode(HomeConfiguration.self, from: data)
                 homeAddress = home.address; fingerprint = home.fingerprint
                 configuredHome = home
+                if let saved = try DeviceKeychain.load("run-observation") {
+                    guard saved.count <= 16_384 else { throw ClientFailure(message: "Saved run observation exceeds its bound.") }
+                    let observation = try JSONDecoder().decode(RunObservation.self, from: saved)
+                    try observation.validate()
+                    if observation.home == home && observation.deviceId == (try DeviceIdentity.loadOrCreate().id) {
+                        run = observation.cursor; projectId = observation.projectId; chatId = observation.chatId
+                        observationOwner = (observation.homeId, observation.userId)
+                    }
+                }
             }
         } catch { self.error = error.localizedDescription }
         gateway.onEvent = { [weak self] event, payload in
@@ -58,6 +69,9 @@ import UserNotifications
             } else if event == "conversation.event" {
                 guard self.run.receive(payload) else { return }
                 self.runEvents.append(payload)
+                if self.run.requestId == nil || self.run.sequence - self.persistedRunSequence >= 16 {
+                    do { try self.persistRunObservation() } catch { self.error = error.localizedDescription }
+                }
                 if self.runEvents.count > 100 { self.runEvents.removeFirst() }
                 Task { await self.perform { try await self.refreshContinuity() } }
             } else if event == "resync.required" || event == "data.invalidate" {
@@ -74,6 +88,8 @@ import UserNotifications
         let home = try HomeConfiguration.validated(address: homeAddress, fingerprint: fingerprint)
         if configuredHome != home {
             run.clear(); projectId = nil; chatId = nil; continuity = [:]; notifications = []; review = [:]; artifact = [:]; artifactVersions = []; runEvents = []
+            observationOwner = nil
+            try DeviceKeychain.remove("run-observation")
         }
         configuredHome = home
         try gateway.connect(home: home, pairingToken: pairingToken)
@@ -88,6 +104,10 @@ import UserNotifications
         }
     }
     func selectProject(_ id: Int) async throws {
+        if run.requestId != nil {
+            guard projectId == id else { throw ClientFailure(message: "Inspect or stop the attached run before changing its Project.") }
+            return
+        }
         projectId = id; chatId = nil; pageOffset = 0; artifactsOffset = 0
         continuity = [:]; notifications = []; artifact = [:]; artifactVersions = []; review = [:]
         try await refreshContinuity()
@@ -102,7 +122,23 @@ import UserNotifications
         nextOffset = continuity["nextOffset"] as? Int
         nextArtifactsOffset = continuity["nextArtifactsOffset"] as? Int
     }
-    func selectChat(_ id: Int) async throws { chatId = id; pageOffset = 0; try await refreshContinuity() }
+    func selectChat(_ id: Int) async throws {
+        guard run.requestId == nil || chatId == id else { throw ClientFailure(message: "Inspect or stop the attached run before changing its Chat.") }
+        chatId = id; pageOffset = 0; try await refreshContinuity()
+        if let homeId = continuity["homeId"] as? String, let userId = continuity["userId"] as? Int {
+            observationOwner = (homeId, userId); try persistRunObservation()
+        }
+    }
+    private func persistRunObservation() throws {
+        guard let home = configuredHome, let projectId, let chatId, let owner = observationOwner else { return }
+        let state = RunObservation(home: home, deviceId: try DeviceIdentity.loadOrCreate().id,
+            homeId: owner.homeId, userId: owner.userId, projectId: projectId, chatId: chatId, cursor: run)
+        try state.validate()
+        let data = try JSONEncoder().encode(state)
+        guard data.count <= 16_384 else { throw ClientFailure(message: "Saved run observation exceeds its bound.") }
+        try DeviceKeychain.save(data, account: "run-observation")
+        persistedRunSequence = run.sequence
+    }
     func nextMessages() async throws { guard let nextOffset else { return }; pageOffset = nextOffset; try await refreshContinuity() }
     func firstMessages() async throws { pageOffset = 0; try await refreshContinuity() }
     func createChat() async throws {
@@ -117,11 +153,16 @@ import UserNotifications
         let requestId = UUID().uuidString.lowercased()
         guard run.requestId == nil else { throw ClientFailure(message: "A run is still attached or unconfirmed. Reconnect to inspect it before sending another message.") }
         run.begin(requestId); runEvents = []
+        guard let homeId = continuity["homeId"] as? String, let userId = continuity["userId"] as? Int else {
+            run.clear(); throw ClientFailure(message: "Read canonical Home and account identity before sending.")
+        }
+        observationOwner = (homeId, userId)
+        do { try persistRunObservation() } catch { run.clear(); throw error }
         // Keep this ID on ambiguous failure: reconnect subscribes; it never resends start.
         do {
             _ = try await gateway.call("conversation.start", ["chatId": chatId, "body": ["requestId": requestId, "message": message]])
         } catch let error as ClientFailure {
-            if let code = error.code, code != "UNAVAILABLE", run.requestId == requestId { run.clear() }
+            if let code = error.code, code != "UNAVAILABLE", run.requestId == requestId { run.clear(); try persistRunObservation() }
             throw error
         }
         message = ""
@@ -133,11 +174,16 @@ import UserNotifications
     }
     func reattachRun() async throws {
         guard let id = run.requestId else { return }
+        guard let owner = observationOwner, continuity["homeId"] as? String == owner.homeId,
+              continuity["userId"] as? Int == owner.userId else {
+            throw ClientFailure(message: "Saved run observation belongs to a different Home or account. Nothing was reattached.")
+        }
         do {
             let result = try await gateway.call("conversation.subscribe", ["requestId": id, "afterSeq": run.sequence])
             run.subscribed(id, status: result["status"] as? String ?? "")
+            try persistRunObservation()
         } catch let error as ClientFailure {
-            if error.code == "NOT_FOUND" { run.clear() }
+            if error.code == "NOT_FOUND" { run.clear(); try persistRunObservation() }
             throw error
         }
     }

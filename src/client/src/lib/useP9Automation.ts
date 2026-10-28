@@ -133,6 +133,20 @@ export function useP9Notifications(projectId: number | null) {
   });
 }
 
+export function useOwnedP9Notifications(enabled: boolean) {
+  return useQuery<P9NotificationRecord[]>({
+    queryKey: ["/api/automation/notifications"],
+    queryFn: async ({ signal }) => {
+      const response = await fetch("/api/automation/notifications?limit=500", { credentials:"same-origin", cache:"no-store", signal });
+      if (!response.ok) throw new Error("Owner notification discovery is unavailable.");
+      const notifications = await response.json() as P9NotificationRecord[];
+      await projectDeliveredNotificationsToDesktop(notifications);
+      return notifications;
+    },
+    enabled, refetchInterval:30_000, refetchIntervalInBackground:true, refetchOnMount:"always",
+  });
+}
+
 export function useInvalidateP9Automation() {
   const qc = useQueryClient();
   return useCallback((projectId: number | null) => {

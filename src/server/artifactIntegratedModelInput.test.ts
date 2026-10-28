@@ -410,7 +410,7 @@ test("SI-04.17 canonical workbook cells are reviewed, hash-bound and explicitly 
     assert.ok(plan.formats.includes("xlsx"));
     await assert.rejects(getArtifactExportPlan(foreignCtx, saved.artifact.id, 4), /not found/);
     await getDb().update(dataEntitlementPolicies).set({ permittedUses: policy.permittedUses.filter(use => use !== "export") }).where(eq(dataEntitlementPolicies.id, policy.id));
-    await assert.rejects(getArtifactExportPlan(ctx, saved.artifact.id, 4), /does not currently permit/);
+    await assert.rejects(getArtifactExportPlan(ctx, saved.artifact.id, 4), /do not permit|does not currently permit/);
     await getDb().update(dataEntitlementPolicies).set({ permittedUses: policy.permittedUses }).where(eq(dataEntitlementPolicies.id, policy.id));
   });
 });
