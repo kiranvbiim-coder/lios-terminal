@@ -25,7 +25,9 @@ test("C07 current Project consequence draft is separately inactive and never sch
  const draft=source("./reviewedProjectMonitorHandoff.ts");
  assert.match(review,/data-testid="c07-project-monitor-handoff"/);
  assert.match(review,/disabled until separately reviewed and approved in P9/);
- assert.match(review,/onInvestigate\(monitorHandoff\.prompt\)/);
+ assert.match(review,/setMonitorReview\(monitorHandoff\.graphHash\)/);
+ assert.match(review,/<PulseProjectMonitorReview/);
+ assert.match(review,/projectReview=\{monitorHandoff\}/);
  assert.match(draft,/quickMonitorDraft/);
  assert.match(draft,/quickMonitorDraft\("changes",false,60\)/);
  assert.match(draft,/definition\.enabled\)/);
