@@ -35,6 +35,7 @@
     "benchmark:instrument-search:300k": "node --import tsx --test server/financeDatabaseScale.bench.ts",
     "test:statistics": "PYTHONPATH=python-service python3 -m unittest discover -s python-service -p 'test_professional_statistics.py' -v",
     "routes:manifest": "node --import tsx script/route_manifest.ts",
+    "prepush": "node script/prepush_gate.mjs",
     "check:routes": "node --import tsx script/route_manifest.ts --check",
     "check:manifests": "node --disable-warning=ExperimentalWarning --import tsx script/validate_script_manifests.ts && node --import tsx --test script/validate_script_manifests.test.ts",
     "gate:local": "node --import tsx script/ci_local_gate.ts",
