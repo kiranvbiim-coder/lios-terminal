@@ -543,3 +543,80 @@ test("C08 errors and interrupted runs only offer read-only reconciliation, never
     event({type:"done",status:"failed"})],{onRetry:noop,onFollowUp:undefined});
   assert.doesNotMatch(noSource,/data-testid="c08-reconcile-run"|data-testid="trace-error-retry"/);
 });
+
+test("C08 completed Chat does not obscure unresolved tool reports or offer a blind retry", () => {
+  const denied = render([
+    planEvent,
+    event({ type: "tool_result", stepId: "step-1", label: "Fetch filings",
+      summary: "PRIVATE_TOOL_OUTPUT", deterministic: false, sourceRefs: [], outcome: "denied" }),
+    doneOk,
+  ], { onRetry: noop, onFollowUp: noop, onInspectRun: noop });
+  assert.match(denied, /data-testid="c08-recorded-action-recovery"/);
+  assert.match(denied, /1 denied/);
+  assert.match(denied, /Overall run completion does not override/);
+  assert.match(denied, /data-testid="c08-review-recorded-actions"/);
+  assert.match(denied, /data-testid="c08-reconcile-partial-actions"/);
+  assert.doesNotMatch(denied, /PRIVATE_TOOL_OUTPUT|trace-error-retry/);
+
+  const unfinished = render([
+    planEvent, event({ type: "tool_start", stepId: "step-1",
+      label: "Fetch filings", componentId: "research" }), doneOk,
+  ]);
+  assert.match(unfinished, /1 started tool action/);
+  assert.match(unfinished, /c08-recorded-action-recovery/);
+
+  const completed = render([
+    planEvent, event({ type: "tool_result", stepId: "step-1", label: "Fetch filings",
+      summary: "", deterministic: true, sourceRefs: [], outcome: "completed" }), doneOk,
+  ]);
+  assert.doesNotMatch(completed, /c08-recorded-action-recovery/);
+});
+
+test("C08 partial reconciliation is only a read-only draft and never offers an automatic tool replay", () => {
+  const output = render([
+    planEvent, event({ type: "tool_result", stepId: "step-1", label: "Fetch filings",
+      summary: "", deterministic: true, sourceRefs: [], outcome: "failed" }), doneOk,
+  ], { onFollowUp: undefined, onRetry: noop });
+  assert.match(output, /data-testid="c08-review-recorded-actions"/);
+  assert.doesNotMatch(output, /data-testid="c08-reconcile-partial-actions"|data-testid="trace-error-retry"/);
+  assert.match(output, /No automatic retry, tool execution or permission grant is performed/);
+});
+
+test("C06 exact P4 reopen is visible only for saved versions when current Chat provides the handler", () => {
+  const draft = {
+    artifactType: "research_brief", title: "Recorded filing analysis",
+    projectId: 12, persistence: "project_candidate", sourceRefs: [],
+  };
+  const saved = event({ type: "artifact", artifact: draft,
+    persistedArtifact: { id: "artifact:66666666-6666-4666-8666-666666666666", version: 4 } });
+  const shown = render([saved, doneOk], { onOpenSavedArtifact: noop });
+  assert.match(shown, /data-testid="c06-open-recorded-artifact"/);
+  assert.match(shown, /data-testid="c06-open-exact-saved-version"/);
+  assert.match(shown, /Open saved v4/);
+  assert.match(shown, /Saved in Project · exact v4/);
+  assert.match(shown, /P4 rechecks permissions when opened/);
+  assert.doesNotMatch(shown, /Keep in Project/);
+
+  const unavailable = render([saved, doneOk], { onOpenSavedArtifact: undefined });
+  assert.doesNotMatch(unavailable, /c06-open-recorded-artifact|Open saved v4/);
+  const unsaved = render([event({ type: "artifact", artifact: draft }), doneOk],
+    { onOpenSavedArtifact: noop });
+  assert.doesNotMatch(unsaved, /c06-open-recorded-artifact/);
+});
+
+test("C07 saved Project run offers only the existing reviewed automation draft", () => {
+  const visible = render([planEvent, sourceResult, doneOk], { onPrepareAutomation: noop });
+  assert.match(visible, /data-testid="c07-chat-automation-draft"/);
+  assert.match(visible, /Prepare automation draft/);
+  assert.match(visible, /No monitoring starts without a separate P9 activation review/);
+
+  const failed = render([planEvent, event({ type: "done", status: "failed" })],
+    { onPrepareAutomation: noop });
+  assert.doesNotMatch(failed, /c07-chat-automation-draft/);
+
+  const active = render([planEvent], { onPrepareAutomation: noop, busy: true });
+  assert.doesNotMatch(active, /c07-chat-automation-draft/);
+
+  const noProject = render([planEvent, doneOk], { onPrepareAutomation: undefined });
+  assert.doesNotMatch(noProject, /c07-chat-automation-draft/);
+});
