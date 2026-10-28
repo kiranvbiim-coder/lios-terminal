@@ -4,6 +4,90 @@
 
 **Release spending cap: strictly $0 additional cash, without exceptions.** The single actionable SI-07/P10 zero-cost Electron beta plan is [`technical/LIOS_ZERO_COST_RELEASE_EXECUTION.md`](technical/LIOS_ZERO_COST_RELEASE_EXECUTION.md). Read it before editing any release workflow, updater, installer or packaging code. Use existing master [#91](https://github.com/kiranvbiim-coder/lios-terminal/issues/91) and existing P10/P14 owners, not a new program. Ad-hoc macOS / unsigned Windows beta may be packaged and labeled honestly; **production P14 Developer ID/notarization/Authenticode evidence is not bypassed or accepted**. No paid platform, credit/overage, cloud, CI or distribution requirement may be introduced. Release steps R0–R6 have proof gates in the contract; status is NOT VERIFIED until independently exercised. This heading is a current owner lock; historical notes below remain evidence only.
 
+## OpenClaw isolated supporting service — five-package agent checklist — 2026-10-28
+
+**Owner-approved integration decision; this section is an operational crosswalk, NOT a new program, independent roadmap, implementation authority, or evidence of feature completeness.** Apply it under existing SI-06/SI-07 workstreams and SP-06/SP-07/P14, preserving all pre-existing GM/TC/CA/P owners and source/security/release gates. Read [the detailed architecture and full channel-surface contract](technical/OPENCLAW_ASSIMILATION_BLUEPRINT.md#01-owner-decision--full-openclaw-capability-convergence-through-an-isolated-supporting-service--2026-10-28), `AGENTS.md`, the canonical donor reuse policy and master [issue #91](https://github.com/kiranvbiim-coder/lios-terminal/issues/91). The user requested **full useful OpenClaw capability assimilation**, including Telegram and WhatsApp, through **one isolated, supervised supporting service** hidden behind normal LiOS UX. This is not a second branded app or runtime authority.
+
+**How to read checkboxes:** an unchecked `[ ]` means **not yet independently attested for this new five-package integration decision**, **NOT necessarily absent in source**. Before implementation, inspect current `main`, active branches/PRs, registered donor inventory, the approved pinned OpenClaw commit and already-landed tests. If implementation already exists, cite exact file/commit and run its actual journey instead of rebuilding it. Track every item as `NOT_INSPECTED / PRESENT_UNVERIFIED / REUSE_ADAPTING / IN_PROGRESS / CODE_INTEGRATED / V0_V1_VERIFIED / V2_VERIFIED / INSTALLED_VERIFIED / ACCEPTED / BLOCKED` in the existing issue #91/PR evidence (not a second state store). Mark a checkbox complete only with recorded evidence appropriate to its claim. Link any blocked item to a precise permission, entitlement, official API, rights, hardware or native-validation prerequisite. **No source code was implemented by adding this checklist.**
+
+### Package 1 — Donor inventory and single-architecture contracts (SI-06/SI-07; existing GM/CA/P13 owners)
+
+- [ ] P1.01 Confirm this repo is `kiranvbiim-coder/lios-terminal`, record exact `main` SHA, owner-fork path/commit and the approved pinned `openclaw/openclaw@c074824a27c96d3983043f9eeb33823cd1772d8c`; never assume a fork's HEAD is approved.
+- [ ] P1.02 Inventory current LiOS Gateway, Home, supervisors, execution, P13 plugin/skills/MCP, AI auth/access, memory, P9 automation, TC chat, P4 Artifacts, connectors and devices; link existing code/tests/PRs and classify landed vs branch-only.
+- [ ] P1.03 Inventory **every relevant useful** upstream channel and capability family, not only chat sending: Telegram, WhatsApp, applicable other channels, sessions, agent/tool orchestration, browser/computer-use, coding, memory, scheduling, media, search, notifications, devices and diagnostics.
+- [ ] P1.04 Decompose candidate upstream packages into reusable mechanisms, related tests, dependencies and source pins; document `DIRECT_REUSE/IMPORT/ADAPT/REPURPOSE/COMBINE/GENERALIZE/INNOVATE/DEFER/REJECT` under the existing donor policy.
+- [ ] P1.05 Produce a specific Telegram and WhatsApp per-feature capability matrix: supported transport/account login, 1:1/groups, inbound/outbound, replies, edits, reactions, media, identity, delivery, state sync, automated responses and platform/API limits.
+- [ ] P1.06 Review exact source licenses, notices, external API terms, redistribution rights, auth method, data retention, user privacy, dependencies and known security issues before selecting imported code.
+- [ ] P1.07 Map each mechanism to exactly one existing LiOS owner and stable interface; identify high-conflict files/migrations, active PRs and implementation ownership before parallel work.
+- [ ] P1.08 Define versioned typed request/event/error/receipt and attachment contracts for existing LiOS Gateway ↔ isolated service, without parallel Project/Chat/Artifact/permission/secret/auth/automation authorities.
+- [ ] P1.09 Agree bounded acceptance tests, R0–R4/V0–V4 validation levels, target Shipping Point, rollback and actual supported user journeys; record PR/issue claim before coding.
+
+**Package 1 proof:** complete owner/fork/upstream source map; channel feature matrix; legal/security findings; existing-code crosswalk; one existing-owner task/PR per integration seam.
+
+### Package 2 — Supervised isolated supporting service (SI-06; existing GM/Home/Gateway and GM-11/P13 security owners)
+
+- [ ] P2.01 Reuse the existing Home process supervision and provisioning/lifecycle contracts; prove the service is independently startable/stoppable/disableable without another LiOS shell or background always-on vendor service.
+- [ ] P2.02 Define versioned local/user-owned IPC transport with per-session auth, binding to current owner/device, bounded input/output and no public unauthenticated port.
+- [ ] P2.03 Enforce canonical permissions, source/tenant/Project scopes, trust receipts, explicit high-risk tool/side-effect authorization and host sandbox boundaries **before** privileged exposure.
+- [ ] P2.04 Make token/credential loading use existing OS-protected secret references; redact logs, crash dumps, telemetry, Artifacts, prompts and backup/export material.
+- [ ] P2.05 Set lifecycle budgets, queue/backpressure, cancellation, timeouts, rate limits, health probes, restart/backoff, crash-loop protection and manual diagnostics.
+- [ ] P2.06 Preserve reproducible dependency/pin/lockfile, donor notices, resource footprint and clean-install/offline packaging; do not silently download executables or models.
+- [ ] P2.07 Verify service crash, absent binary, version mismatch, revoked account, permission denial, offline network and Home restart have explicit recoverable states with no invented success.
+- [ ] P2.08 Prove existing native app, Python/finance sidecars, canonical database and AI-OFF deterministic work remain functional when service is off/unavailable.
+- [ ] P2.09 Record end-to-end event ownership and replay/idempotency, avoiding duplicate sends, worker instances, schedules, receipts or persistence authorities.
+
+**Package 2 proof:** exact supervised local/packaged execution evidence, denial/restart/rollback cases and signed-off existing GM/P13 architectural boundaries. A launched donor executable alone does not pass.
+
+### Package 3 — Full useful donor capability and channel assimilation (SI-06; existing GM/P13/connector/AI-access owners)
+
+- [ ] P3.01 Import/adapt approved donor packages and their relevant upstream tests using exact pins, notices and an explicit imported-path-to-LiOS-owner register; avoid unneeded whole-repo baggage.
+- [ ] P3.02 Implement permitted Telegram account binding, inbound/outbound messaging, supported groups/media/replies/event handling and exact per-feature status; cover revocation, rate limits and authorization.
+- [ ] P3.03 Implement permitted WhatsApp account binding and the **full useful supported** media, group, messaging, replies, event/delivery and account lifecycle surface found by P1; document official API/platform/rights gaps rather than fabricating support.
+- [ ] P3.04 Normalize channel events into existing authenticated LiOS Chat/Project/context contracts, with identity provenance, ordering, replay protection, attachment limits and user-approved scope.
+- [ ] P3.05 Integrate approved agent/subagent/delegation, multi-step recovery and checkpoints behind canonical LiOS execution and consent semantics, without donor-owned conversation truth.
+- [ ] P3.06 Integrate useful donor tool execution, browser/computer-use, coding/ACP, skills/MCP and plugin adapters behind existing GM/P13 authorization and isolation.
+- [ ] P3.07 Integrate supported BYOAI account/OAuth/CLI/API/local-model access and fallback behind the current LiOS AI-access authority; prohibit unapproved inference costs or silent user data transmission.
+- [ ] P3.08 Integrate useful memory/retrieval, scheduling, background tasks and notifications into established GM/P9/P4/TC owners; no separate task/memory/Artifact database.
+- [ ] P3.09 Integrate user-owned device/node/client features and transport only through existing Gateway/device trust and mobile/tablet/watch contracts.
+- [ ] P3.10 Run real connected-provider tests where entitled; record capability-specific `supported / unavailable / blocked` accurately for Telegram/WhatsApp/other channels and never claim full upstream parity merely from compilation.
+
+**Package 3 proof:** feature-by-feature code and runtime evidence plus license/test/source references; platform-limited capabilities explicitly accounted for, with no silent removal of useful donor depth.
+
+### Package 4 — One invisible LiOS user experience (SI-07; TC/P4/P9/GM owners)
+
+- [ ] P4.01 Contextual Chat-based capability discovery, Add/Install vs Connect semantics, account authorization and clear current availability; no donor settings or permanent module maze.
+- [ ] P4.02 User-driven Telegram/WhatsApp connection and permissions UI with accurate account status, disconnect/revoke, failure recovery, explicit outbound recipients/scopes and consent.
+- [ ] P4.03 Conversational requests may invoke authorized channel actions; nontrivial external sends/edits/deletes and other side effects follow canonical risk-tiered authorization, not hidden automatic execution.
+- [ ] P4.04 Incoming authorized channel content appears in existing Chats/Projects with source identity, scope and freshness/receipt distinctions; avoid cross-Project sharing and unauthorized AI context exposure.
+- [ ] P4.05 Useful replies, images/media, documents/tables/charts/research and channel-driven outputs become existing P4 Artifacts/revisions where applicable; do not store parallel donor Artifacts.
+- [ ] P4.06 Preserve compact response → live Chat sidecar → **same existing full Workbench** → edit/version → return to Chat, with persistent context and no duplicate workspace.
+- [ ] P4.07 Use existing P9 automation/notification UX for recurring channel-triggered work and alerts, showing actual queued/delivered/executed/failed truth separately.
+- [ ] P4.08 Provide coherent desktop/mobile/tablet/watch interactions as authorized LiOS Home clients/nodes; validate offline, queued and reconnect states without false completion.
+- [ ] P4.09 Make process/auth/platform failure visible in the ordinary LiOS interface, with user-facing recovery and advanced diagnostics when requested, without donor branding in normal flows.
+
+**Package 4 proof:** repeatable user-driven installed LiOS Chat → connect/authorize → genuine channel operation → result/Artifact/Workbench → restart/reopen; accessibility and privacy checks.
+
+### Package 5 — Hardening, native proof and release qualification (SI-07; SP-06/SP-07/P10/P14 and security owners)
+
+- [ ] P5.01 Verify installed local macOS/Windows runtime start/stop/crash recovery from the exact build, preserving the public-beta $0 additional-cash condition; do not confuse source CI with target acceptance.
+- [ ] P5.02 Validate an actually entitled, consented Telegram **inbound → LiOS reply/research/Artifact → authorized outbound** journey with real provider receipts and clear failure semantics.
+- [ ] P5.03 Validate the corresponding **legally supported** WhatsApp connected journey; if entitlement/provider/path is unavailable, mark blocked and do not substitute mock data as a pass.
+- [ ] P5.04 Validate opt-out/revoke/scope changes, Project/tenant isolation, secret redaction, BYOAI data boundaries, attachment handling and malicious/untrusted channel input injection defenses.
+- [ ] P5.05 Validate user approval vs denial, no duplicate side effects after retry, interrupted jobs, cancellation, corrupted/late events, rate limiting and unavailable downstream services.
+- [ ] P5.06 Validate background/automation schedules, notification truth, offline queue, reconnect and device handoff under the same canonical Home/permissions contracts.
+- [ ] P5.07 Validate full Chat/Artifact/Workbench revision persistence, restart/reopen and accessible keyboard/screen-reader flows, not merely screenshots or source unit tests.
+- [ ] P5.08 Validate resource budgets, sandbox isolation, software supply-chain/third-party notices, upgrade/rollback, uninstall/cleanup and no undesired external service exposure.
+- [ ] P5.09 Record reproducible commit/build/source pin, exact OS/topology, authorized accounts, test steps, observed receipts/logs, security/rights exceptions and outstanding blockers in existing PR and issue #91.
+- [ ] P5.10 Obtain independent SP-06/SP-07/P14 review at the appropriate evidence level; clearly distinguish unsigned/ad-hoc $0 public beta from paid-signing/notarized production obligations still unmet.
+
+**Package 5 proof:** real native end-to-end acceptance evidence only; no fabricated provider parity, packaged journey, store receipt, completion percentage, rights posture or production release claim.
+
+### Mandatory coordination record for each claimed checklist item
+
+In existing issue #91 and the claimed PR, record: **P1–P5 checklist item(s); existing canonical GM/TC/CA/P task/owner; base and head SHA; files/contracts; current baseline/what was already implemented; exact donor fork/version/path and reuse disposition; target SP and MSJ; risk/validation class; real commands and actual outcomes; native/user-provided entitlement needs; rights/security decisions; blockers; next dependency; links to source/tests/evidence.** Multi-agent work may proceed in parallel on independent adapters/fixtures/tests, but one owner coordinates each high-conflict shared core. Do **not** mark something complete on the strength of a generated report, agent assertion, copied package or passing CI alone.
+
+---
+
 ## Active work — public production readiness
 
 ### Native macOS beta qualification on landed main — 2026-10-28
