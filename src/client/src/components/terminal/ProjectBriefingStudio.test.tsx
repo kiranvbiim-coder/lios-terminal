@@ -93,6 +93,15 @@ test("D04 quiet storyboard review stays opt-in, reversible and source-preserving
   assert.doesNotMatch(src, /localStorage|sessionStorage|setTimeout|createP9Workflow/);
 });
 
+test("D06 visible Project authority follows live Artifact changes without cached metadata", () => {
+  const src = readFileSync(new URL("./ProjectBriefingStudio.tsx", import.meta.url), "utf8");
+  assert.match(src, /const byId = new Map\(available\.map\(item => \[item\.id, item\]\)\)/);
+  assert.doesNotMatch(src, /useMemo\(\(\) => new Map\(available/);
+  assert.match(src, /visual\.title !== source\.title/);
+  assert.match(src, /visual\.content\.kind !== source\.kind/);
+  assert.match(src, /currentProjectBriefingVisuals\(pinnedVisuals, chosen, byId, projectId\)/);
+});
+
 test("D05 shows only exact P4 native visuals with explicit bounded recorded preview", () => {
   const chart = {
     kind: "chart", chartType: "line", rendererPreference: "recharts",

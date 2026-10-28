@@ -98,6 +98,8 @@ test("D06 a verified pinned chart remains visible only while its exact selected 
     "wrong-Project P4 pin cannot be displayed");
   assert.deepEqual(currentProjectBriefingVisuals([{ ...pinned, version: 5 }], [selected], live, 11), [],
     "wrong-version P4 pin cannot be displayed");
+  assert.deepEqual(currentProjectBriefingVisuals([{ ...pinned, title: "Mismatched source title" }], [selected], live, 11), [],
+    "a P4 visual from an unreviewed title must not be displayed");
   assert.deepEqual(currentProjectBriefingVisuals([{ ...pinned,
     content: { kind: "table", columns: [{ key: "x", label: "X", type: "number" }], rows: [{ x: 42 }] } }],
     [selected], live, 11), [], "a forged kind swap cannot be displayed");
