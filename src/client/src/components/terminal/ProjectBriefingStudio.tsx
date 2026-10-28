@@ -1,5 +1,5 @@
 import * as React from "react";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { ArrowDown, ArrowUp, BookOpenCheck, FileText, Layers3, Plus, Trash2, X } from "lucide-react";
 import { GalleryRecordedPreviewContent, ProjectArtifactGalleryPreview } from "./ProjectArtifactGalleryPreview";
 import { captureBriefingVisual, type PinnedBriefingVisual } from "@/lib/phase4BriefingVisuals";
@@ -56,7 +56,8 @@ export function ProjectBriefingStudio({
   }, [projectId]);
   // Only exact, currently active Project Artifacts appear; source contents are not fetched.
   const available = artifacts.filter(artifact => artifact.projectId === projectId && artifact.status === "active");
-  const byId = useMemo(() => new Map(available.map(item => [item.id, item])), [artifacts, projectId]);
+  // Derive current permissions/status every render: artifact lists can be refreshed in-place.
+  const byId = new Map(available.map(item => [item.id, item]));
   // Also filter synchronously in render, before the Project-switch effect.
   const chosen = selectedSources.filter(source => source.projectId === projectId);
   // D06 visibility is tested against live authorized Project/Artifact identity.
@@ -112,7 +113,7 @@ export function ProjectBriefingStudio({
       if (controller.signal.aborted || activeProjectRef.current !== inspectedProject) return;
       const visual = captureBriefingVisual(detail, inspectedProject);
       if (visual.artifactId !== source.id || visual.version !== source.headVersion ||
-          visual.content.kind !== source.kind)
+          visual.title !== source.title || visual.content.kind !== source.kind)
         throw new Error("The selected chart/table changed; review this saved source again.");
       setPinnedVisuals(current => activeProjectRef.current !== inspectedProject
         ? current : current.some(v => v.artifactId === visual.artifactId)
