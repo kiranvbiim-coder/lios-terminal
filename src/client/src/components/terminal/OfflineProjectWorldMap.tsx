@@ -1,7 +1,7 @@
 import * as React from "react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Focus, MapPin, Minus, Plus } from "lucide-react";
-import { projectOfflineWorldPoints, type RecordedGeographicPoint } from "@/lib/offlineWorldMapPresentation";
+import { projectOfflineWorldPoints, recordedWorldMapDays, type RecordedGeographicPoint } from "@/lib/offlineWorldMapPresentation";
 
 const WIDTH = 1152;
 const HEIGHT = 576;
@@ -10,20 +10,38 @@ const MAX_ZOOM = 4;
 const clampZoom = (value: number) => Math.max(MIN_ZOOM, Math.min(MAX_ZOOM, value));
 const ATLAS = "/maps/natural-earth-110m-world.svg";
 
-export function OfflineProjectWorldMap({ points }: { points: readonly RecordedGeographicPoint[] }) {
+export function OfflineProjectWorldMap({ points, origin = "P7 Project graph" }: {
+  points: readonly RecordedGeographicPoint[];
+  origin?: "P7 Project graph" | "P4 saved table";
+}) {
   const [sourceOnly, setSourceOnly] = useState(false);
   const [withEventDate, setWithEventDate] = useState(false);
+  const [timeWindowEnabled, setTimeWindowEnabled] = useState(false);
+  const [fromDay, setFromDay] = useState<string>("");
+  const [throughDay, setThroughDay] = useState<string>("");
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [atlasUnavailable, setAtlasUnavailable] = useState(false);
   const [zoom, setZoom] = useState(0.7);
   const [pan, setPan] = useState({ x: 0, y: 0 });
   const viewportRef = useRef<HTMLDivElement>(null);
   const dragRef = useRef<{ id: number; x: number; y: number; fromX: number; fromY: number } | null>(null);
+  const availableDays = useMemo(() => recordedWorldMapDays(points), [points]);
+  const earliestDay = availableDays[0] ?? "";
+  const latestDay = availableDays[availableDays.length - 1] ?? "";
+  const selectedFrom = fromDay || earliestDay;
+  const selectedThrough = throughDay || latestDay;
+  const dateWindowValid = !timeWindowEnabled || Boolean(selectedFrom && selectedThrough && selectedFrom <= selectedThrough &&
+    selectedFrom >= earliestDay && selectedThrough <= latestDay);
   const projection = useMemo(
-    () => projectOfflineWorldPoints(points, { sourceOnly, withEventDate }),
-    [points, sourceOnly, withEventDate],
+    () => projectOfflineWorldPoints(timeWindowEnabled && !dateWindowValid ? [] : points, {
+      sourceOnly, withEventDate: withEventDate || timeWindowEnabled,
+      ...(timeWindowEnabled ? { fromDate: selectedFrom, throughDate: selectedThrough } : {}),
+    }),
+    [points, sourceOnly, withEventDate, timeWindowEnabled, dateWindowValid, selectedFrom, selectedThrough],
   );
   const selected = projection.points.find(point => point.id === selectedId) ?? null;
+  const scrubDays = availableDays.filter(day => !selectedFrom || day >= selectedFrom);
+  const scrubPosition = scrubDays.findIndex(day => day === selectedThrough);
 
   const fit = () => {
     const width = viewportRef.current?.clientWidth ?? 560;
@@ -84,6 +102,49 @@ export function OfflineProjectWorldMap({ points }: { points: readonly RecordedGe
         Only points with recorded event dates
       </label>
     </div>
+    <section className="rounded-lg border border-border/55 p-3" aria-label="Recorded geography time window" data-testid="world-map-time-controls">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <label className="inline-flex min-h-10 cursor-pointer items-center gap-2 font-ui text-sm text-foreground">
+          <input type="checkbox" checked={timeWindowEnabled}
+            disabled={!availableDays.length}
+            onChange={event => { setTimeWindowEnabled(event.target.checked); setSelectedId(null); }}
+            className="h-4 w-4 accent-amber-300 focus-visible:ring-2 focus-visible:ring-amber-300/70"/>
+          Filter by recorded event time
+        </label>
+        <span className="font-ui text-xs text-muted-foreground" role="status">
+          {availableDays.length ? `${availableDays.length} distinct recorded UTC day(s)` : "No recorded event dates"}
+        </span>
+      </div>
+      {timeWindowEnabled && availableDays.length > 0 && <div className="mt-2 space-y-2">
+        <div className="grid gap-2 sm:grid-cols-2">
+          <label className="font-ui text-xs text-muted-foreground">From (UTC)
+            <input type="date" value={selectedFrom} min={earliestDay} max={latestDay}
+              onChange={event => { setFromDay(event.target.value); setSelectedId(null); }}
+              className="mt-1 min-h-11 w-full rounded-lg border border-border/60 bg-background px-2 font-ui text-sm text-foreground focus-visible:ring-2 focus-visible:ring-amber-300/70"/>
+          </label>
+          <label className="font-ui text-xs text-muted-foreground">Through (UTC)
+            <input type="date" value={selectedThrough} min={earliestDay} max={latestDay}
+              onChange={event => { setThroughDay(event.target.value); setSelectedId(null); }}
+              className="mt-1 min-h-11 w-full rounded-lg border border-border/60 bg-background px-2 font-ui text-sm text-foreground focus-visible:ring-2 focus-visible:ring-amber-300/70"/>
+          </label>
+        </div>
+        {scrubDays.length > 1 && <label className="block font-ui text-xs text-muted-foreground">
+          Step through recorded event days
+          <input type="range" min={0} max={scrubDays.length - 1}
+            step={1} value={Math.max(0, scrubPosition)}
+            aria-label="Show recorded locations through this UTC event day"
+            onChange={event => { setThroughDay(scrubDays[Number(event.target.value)]); setSelectedId(null); }}
+            className="mt-2 min-h-10 w-full accent-amber-300"/>
+        </label>}
+        {!dateWindowValid && <p role="alert" className="font-ui text-xs text-amber-200">
+          The selected UTC date window is outside the recorded period or reversed. No points are assumed.
+        </p>}
+        <p className="font-ui text-xs leading-5 text-muted-foreground">
+          Includes only events dated within the selected UTC days. Undated locations remain unknown.
+          Date controls are derived from recorded Project evidence, not inferred publication times.
+        </p>
+      </div>}
+    </section>
     <div ref={viewportRef} role="region" tabIndex={0}
       aria-label="Offline world map. Drag blank space to pan, use zoom controls, Tab to location markers or select locations in the list."
       data-testid="offline-world-map-viewport"
@@ -136,11 +197,11 @@ export function OfflineProjectWorldMap({ points }: { points: readonly RecordedGe
           <MapPin className="h-4 w-4" aria-hidden="true"/>
         </button>)}
       </div>
-      <span aria-hidden="true" className="pointer-events-none absolute bottom-2 left-2 rounded-md border border-border/50 bg-[#07131c]/90 px-2 py-1 font-ui text-[11px] text-white/75">Natural Earth · offline · {Math.round(zoom * 100)}%</span>
+      <span aria-hidden="true" className="pointer-events-none absolute bottom-2 left-2 rounded-md border border-border/50 bg-[#07131c]/90 px-2 py-1 font-ui text-xs text-white/75">Natural Earth · offline · {Math.round(zoom * 100)}%</span>
     </div>
     {atlasUnavailable && <p role="alert" className="rounded-lg border border-amber-300/40 p-3 font-ui text-sm text-amber-200">Bundled world outline unavailable. Recorded coordinates remain accessible below; no online basemap will be requested.</p>}
     {projection.points.length === 0
-      ? <p role="status" className="font-ui text-sm text-muted-foreground">No recorded locations meet the selected source/date filters.</p>
+      ? <p role="status" className="font-ui text-sm text-muted-foreground">No recorded locations meet the selected source or UTC event-time filters.</p>
       : <div className="grid min-w-0 gap-3 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
         <section aria-label="Map location list" className="min-w-0 rounded-lg border border-border/55 p-3">
           <h5 className="font-ui text-sm font-semibold text-foreground">Recorded locations ({projection.points.length})</h5>
@@ -168,6 +229,6 @@ export function OfflineProjectWorldMap({ points }: { points: readonly RecordedGe
           </> : <p className="text-muted-foreground">Select a marker or a location from the keyboard-accessible list to inspect the source reference and recorded time.</p>}
         </section>
       </div>}
-    <p className="font-ui text-xs leading-5 text-muted-foreground">Public-domain Natural Earth 1:110m generalized borders (not navigation-grade; disputed boundaries may differ). Pins are exact P7 Project-recorded coordinates directly linked to the selected insight, not geocoded names or device location. No online tiles or external location API.</p>
+    <p className="font-ui text-xs leading-5 text-muted-foreground">Public-domain Natural Earth 1:110m generalized borders (not navigation-grade; disputed boundaries may differ). Pins are exact {origin === "P7 Project graph" ? "P7 Project-recorded" : "P4 saved-table"} coordinates with retained source IDs, not geocoded names or device location. No online tiles or external location API.</p>
   </div>;
 }

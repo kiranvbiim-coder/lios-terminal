@@ -1,4 +1,5 @@
 import type { EvidenceClaim, EvidenceObservation, TrustManifest } from "@shared/trustContracts";
+import { recordedIsoTimestamp } from "./recordedIsoTimestamp";
 
 /**
  * A read-only projection of one recorded P3 claim. Do not imply that status
@@ -68,4 +69,42 @@ export function readableAssumptionValue(value: unknown): string {
   if (typeof value === "boolean" || (typeof value === "number" && Number.isFinite(value))) return String(value);
   if (value === null) return "null (recorded)";
   return "Structured value recorded; inspect the governed Artifact for detail";
+}
+
+
+/**
+ * B05/B06 read-only evidence time slice of the CURRENT P3 manifest. This does
+ * not restore earlier claims/permissions, claim status or provider contents.
+ * Invalid/ambiguous timestamps never pass the historical filter.
+ */
+export function inspectEvidenceClaimObservedBy(
+  manifest: TrustManifest,
+  claimId: string,
+  observedBy: string | null,
+): PrismClaimInspection | null {
+  const inspected = inspectEvidenceClaim(manifest, claimId);
+  if (!inspected || !observedBy) return inspected;
+  const cutoff = recordedIsoTimestamp(observedBy);
+  if (!cutoff) return null;
+  const cutoffMs = Date.parse(cutoff);
+  const sources = inspected.sources.map(source => ({
+    ...source,
+    observations: source.observations.filter(observation => {
+      const recorded = recordedIsoTimestamp(observation.observedAt);
+      return !!recorded && Date.parse(recorded) <= cutoffMs;
+    }),
+  }));
+  return {
+    ...inspected, sources,
+    missingSourceCount: sources.filter(source => source.observations.length === 0).length,
+  };
+}
+
+/** Only offered time choices from exact recorded observations within this P3 manifest. */
+export function claimObservedTimeChoices(manifest: TrustManifest, claimId: string): string[] {
+  const inspected = inspectEvidenceClaim(manifest, claimId);
+  if (!inspected) return [];
+  return [...new Set(inspected.sources.flatMap(source => source.observations)
+    .map(observation => recordedIsoTimestamp(observation.observedAt))
+    .filter((value): value is string => !!value))].sort();
 }

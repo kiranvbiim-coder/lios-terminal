@@ -1,7 +1,15 @@
 import * as React from "react";
 import {
-  changedNewsFields, newsStoryRevisions, type NewsStoryRevision,
+  changedNewsFields, newsStoryRevisions, compareRecordedNewsObservations, type NewsStoryRevision,
 } from "@/lib/newsStoryEvolution";
+import { relatedNewsCoverage } from "@/lib/newsRelatedCoverage";
+import { safePulseSourceUrl } from "@/lib/pulseStoryPresentation";
+import type { NewsStoryObservation } from "@/lib/newsStoryEvolution";
+import { OptionalTimelineBoundary } from "../terminal/OptionalTimelineBoundary";
+
+const NewsObservedRevisionTimeline = React.lazy(() => import("./NewsObservedRevisionTimeline"));
+const RelatedPublisherTimeline = React.lazy(() => import("./NewsObservedRevisionTimeline")
+  .then(module => ({ default: module.RelatedPublisherTimeline })));
 
 function utcDateTime(value: string): string {
   const time = Date.parse(value);
@@ -12,12 +20,27 @@ function utcDateTime(value: string): string {
 
 /** Exact-URL read-through, recording only changes seen while this News panel is mounted. */
 export function NewsStoryEvolution({
-  exactUrl, history,
+  exactUrl, history, coverage = [], onSelectRelated,
 }: {
   exactUrl: string;
   history: readonly NewsStoryRevision[];
+  coverage?: readonly NewsStoryObservation[];
+  onSelectRelated?: (url: string) => void;
 }) {
+  const [timelineVisible, setTimelineVisible] = React.useState(false);
+  const [baselineObservedAt, setBaselineObservedAt] = React.useState<string | null>(null);
+  const [relatedTimelineVisible, setRelatedTimelineVisible] = React.useState(false);
+  React.useEffect(() => {
+    setTimelineVisible(false);
+    setRelatedTimelineVisible(false);
+    setBaselineObservedAt(null);
+  }, [exactUrl]);
   const versions = newsStoryRevisions(history, exactUrl);
+  const earlierObservedAt = baselineObservedAt && versions.some(v => v.observedAt === baselineObservedAt)
+    ? baselineObservedAt : versions.at(-1)?.observedAt ?? null;
+  const observedComparison = earlierObservedAt ? compareRecordedNewsObservations(history, exactUrl, earlierObservedAt) : null;
+  const anchor = coverage.find(item => item.url === exactUrl);
+  const related = anchor ? relatedNewsCoverage(anchor, coverage) : [];
   const changes = versions.slice(0, -1).map((later, index) => ({
     later, before: versions[index + 1],
     fields: changedNewsFields(versions[index + 1], later),
@@ -27,7 +50,7 @@ export function NewsStoryEvolution({
       data-testid="news-story-evolution" aria-label="Observed story feed changes">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <h3 className="font-ui text-sm font-semibold text-foreground">Story Evolution</h3>
-        <span className="font-ui text-[11px] text-muted-foreground">
+        <span className="font-ui text-xs text-muted-foreground">
           {changes.length} observed {changes.length === 1 ? "change" : "changes"}
         </span>
       </div>
@@ -44,6 +67,57 @@ export function NewsStoryEvolution({
           <summary className="cursor-pointer font-ui text-xs font-semibold text-amber-200 focus-visible:outline-2 focus-visible:outline-amber-300">
             Inspect recorded changes
           </summary>
+          <button type="button" aria-expanded={timelineVisible}
+            onClick={() => setTimelineVisible(visible => !visible)}
+            className="mt-3 min-h-10 rounded-md border border-border/60 px-3 py-2 font-ui text-xs text-amber-100 focus-visible:outline-2 focus-visible:outline-amber-300">
+            {timelineVisible ? "Hide visual timeline" : "Explore visual timeline"}
+          </button>
+          {timelineVisible && <OptionalTimelineBoundary key={exactUrl}>
+            <React.Suspense fallback={<p role="status" className="mt-3 font-ui text-xs text-muted-foreground">Loading recorded timeline…</p>}>
+              <NewsObservedRevisionTimeline versions={versions} />
+            </React.Suspense>
+          </OptionalTimelineBoundary>}
+          {observedComparison && <section aria-label="As-observed feed version comparison"
+            data-testid="news-as-observed-comparison" className="mt-3 space-y-3 rounded-lg border border-border/60 p-3">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div className="min-w-0">
+                <h4 className="font-ui text-sm font-semibold text-foreground">Compare as observed then</h4>
+                <p className="font-ui text-xs leading-5 text-muted-foreground">
+                  Local feed captures only. The earlier version was observed while this News panel was open;
+                  it is not proof the publisher or public knew that text before the observation.
+                </p>
+              </div>
+              <label className="min-w-0 flex-1 font-ui text-xs text-muted-foreground sm:max-w-[18rem]">
+                Earlier recorded feed observation (UTC)
+                <select aria-label="Choose an earlier recorded feed observation"
+                  value={earlierObservedAt ?? ""} onChange={event => setBaselineObservedAt(event.target.value)}
+                  className="mt-1 min-h-11 w-full rounded-md border border-border/60 bg-background px-2 font-ui text-sm text-foreground">
+                  {versions.slice(1).map(version => <option key={version.observedAt} value={version.observedAt}>
+                    {utcDateTime(version.observedAt)}
+                  </option>)}
+                </select>
+              </label>
+            </div>
+            <div className="grid min-w-0 gap-3 sm:grid-cols-2">
+              {([
+                { name:"Earlier observation", record: observedComparison.earlier },
+                { name:"Latest observation", record: observedComparison.later },
+              ] as const).map(({name,record})=><article key={name} className="min-w-0 space-y-2 rounded-lg border border-border/50 p-3">
+                <h5 className="font-ui text-xs font-semibold text-foreground">{name}</h5>
+                <p className="font-ui text-xs text-muted-foreground">Captured: <time dateTime={record.observedAt}>{utcDateTime(record.observedAt)}</time></p>
+                <p className="break-words font-ui text-sm font-semibold text-foreground">{record.title}</p>
+                <p className="whitespace-pre-wrap break-words font-ui text-xs leading-5 text-muted-foreground">
+                  {record.summary || "No summary recorded"}
+                </p>
+                <p className="font-ui text-xs text-muted-foreground">Source: {record.source}</p>
+                <p className="font-ui text-xs text-muted-foreground">Feed publication time: {utcDateTime(record.publishedAt)}</p>
+              </article>)}
+            </div>
+            <p role="status" className="font-ui text-xs leading-5 text-muted-foreground">
+              Fields differing between these observations: {observedComparison.changedFields.join(", ") || "none"}.
+              Recorded feed changes are not independently verified article corrections or real-world changes.
+            </p>
+          </section>}
           <ol className="mt-3 space-y-3 border-l border-border/70 pl-3">
             {changes.map(({ later, before, fields }) => (
               <li key={later.observedAt + later.url} className="space-y-1 font-ui text-xs text-muted-foreground">
@@ -62,6 +136,42 @@ export function NewsStoryEvolution({
           </ol>
         </details>
       )}
+      {related.length > 0 && <section className="mt-4 border-t border-border/60 pt-3"
+        data-testid="news-related-coverage" aria-label="Other publisher headlines">
+        <h4 className="font-ui text-sm font-semibold text-foreground">Related publisher headlines</h4>
+        <p className="mt-1 font-ui text-xs leading-5 text-muted-foreground">
+          Shared headline terms within 72 hours suggest further reading, not proof that they report the same event or corroborate its claims.
+        </p>
+        {related.length > 1 && <>
+          <button type="button" aria-expanded={relatedTimelineVisible}
+            onClick={() => setRelatedTimelineVisible(visible => !visible)}
+            className="mt-3 min-h-10 rounded-md border border-border/60 px-3 py-2 font-ui text-xs text-amber-100 focus-visible:outline-2 focus-visible:outline-amber-300">
+            {relatedTimelineVisible ? "Hide publication timeline" : "Explore publication timeline"}
+          </button>
+          {relatedTimelineVisible && <OptionalTimelineBoundary key={exactUrl}>
+            <React.Suspense fallback={<p role="status" className="font-ui text-xs text-muted-foreground">Loading publisher chronology…</p>}>
+              <RelatedPublisherTimeline headlines={related} />
+            </React.Suspense>
+          </OptionalTimelineBoundary>}
+        </>}
+        <ul className="mt-3 space-y-2">{related.map(item => (
+          <li key={item.url} className="rounded-lg border border-border/60 p-2">
+            <p className="font-ui text-xs text-amber-200">{item.source} · <time dateTime={item.publishedAt}>{utcDateTime(item.publishedAt)}</time></p>
+            <p className="mt-1 font-ui text-sm leading-5 text-foreground">{item.title}</p>
+            <div className="mt-2 flex flex-wrap gap-3">
+              {onSelectRelated && <button type="button" onClick={() => onSelectRelated(item.url)}
+                className="min-h-10 font-ui text-xs text-amber-100 underline underline-offset-2 focus-visible:outline-2 focus-visible:outline-amber-300">
+                Read in LiOS
+              </button>}
+              {safePulseSourceUrl(item.url) && <a href={item.url} target="_blank"
+                rel="noopener noreferrer" referrerPolicy="no-referrer"
+                className="inline-flex min-h-10 items-center font-ui text-xs text-muted-foreground underline underline-offset-2 focus-visible:outline-2 focus-visible:outline-amber-300">
+                Open publisher
+              </a>}
+            </div>
+          </li>
+        ))}</ul>
+      </section>}
     </section>
   );
 }

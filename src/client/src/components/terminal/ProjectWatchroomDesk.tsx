@@ -1,9 +1,19 @@
 import * as React from "react";
 import { useMemo, useState } from "react";
 import { BellRing, CircleAlert, Clock3, Workflow } from "lucide-react";
-import { useP9Notifications, useP9Runs, useP9Workflows } from "@/lib/useP9Automation";
-import { projectWatchroomSummary } from "@/lib/phase2ProjectPresentation";
+import { useP9Notifications, useP9Runs, useP9Workflows, type P9RunRecord } from "@/lib/useP9Automation";
+import { projectWatchroomSummary, watchroomRecordedHistory } from "@/lib/phase2ProjectPresentation";
 import { ProjectAutomationPanel } from "./ProjectAutomationPanel";
+import { OptionalTimelineBoundary } from "./OptionalTimelineBoundary";
+
+const WatchroomRecordedRunTimeline = React.lazy(() => import("./WatchroomRecordedRunTimeline"));
+
+const RUN_STATUS_TONE: Record<P9RunRecord["status"], string> = {
+  succeeded: "border-emerald-300/70 bg-emerald-300/30",
+  failed: "border-rose-300/70 bg-rose-300/30",
+  skipped: "border-zinc-400/70 bg-zinc-400/20",
+  running: "border-cyan-300/70 bg-cyan-300/30",
+};
 
 /**
  * One discovery face over canonical P9 workflow/run/notification records.
@@ -11,6 +21,8 @@ import { ProjectAutomationPanel } from "./ProjectAutomationPanel";
  */
 export function ProjectWatchroomDesk({ projectId }: { projectId: number }) {
   const [managing, setManaging] = useState(false);
+  const [timelineWorkflowId, setTimelineWorkflowId] = useState<string | null>(null);
+  React.useEffect(() => { setTimelineWorkflowId(null); }, [projectId]);
   const workflows = useP9Workflows(managing ? null : projectId);
   const runs = useP9Runs(managing ? null : projectId);
   const notifications = useP9Notifications(managing ? null : projectId);
@@ -46,7 +58,9 @@ export function ProjectWatchroomDesk({ projectId }: { projectId: number }) {
           No saved Watchrooms in this Project. Choose Manage watchrooms to review a new, initially paused monitor, or save a workflow from Chat.
         </div>}
         <div className="grid min-w-0 gap-3 lg:grid-cols-2" aria-label="Saved Project watchrooms">
-          {summary.rooms.slice(0, 12).map(room => (
+          {summary.rooms.slice(0, 12).map(room => {
+            const recordedRuns = watchroomRecordedHistory(projectId, room.workflow.id, runs.data ?? []);
+            return (
             <article key={room.workflow.id} className="min-w-0 space-y-2 rounded-xl border border-border/60 bg-white/[0.018] p-4">
               <div className="flex flex-wrap items-center gap-2">
                 <span className="font-ui text-xs capitalize text-muted-foreground">{room.workflow.template.replaceAll("_", " ")}</span>
@@ -60,10 +74,42 @@ export function ProjectWatchroomDesk({ projectId }: { projectId: number }) {
                 {room.latestRun?.summary && <p className="line-clamp-2">{room.latestRun.summary}</p>}
                 <p>{room.latestRun?.sourceRefs.length ?? 0} run source references · {room.latestRun?.executionReceiptIds.length ?? 0} execution receipt IDs</p>
               </div>
+              {recordedRuns.length > 0 && <section aria-label={"Recorded run history for " + room.workflow.name}
+                className="space-y-2 border-t border-border/50 pt-3">
+                <p className="font-ui text-xs text-muted-foreground">
+                  {recordedRuns.length} recent recorded run{recordedRuns.length === 1 ? "" : "s"} · oldest to newest
+                </p>
+                <ol className="flex min-w-0 flex-wrap gap-1.5" data-testid="watchroom-recorded-run-strip">
+                  {recordedRuns.map(run => <li key={run.id}
+                    title={new Date(run.startedAt).toLocaleString() + " · " + run.status}
+                    className={`flex min-h-8 min-w-8 items-center justify-center rounded-md border ${RUN_STATUS_TONE[run.status]}`}>
+                    <span className="sr-only">{run.status} at <time dateTime={run.startedAt}>{run.startedAt}</time></span>
+                    <span aria-hidden="true" className="font-ui text-[11px] font-semibold text-foreground">
+                      {run.status === "succeeded" ? "✓" : run.status === "failed" ? "!" : run.status === "running" ? "…" : "–"}
+                    </span>
+                  </li>)}
+                </ol>
+                <p className="font-ui text-[11px] leading-5 text-muted-foreground">
+                  Recorded P9 outcomes only. A paused monitor, skipped run or missing observation is not a successful execution.
+                </p>
+                {recordedRuns.length > 1 && <>
+                  <button type="button" aria-expanded={timelineWorkflowId === room.workflow.id}
+                    onClick={() => setTimelineWorkflowId(current => current === room.workflow.id ? null : room.workflow.id)}
+                    className="min-h-10 rounded-lg border border-border/65 px-3 py-2 font-ui text-xs text-amber-100 focus-visible:outline-2 focus-visible:outline-amber-300">
+                    {timelineWorkflowId === room.workflow.id ? "Hide run timeline" : "Explore run timeline"}
+                  </button>
+                  {timelineWorkflowId === room.workflow.id && <OptionalTimelineBoundary key={projectId + ":" + room.workflow.id}>
+                    <React.Suspense fallback={<p role="status" className="font-ui text-xs text-muted-foreground">Loading recorded run timeline…</p>}>
+                      <WatchroomRecordedRunTimeline projectId={projectId}
+                        workflowId={room.workflow.id} runs={recordedRuns} />
+                    </React.Suspense>
+                  </OptionalTimelineBoundary>}
+                </>}
+              </section>}
               <button type="button" onClick={() => setManaging(true)}
                 className="min-h-10 rounded-lg border border-border/65 px-3 py-2 font-ui text-sm text-foreground hover:border-amber-300/40 focus-visible:ring-2 focus-visible:ring-amber-300/70">Review workflow and history</button>
             </article>
-          ))}
+            ); })}
         </div>
         {summary.rooms.length > 12 && <p className="font-ui text-xs text-muted-foreground">Showing 12 of {summary.rooms.length} saved workflows. Open Manage watchrooms to review all.</p>}
         {summary.unread.length > 0 && <section className="rounded-lg border border-border/55 p-3" aria-label="Unread workflow notifications">

@@ -29,6 +29,7 @@ import {
   getMarketDatasetRevisionReport,
   getMarketDatasetSnapshot,
   listMarketDatasetSnapshots,
+  compareMarketDatasetPayloads,
 } from "./marketDatasetStore";
 import {
   captureFredSeriesSnapshot,
@@ -37,6 +38,8 @@ import {
   getEconomicDatasetRevisionReport,
   getEconomicDatasetSnapshot,
   listEconomicDatasetSnapshots,
+  compareEconomicDatasetPayloads,
+  economicSnapshotContentHash,
 } from "./economicDatasetStore";
 import {
   calculateEstimateSurprises,
@@ -56,6 +59,8 @@ import { IntegratedModelArtifactError, integratedModelArtifactRequestSchema, loa
 import { getDb } from "./db";
 import { and, eq, isNull } from "drizzle-orm";
 import { datasetSnapshots, users } from "@shared/schema";
+import { marketCapturePairIssue, marketCaptureReference } from "@shared/marketEvidenceTimeMachine";
+import { economicCapturePairIssue, economicCaptureReference } from "@shared/economicEvidenceTimeMachine";
 
 const READ_ROLES = ["internal_admin", "internal_analyst", "internal_compliance"] as const;
 const AUTHOR_ROLES = ["internal_admin", "internal_analyst"] as const;
@@ -139,6 +144,54 @@ export function registerDataFabricRoutes(app: Express): void {
     res.json(await listMarketDatasetSnapshots(symbol.data, limit));
   });
 
+  // B06: compare exactly two immutable market captures. This endpoint must
+  // never ask the live provider to reconstruct a past observation, nor treat
+  // historical bar dates as the capture's availability date.
+  app.get("/api/data-snapshots/markets/:symbol/compare", requireRole(...READ_ROLES), async (req, res) => {
+    const symbol = symbolSchema.safeParse(req.params.symbol);
+    const baselineId = z.string().uuid().safeParse(req.query.baselineId);
+    const currentId = z.string().uuid().safeParse(req.query.currentId);
+    if (!symbol.success || !baselineId.success || !currentId.success || baselineId.data === currentId.data)
+      return res.status(400).json({ error: "Two distinct saved capture IDs and an exact symbol are required." });
+    try {
+      const [baseline, current] = await Promise.all([
+        getMarketDatasetSnapshot(baselineId.data),
+        getMarketDatasetSnapshot(currentId.data),
+      ]);
+      if (!baseline || !current || baseline.entityKey !== symbol.data.toUpperCase() ||
+        current.entityKey !== symbol.data.toUpperCase()) {
+        return res.status(404).json({ error: "No authorized capture pair exists for this symbol." });
+      }
+      const issue = marketCapturePairIssue(baseline, current, symbol.data);
+      if (issue) return res.status(422).json({ status: "incomparable", error: issue });
+      // The canonical market store fingerprints payload + lineage. Validate
+      // both before comparing; a changed or damaged row is not evidence.
+      if ([baseline, current].some(snapshot =>
+        stableSnapshotHash({ payload: snapshot.payload, lineage: snapshot.lineage }) !== snapshot.contentHash)) {
+        return res.status(409).json({ status: "unverified", error: "Recorded capture content hash mismatch; no comparison is available." });
+      }
+      const report = compareMarketDatasetPayloads(baseline.payload, current.payload, current.id, baseline.id);
+      res.setHeader("Cache-Control", "no-store");
+      return res.json({
+        status: "compared", baseline: marketCaptureReference(baseline), current: marketCaptureReference(current),
+        changes: {
+          status: report.status, changedObservations: report.changedObservations,
+          materialChanges: report.materialChanges, totalAddedDates: report.addedDates.length,
+          totalRemovedDates: report.removedDates.length, actionChanges: report.actionChanges,
+          revisions: report.revisions.slice(0, 48), addedDates: report.addedDates.slice(0, 16),
+          removedDates: report.removedDates.slice(0, 16),
+        },
+        omitted: {
+          revisions: Math.max(0, report.revisions.length - 48),
+          addedDates: Math.max(0, report.addedDates.length - 16),
+          removedDates: Math.max(0, report.removedDates.length - 16),
+        },
+      });
+    } catch {
+      return res.status(502).json({ status: "unavailable", error: "Saved market capture comparison unavailable." });
+    }
+  });
+
   app.get("/api/data-snapshots/markets/:symbol/as-of", requireRole(...READ_ROLES), async (req, res) => {
     const symbol = symbolSchema.safeParse(req.params.symbol);
     const asOf = z.coerce.date().safeParse(req.query.asOf ?? new Date());
@@ -167,6 +220,51 @@ export function registerDataFabricRoutes(app: Express): void {
     const seriesId = z.string().trim().min(1).max(80).regex(/^[A-Za-z0-9._-]+$/).safeParse(req.params.seriesId);
     if (!seriesId.success) return res.status(400).json({ error: "A valid series ID is required." });
     res.json(await listEconomicDatasetSnapshots(seriesId.data, "economic_series", Math.min(Math.max(Number(req.query.limit) || 25, 1), 100)));
+  });
+
+  // B06: compare real retained macro vintages. Only previously captured
+  // versions with valid content hashes can enter this pairwise comparison.
+  app.get("/api/data-snapshots/economics/:seriesId/compare", requireRole(...READ_ROLES), async (req, res) => {
+    const seriesId = z.string().trim().min(1).max(80).regex(/^[A-Za-z0-9._-]+$/).safeParse(req.params.seriesId);
+    const baselineId = z.string().uuid().safeParse(req.query.baselineId);
+    const currentId = z.string().uuid().safeParse(req.query.currentId);
+    if (!seriesId.success || !baselineId.success || !currentId.success || baselineId.data === currentId.data)
+      return res.status(400).json({ error: "Exact economic series and two distinct saved snapshot IDs are required." });
+    try {
+      const [baseline, current] = await Promise.all([
+        getEconomicDatasetSnapshot(baselineId.data), getEconomicDatasetSnapshot(currentId.data),
+      ]);
+      if (!baseline || !current || baseline.dataClass !== "economic_series" ||
+          current.dataClass !== "economic_series" ||
+          baseline.entityKey !== seriesId.data.toUpperCase() ||
+          current.entityKey !== seriesId.data.toUpperCase()) {
+        return res.status(404).json({ error: "The recorded economic capture pair is unavailable for this series." });
+      }
+      const issue = economicCapturePairIssue(baseline,current,seriesId.data);
+      if (issue) return res.status(422).json({ status: "incomparable", error: issue });
+      if ([baseline,current].some(snapshot =>
+          economicSnapshotContentHash(snapshot.payload,snapshot.lineage) !== snapshot.contentHash)) {
+        return res.status(409).json({ status: "unverified", error: "Saved economic capture SHA-256 verification failed." });
+      }
+      const result = compareEconomicDatasetPayloads(baseline.payload,current.payload);
+      res.setHeader("Cache-Control", "no-store");
+      return res.json({
+        status: "compared", baseline: economicCaptureReference(baseline), current: economicCaptureReference(current),
+        changes: {
+          status: result.status, changedObservations: result.changedObservations,
+          totalAddedDates: result.addedDates.length, totalRemovedDates: result.removedDates.length,
+          revisions: result.revisions.slice(0,48), addedDates: result.addedDates.slice(0,16),
+          removedDates: result.removedDates.slice(0,16),
+        },
+        omitted: {
+          revisions: Math.max(0,result.revisions.length-48),
+          addedDates: Math.max(0,result.addedDates.length-16),
+          removedDates: Math.max(0,result.removedDates.length-16),
+        },
+      });
+    } catch {
+      return res.status(502).json({ status:"unavailable", error:"Saved economic evidence comparison unavailable." });
+    }
   });
 
   app.get("/api/data-snapshots/economics/:seriesId/as-of", requireRole(...READ_ROLES), async (req, res) => {

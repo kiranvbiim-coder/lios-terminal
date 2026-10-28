@@ -117,11 +117,11 @@ export function ProjectEvidenceGraph({ projectId, graph, insight }: {
           className={`pointer-events-auto absolute flex h-[68px] w-[156px] flex-col justify-center overflow-hidden rounded-lg border bg-zinc-950/95 px-2 text-left font-ui shadow-sm outline-none focus-visible:ring-4 focus-visible:ring-amber-300/70 ${chosenNode === item.id
             ? "border-amber-300 text-foreground" : item.directlyMatched ? "border-amber-300/55 text-foreground" : "border-border/70 text-muted-foreground"}`}
           style={{ left: item.x - 78, top: item.y - 34 }}>
-          <span className="block truncate text-[10px] capitalize text-amber-200">{item.kind.replaceAll("_", " ")}</span>
+          <span className="block truncate text-xs capitalize text-amber-200">{item.kind.replaceAll("_", " ")}</span>
           <span className="block line-clamp-2 text-xs font-semibold">{item.label}</span>
         </button>)}
       </div>
-      <div className="pointer-events-none absolute bottom-2 left-2 flex items-center gap-1 rounded-md border border-border/45 bg-background/90 px-2 py-1 font-ui text-[11px] text-muted-foreground" aria-hidden="true">
+      <div className="pointer-events-none absolute bottom-2 left-2 flex items-center gap-1 rounded-md border border-border/45 bg-background/90 px-2 py-1 font-ui text-xs text-muted-foreground" aria-hidden="true">
         <Move className="h-3 w-3"/>Pan · {Math.round(zoom * 100)}%
       </div>
     </div>
