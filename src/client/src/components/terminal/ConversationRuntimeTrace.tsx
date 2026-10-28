@@ -57,6 +57,8 @@ interface Props {
   onKeepArtifact?: (artifact: ConversationArtifactDraft) => void;
   /** C06: opens an exact previously saved P4 revision through the owning Chat; no implicit save or edit. */
   onOpenSavedArtifact?: (artifactId: string, version: number, projectId: number | null, requestId: string) => void;
+  /** C07: opens existing P9 draft/review; must not schedule or run anything. */
+  onPrepareAutomation?: () => void;
   onRecoveryAction?: (action: string) => void;
   /** Prefills the composer with a suggested next request; never sends it. */
   onFollowUp?: (prompt: string) => void;
@@ -161,6 +163,7 @@ export default function ConversationRuntimeTrace({
   onMutationCancel,
   onKeepArtifact,
   onOpenSavedArtifact,
+  onPrepareAutomation,
   onRecoveryAction,
   onFollowUp,
   onRetry,
@@ -589,6 +592,17 @@ export default function ConversationRuntimeTrace({
         </section>
       )}
 
+      {!busy && done?.type === "done" && done.status === "completed" && onPrepareAutomation && (
+        <div data-testid="c07-chat-automation-draft" className="mb-2 flex flex-wrap items-center justify-between gap-2 rounded-lg border border-border/55 px-3 py-2">
+          <p className="font-ui text-xs leading-5 text-muted-foreground">
+            Reuse this reviewed Project Chat request. No monitoring starts until a separate P9 activation review.
+          </p>
+          <button type="button" onClick={onPrepareAutomation}
+            className="min-h-11 rounded-lg border border-amber-300/35 px-3 py-2 font-ui text-sm text-foreground hover:bg-amber-300/[0.05] focus-visible:outline focus-visible:outline-2 focus-visible:outline-amber-300">
+            Prepare automation draft
+          </button>
+        </div>
+      )}
       {visualAnswerRequest && <GovernedVisualAnswer
         key={visualAnswerRequest.artifactId + ":" + visualAnswerRequest.version}
         request={visualAnswerRequest} />}

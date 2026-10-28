@@ -47,7 +47,9 @@ export function SaveWorkflowDialog({
   const saveInFlight = useRef(false);
   const opener = useRef<HTMLElement | null>(typeof document !== "undefined" && document.activeElement instanceof HTMLElement ? document.activeElement : null);
   const [template, setTemplate] = useState<P9WorkflowTemplate>("custom");
-  const [triggerMode, setTriggerMode] = useState<"manual" | "interval" | "daily" | "event">("interval");
+  const [triggerMode, setTriggerMode] = useState<"manual" | "interval" | "daily" | "event">("manual");
+  const [activateAfterSave, setActivateAfterSave] = useState(false);
+  const [activationReviewedKey, setActivationReviewedKey] = useState<string | null>(null);
   const [intervalMinutes, setIntervalMinutes] = useState(60);
   const [dailyHour, setDailyHour] = useState(9);
   const [dailyMinute, setDailyMinute] = useState(0);
@@ -87,6 +89,13 @@ export function SaveWorkflowDialog({
     return { type: "event", eventType, filters };
   }, [dailyHour, dailyMinute, eventFilterKey, eventFilterValue, eventType, intervalMinutes, triggerMode]);
 
+  const activationSignature = JSON.stringify([
+    projectId, chatId, sourceRequestId, request.message,
+    template, name.trim(), trigger, notify, minRelevance, cooldownMinutes,
+    request.executionMode, request.sourceScope, acceptedIdentity, followCurrentProfile,
+  ]);
+  const activationReviewed = activateAfterSave && activationReviewedKey === activationSignature;
+
   const changeTemplate = (next: P9WorkflowTemplate) => {
     setTemplate(next);
     setEventType(defaultEvent(next));
@@ -95,6 +104,10 @@ export function SaveWorkflowDialog({
 
   const save = async () => {
     if (saveInFlight.current || !name.trim()) return;
+    if (activateAfterSave && !activationReviewed) {
+      setError("Review the exact trigger, scope and approvals before activating this workflow.");
+      return;
+    }
     if (financeMonitor && (!accepted || !acceptedCurrent)) {
       setError("Inspect and explicitly accept the retained financial Artifact version before saving this monitor.");
       return;
@@ -134,7 +147,7 @@ export function SaveWorkflowDialog({
         sourceRefs: [],
         engineRefs: ["lios.conversation-runtime"],
         artifactRefs: activeArtifactRef ? [activeArtifactRef] : [],
-        enabled: true,
+        enabled: activationReviewed,
       });
       onSaved();
       onClose();
@@ -157,28 +170,28 @@ export function SaveWorkflowDialog({
         <header className="flex items-center gap-3 border-b border-border/70 px-4 py-3">
           <Save className="h-4 w-4 text-amber-300" />
           <div className="min-w-0 flex-1">
-            <DialogTitle className="font-ui text-sm font-semibold text-foreground">Save Workflow</DialogTitle>
-            <DialogDescription className="mt-0.5 font-ui text-xs text-muted-foreground">Review this Project's trigger and approvals before saving. A scheduled workflow can run again on fresh data; permissions and AI-sharing policy remain enforced.</DialogDescription>
+            <DialogTitle className="font-ui text-sm font-semibold text-foreground">Review automation draft</DialogTitle>
+            <DialogDescription className="mt-0.5 font-ui text-xs text-muted-foreground">Save an inactive, manual workflow first. To run automatically, explicitly choose a trigger, review the retained request and approve activation. Home permissions and AI-sharing policy remain enforced.</DialogDescription>
           </div>
           <button type="button" aria-label="Close Save Workflow" disabled={saving} onClick={() => { if (!saveInFlight.current) onClose(); }} className="rounded p-1.5 text-muted-foreground hover:bg-white/5 hover:text-foreground"><X className="h-3.5 w-3.5" /></button>
         </header>
 
         <fieldset disabled={saving} className="space-y-4 p-4">
           <label className="block">
-            <span className="font-terminal text-[6px] uppercase tracking-wider text-muted-foreground">Workflow name</span>
+            <span className="font-terminal text-xs uppercase tracking-wider text-muted-foreground">Workflow name</span>
             <input ref={nameRef} value={name} onChange={event => setName(event.target.value)} maxLength={200} className="mt-1 min-h-11 w-full rounded border border-border/60 bg-black/25 px-3 py-2 font-ui text-sm text-foreground outline-none focus:border-amber-300/35" />
           </label>
 
           <div className="grid gap-3 sm:grid-cols-2">
             <label>
-              <span className="font-terminal text-[6px] uppercase tracking-wider text-muted-foreground">Template</span>
-              <select value={template} onChange={(event) => changeTemplate(event.target.value as P9WorkflowTemplate)} className="mt-1 w-full rounded border border-border/60 bg-black px-2 py-2 font-ui text-[8px] text-foreground">
+              <span className="font-terminal text-xs uppercase tracking-wider text-muted-foreground">Template</span>
+              <select value={template} onChange={(event) => changeTemplate(event.target.value as P9WorkflowTemplate)} className="mt-1 w-full rounded border border-border/60 bg-black px-2 py-2 font-ui text-xs text-foreground">
                 {TEMPLATES.map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}
               </select>
             </label>
             <label>
-              <span className="font-terminal text-[6px] uppercase tracking-wider text-muted-foreground">Trigger</span>
-              <select value={triggerMode} onChange={(event) => setTriggerMode(event.target.value as typeof triggerMode)} className="mt-1 w-full rounded border border-border/60 bg-black px-2 py-2 font-ui text-[8px] text-foreground">
+              <span className="font-terminal text-xs uppercase tracking-wider text-muted-foreground">Trigger</span>
+              <select value={triggerMode} onChange={(event) => setTriggerMode(event.target.value as typeof triggerMode)} className="mt-1 w-full rounded border border-border/60 bg-black px-2 py-2 font-ui text-xs text-foreground">
                 <option value="manual">Manual / Run now</option>
                 <option value="interval">Schedule / interval</option>
                 <option value="daily">Schedule / daily UTC</option>
@@ -208,9 +221,9 @@ export function SaveWorkflowDialog({
           </label>}
           {triggerMode === "interval" && (
             <label className="block rounded border border-border/50 bg-black/15 p-3">
-              <span className="flex items-center gap-2 font-terminal text-[6px] uppercase tracking-wider text-muted-foreground"><Clock3 className="h-3 w-3" /> Repeat every minutes</span>
-              <input type="number" min={5} max={10080} value={intervalMinutes} onChange={(event) => setIntervalMinutes(Number(event.target.value))} className="mt-2 w-32 rounded border border-border/60 bg-black px-2 py-1.5 font-terminal text-[8px] text-foreground" />
-              <div className="mt-2 font-ui text-[7px] text-muted-foreground">Minimum 5 minutes. The definition survives application restarts; overdue work is reclaimed by the P9 scheduler.</div>
+              <span className="flex items-center gap-2 font-terminal text-xs uppercase tracking-wider text-muted-foreground"><Clock3 className="h-3 w-3" /> Repeat every minutes</span>
+              <input type="number" min={5} max={10080} value={intervalMinutes} onChange={(event) => setIntervalMinutes(Number(event.target.value))} className="mt-2 w-32 rounded border border-border/60 bg-black px-2 py-1.5 font-terminal text-xs text-foreground" />
+              <div className="mt-2 font-ui text-xs text-muted-foreground">Minimum 5 minutes. The definition survives application restarts; overdue work is reclaimed by the P9 scheduler.</div>
             </label>
           )}
           {triggerMode === "daily" && <fieldset className="rounded border border-border/50 bg-black/15 p-3">
@@ -230,8 +243,8 @@ export function SaveWorkflowDialog({
             <div className="rounded border border-border/50 bg-black/15 p-3">
               <div className="grid gap-2 sm:grid-cols-3">
                 <label>
-                  <span className="font-terminal text-[6px] uppercase tracking-wider text-muted-foreground">Event</span>
-                  <select value={eventType} onChange={(event) => setEventType(event.target.value as P9AutomationEventType)} className="mt-1 w-full rounded border border-border/60 bg-black px-2 py-1.5 font-ui text-[7px] text-foreground">
+                  <span className="font-terminal text-xs uppercase tracking-wider text-muted-foreground">Event</span>
+                  <select value={eventType} onChange={(event) => setEventType(event.target.value as P9AutomationEventType)} className="mt-1 w-full rounded border border-border/60 bg-black px-2 py-1.5 font-ui text-xs text-foreground">
                     <option value="filing">Filing</option>
                     <option value="earnings">Earnings</option>
                     <option value="estimate_revision">Estimate revision</option>
@@ -242,12 +255,12 @@ export function SaveWorkflowDialog({
                   </select>
                 </label>
                 <label>
-                  <span className="font-terminal text-[6px] uppercase tracking-wider text-muted-foreground">Filter key</span>
-                  <input value={eventFilterKey} onChange={(event) => setEventFilterKey(event.target.value)} placeholder="symbol" className="mt-1 w-full rounded border border-border/60 bg-black px-2 py-1.5 font-ui text-[7px] text-foreground" />
+                  <span className="font-terminal text-xs uppercase tracking-wider text-muted-foreground">Filter key</span>
+                  <input value={eventFilterKey} onChange={(event) => setEventFilterKey(event.target.value)} placeholder="symbol" className="mt-1 w-full rounded border border-border/60 bg-black px-2 py-1.5 font-ui text-xs text-foreground" />
                 </label>
                 <label>
-                  <span className="font-terminal text-[6px] uppercase tracking-wider text-muted-foreground">Filter value</span>
-                  <input value={eventFilterValue} onChange={(event) => setEventFilterValue(event.target.value)} placeholder="AAPL" className="mt-1 w-full rounded border border-border/60 bg-black px-2 py-1.5 font-ui text-[7px] text-foreground" />
+                  <span className="font-terminal text-xs uppercase tracking-wider text-muted-foreground">Filter value</span>
+                  <input value={eventFilterValue} onChange={(event) => setEventFilterValue(event.target.value)} placeholder="AAPL" className="mt-1 w-full rounded border border-border/60 bg-black px-2 py-1.5 font-ui text-xs text-foreground" />
                 </label>
               </div>
               <p className="mt-2 text-xs text-muted-foreground">Only observed events matching this Project/account and filter can run the recipe. Accepted deliveries survive Home restart. Current permissions are rechecked; already-started actions are not blindly replayed.</p>
@@ -255,34 +268,67 @@ export function SaveWorkflowDialog({
           )}
 
           <div className="rounded border border-border/50 bg-black/15 p-3">
-            <label className="flex items-center justify-between gap-3 font-ui text-[8px] text-foreground">
+            <label className="flex items-center justify-between gap-3 font-ui text-xs text-foreground">
               Notify only when configured policy permits
               <input type="checkbox" checked={notify} onChange={(event) => setNotify(event.target.checked)} />
             </label>
             <div className="mt-3 grid gap-3 sm:grid-cols-2">
               <label>
-                <span className="font-terminal text-[6px] uppercase tracking-wider text-muted-foreground">Minimum relevance · {minRelevance.toFixed(2)}</span>
+                <span className="font-terminal text-xs uppercase tracking-wider text-muted-foreground">Minimum relevance · {minRelevance.toFixed(2)}</span>
                 <input type="range" min={0} max={1} step={0.05} value={minRelevance} onChange={(event) => setMinRelevance(Number(event.target.value))} className="mt-1 w-full" />
               </label>
               <label>
-                <span className="font-terminal text-[6px] uppercase tracking-wider text-muted-foreground">Cooldown minutes</span>
-                <input type="number" min={0} max={43200} value={cooldownMinutes} onChange={(event) => setCooldownMinutes(Number(event.target.value))} className="mt-1 w-full rounded border border-border/60 bg-black px-2 py-1.5 font-terminal text-[8px] text-foreground" />
+                <span className="font-terminal text-xs uppercase tracking-wider text-muted-foreground">Cooldown minutes</span>
+                <input type="number" min={0} max={43200} value={cooldownMinutes} onChange={(event) => setCooldownMinutes(Number(event.target.value))} className="mt-1 w-full rounded border border-border/60 bg-black px-2 py-1.5 font-terminal text-xs text-foreground" />
               </label>
             </div>
-            <div className="mt-2 font-ui text-[7px] leading-4 text-muted-foreground">Unchanged runs are suppressed by default. Canonical notifications remain in this Project; permitted desktop alerts show redacted text. Your current notification policy is rechecked when a run finishes.</div>
+            <div className="mt-2 font-ui text-xs leading-4 text-muted-foreground">Unchanged runs are suppressed by default. Canonical notifications remain in this Project; permitted desktop alerts show redacted text. Your current notification policy is rechecked when a run finishes.</div>
           </div>
 
-          <div className="rounded border border-cyan-300/15 bg-cyan-300/[0.025] p-3 font-ui text-[7px] leading-4 text-muted-foreground">
+          <div className="rounded border border-cyan-300/15 bg-cyan-300/[0.025] p-3 font-ui text-xs leading-4 text-muted-foreground">
             Saved request: <span className="text-foreground">{request.message.slice(0, 180)}</span>{request.message.length > 180 ? "…" : ""}<br />
             Execution: {financeMonitor ? accepted?.version.refreshSpec?.executionMode ?? request.executionMode : request.executionMode} · Project approvals carried by this workflow: {request.approvals.length ? request.approvals.map((item) => item.action).join(", ") : "none"}. Missing high-impact approval stops the background run rather than auto-approving it.
           </div>
 
+          <section aria-label="Automation activation review" data-testid="c07-automation-activation-review"
+            className="space-y-3 rounded-lg border border-amber-300/20 bg-amber-300/[0.03] p-3">
+            <label className="flex min-h-11 items-start gap-3 text-sm text-foreground">
+              <input type="checkbox" className="mt-1 h-4 w-4" checked={activateAfterSave}
+                onChange={event => { setActivateAfterSave(event.target.checked); setActivationReviewedKey(null); }} />
+              <span>
+                Activate this workflow after saving
+                <span className="mt-1 block text-xs leading-5 text-muted-foreground">
+                  Off by default. An inactive draft has no scheduled or event execution until you enable it from this review or Project Automations.
+                </span>
+              </span>
+            </label>
+            {activateAfterSave && <>
+              <div className="space-y-1 rounded-md border border-amber-300/25 p-3 text-xs leading-5 text-muted-foreground">
+                <p className="font-semibold text-foreground">Activation scope to review</p>
+                <p>Trigger: {trigger.type === "manual" ? "manual only" : trigger.type === "event"
+                  ? `event ${trigger.eventType}`
+                  : trigger.schedule.kind === "daily_utc"
+                    ? `daily at ${String(trigger.schedule.hour).padStart(2,"0")}:${String(trigger.schedule.minute).padStart(2,"0")} UTC`
+                    : `every ${trigger.schedule.everyMinutes} minutes`}.</p>
+                <p>Template: {template}. Saved execution: {request.executionMode}. Notifications: {notify ? "in-app only" : "off"}.</p>
+                <p>Existing approvals are not new grants. High-impact actions require their own server-side review. Saved Home work may continue while the desktop app is closed.</p>
+              </div>
+              <label className="flex min-h-11 items-start gap-3 text-sm text-foreground">
+                <input type="checkbox" className="mt-1 h-4 w-4" checked={activationReviewed}
+                  onChange={event => setActivationReviewedKey(event.target.checked ? activationSignature : null)} />
+                <span>I reviewed this exact trigger, Project and execution scope. Enable only this saved workflow after confirmation.</span>
+              </label>
+              {!activationReviewed && <p role="status" className="text-xs text-amber-200">
+                Activation requires this review. Editing settings invalidates an earlier acknowledgement.
+              </p>}
+            </>}
+          </section>
           {error && <div role="alert" className="rounded border border-red-400/25 bg-red-400/[0.04] px-3 py-2 font-ui text-sm text-red-200">{error}</div>}
 
           <div className="flex justify-end gap-2">
             <button type="button" disabled={saving} onClick={() => { if (!saveInFlight.current) onClose(); }} className="min-h-11 rounded px-3 py-2 font-ui text-sm text-muted-foreground hover:text-foreground">Cancel</button>
-            <button disabled={saving || !name.trim() || (financeMonitor && !acceptedCurrent)} onClick={() => void save()} className="rounded border border-amber-400/35 bg-amber-400/[0.08] px-3 py-2 font-ui text-[8px] font-medium text-amber-200 disabled:opacity-40">
-              {saving ? "Saving…" : "Save Workflow"}
+            <button disabled={saving || !name.trim() || (financeMonitor && !acceptedCurrent) || (activateAfterSave && !activationReviewed)} onClick={() => void save()} className="rounded border border-amber-400/35 bg-amber-400/[0.08] px-3 py-2 font-ui text-xs font-medium text-amber-200 disabled:opacity-40">
+              {saving ? "Saving…" : activationReviewed ? "Save and activate" : "Save inactive draft"}
             </button>
           </div>
         </fieldset>

@@ -530,3 +530,16 @@ test("C06 saved runtime Artifact offers exact-version reopen only when canonical
  const unsaved=render([event({type:"artifact",artifact:draft}),doneOk],{onOpenSavedArtifact:noop});
  assert.doesNotMatch(unsaved,/c06-open-recorded-artifact/);
 });
+
+test("C07 completed Project workflows only offer a review dialog, never a direct schedule or run",()=>{
+ const visible=render([planEvent,sourceResult,doneOk],{onPrepareAutomation:noop});
+ assert.match(visible,/data-testid="c07-chat-automation-draft"/);
+ assert.match(visible,/Prepare automation draft/);
+ assert.match(visible,/No monitoring starts until a separate P9 activation review/);
+ const denied=render([planEvent,event({type:"done",status:"failed"})],{onPrepareAutomation:noop});
+ assert.doesNotMatch(denied,/c07-chat-automation-draft/);
+ const running=render([planEvent],{onPrepareAutomation:noop,busy:true});
+ assert.doesNotMatch(running,/c07-chat-automation-draft/);
+ const noProject=render([planEvent,doneOk],{onPrepareAutomation:undefined});
+ assert.doesNotMatch(noProject,/c07-chat-automation-draft/);
+});

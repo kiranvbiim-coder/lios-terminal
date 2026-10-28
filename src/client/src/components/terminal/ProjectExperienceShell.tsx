@@ -2613,6 +2613,18 @@ export default function ProjectExperienceShell({
                   // The existing ConversationArtifactSidecar/ArtifactPane now
                   // re-fetches this exact version under P4 access controls.
                 }}
+                onPrepareAutomation={chatMode === "project" && selection.projectId && selection.chatId &&
+                  activeChat?.scope === "project" && lastWorkflowRequest && runtimeRequestId &&
+                  runtimeEvents.some(event => event.type === "done" && event.requestId === runtimeRequestId && event.status === "completed")
+                  ? () => {
+                    if (busy || busyRef.current || sendInFlightRef.current ||
+                        keepingArtifactRef.current || artifactDraftDirtyRef.current) {
+                      setLifecycleNotice("Finish the active run and save your current Artifact draft before preparing an automation.");
+                      return;
+                    }
+                    // This only opens the existing P9 SaveWorkflowDialog, never creates or enables a workflow.
+                    setShowSaveWorkflow(true);
+                  } : undefined}
                 onKeepArtifact={chatMode === "temporary" ? undefined : keepArtifact}
                 onSubmitAssumptions={(message) => void send({ message })}
               />
