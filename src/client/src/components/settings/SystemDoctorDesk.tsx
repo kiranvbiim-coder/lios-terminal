@@ -88,7 +88,7 @@ export function SystemDoctorDesk() {
       </p>
       {shown.length === 0 && <p className="rounded-lg border border-dashed border-border/60 p-3 font-ui text-sm text-muted-foreground" role="status">
         No observed runtime records match these filters. Clear search or disable “Needs attention only”; no component has been repaired or declared healthy.
-      </p>
+      </p>}
       <div className="max-h-72 overflow-auto rounded-lg border border-border/55" aria-label="Individual registered runtime statuses">
         <ul className="divide-y divide-border/45">
           {shown.slice(0, 100).map(record => <li key={record.componentId} className="flex flex-wrap items-center justify-between gap-2 px-3 py-2 font-ui text-sm">
