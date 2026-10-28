@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { runtimeDoctorSnapshotSchema, summarizeRuntimeDoctor } from "./phase4RuntimeDoctor";
+import { runtimeDoctorSnapshotSchema, summarizeRuntimeDoctor, visibleRuntimeDoctorRecords } from "./phase4RuntimeDoctor";
 
 const record = (componentId: string, state: "available" | "configurable" | "unavailable" | "degraded") => ({
   componentId, state, detail: "No secrets", checkedAt: "2026-10-27T12:00:00Z",
@@ -31,4 +31,29 @@ test("configurable means registry-only, never available", () => {
   assert.equal(result.available,0);
   assert.equal(result.unverified,1);
   assert.equal(result.status,"partial");
+});
+
+test("D03 runtime doctor finds only observed components, across the whole registry before display cap", () => {
+  const reports = Array.from({ length: 150 }, (_, i) => record("component:" + i, i === 140 ? "degraded" : "available"));
+  reports[140].componentId = "source:unavailable-140";
+  assert.deepEqual(visibleRuntimeDoctorRecords(reports, "UNAVAILABLE-140").map(x => x.componentId),
+    ["source:unavailable-140"]);
+  assert.deepEqual(visibleRuntimeDoctorRecords(reports, "degraded").map(x => x.componentId),
+    ["source:unavailable-140"]);
+  assert.deepEqual(visibleRuntimeDoctorRecords(reports, "", true).map(x => x.componentId),
+    ["source:unavailable-140"]);
+  assert.equal(visibleRuntimeDoctorRecords(reports, "missing", true).length, 0);
+  assert.equal(visibleRuntimeDoctorRecords(reports, "").length, 150);
+  assert.equal(reports[140].state, "degraded");
+});
+
+test("D03 registered and configurable are not silently promoted to observed active", () => {
+  const records = [record("registered:unused", "configurable"), record("gateway:online", "available"),
+    record("provider:disabled", "unavailable")];
+  const parsed = runtimeDoctorSnapshotSchema.parse({ contractVersion: "1", health: records });
+  const outcome = summarizeRuntimeDoctor(parsed);
+  assert.deepEqual([outcome.available, outcome.impaired, outcome.unverified], [1, 1, 1]);
+  assert.deepEqual(visibleRuntimeDoctorRecords(outcome.records, "", true).map(x => x.componentId),
+    ["provider:disabled"]);
+  assert.equal(visibleRuntimeDoctorRecords(outcome.records, "configurable", true).length, 0);
 });
