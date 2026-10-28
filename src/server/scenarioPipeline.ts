@@ -22,7 +22,17 @@ import {
   type ScenarioAssetImpact,
   type ScenarioSource,
 } from "./scenarioActionEngine";
-import { getDatasetSnapshot } from "./pointInTimeDatasetStore";
+import { loadIntegratedModelDatasetSource, assertIntegratedModelDatasetSourceCurrent } from "./integratedModelArtifact";
+import { getDb } from "./db";
+import { datasetSnapshots } from "@shared/schema";
+import { eq } from "drizzle-orm";
+import { runWithRequestIdentity } from "./requestContext";
+import { canAccessDatasetSnapshot } from "./columnarArtifactStore";
+import { getEntitlementPolicyById } from "./dataEntitlementStore";
+import type { TenantContext } from "./tenantContext";
+import { factorRiskSnapshotContentHash, buildFactorAttributionInput } from "./factorRiskModel";
+import { resolveAdvancedQuantInputProvenance } from "@shared/quantModelRegistry";
+import { admitTerminalExecutionSources } from "./terminalArtifactTool";
 
 const finite = z.number().finite();
 const boundedMap = z.record(z.string().trim().min(1).max(160), finite).superRefine((value, ctx) => {
@@ -89,7 +99,7 @@ export interface IntegratedValuation {
 }
 
 export class ScenarioPipelineError extends Error {
-  constructor(public readonly statusCode: 404 | 422, message: string) { super(message); this.name = "ScenarioPipelineError"; }
+  constructor(public readonly statusCode: 403 | 404 | 409 | 422, message: string) { super(message); this.name = "ScenarioPipelineError"; }
 }
 
 function numberField(record: Record<string, number>, keys: string[], label: string): number {
@@ -173,48 +183,117 @@ export interface ScenarioPipelineReceiptCalculation {
 
 export interface ScenarioPipelineResult { trace: ScenarioPipelineTrace; receiptCalculation: ScenarioPipelineReceiptCalculation; }
 
-export interface ScenarioPipelineDependencies {
-  getDatasetSnapshot: (id: string) => Promise<PointInTimeDatasetSnapshot | null>;
-  runIntegratedFinancialModel: typeof runIntegratedFinancialModel;
-  getFactorRiskSnapshot: (id: string) => Promise<FactorRiskSnapshot | null>;
-  decomposeFactorRiskSnapshot: typeof decomposeFactorRiskSnapshot;
-  calculateScenarioActionCandidates: typeof calculateScenarioActionCandidates;
+interface AdmittedScenarioSources {
+  dataset: PointInTimeDatasetSnapshot;
+  factorSnapshot: FactorRiskSnapshot;
+  assertCurrent: () => Promise<void>;
 }
-const defaultDependencies: ScenarioPipelineDependencies = { getDatasetSnapshot, runIntegratedFinancialModel, getFactorRiskSnapshot, decomposeFactorRiskSnapshot, calculateScenarioActionCandidates };
+function factorScenario(request: ScenarioPipelineRequest) {
+  const source = request.source;
+  return {
+    id: request.scenarioId, label: request.scenarioName,
+    factorShocks: request.factorShocks, specificShocks: request.specificShocks,
+    // Incomplete manual provenance stays verbatim in the pipeline trace.
+    // Do not invent an as-of date or source units for the stricter factor contract.
+    ...(source?.source && source.asOf && source.unit ? {provenance:{
+      source:source.source,asOf:source.asOf,units:source.unit,period:source.period,
+    }} : {}),
+  };
+}
 
-export async function runScenarioPipeline(rawRequest: ScenarioPipelineRequest, injected: Partial<ScenarioPipelineDependencies> = {}): Promise<ScenarioPipelineResult> {
+
+async function loadScenarioSources(ctx: TenantContext, request: ScenarioPipelineRequest): Promise<AdmittedScenarioSources> {
+  const uses = ["model_input", "display", "derived_output"];
+  const financial = await loadIntegratedModelDatasetSource(ctx, request.financialDatasetSnapshotId, uses);
+  const [metadata] = await getDb().select({
+    id: datasetSnapshots.id, dataClass: datasetSnapshots.dataClass, provider: datasetSnapshots.provider,
+    createdByUserId: datasetSnapshots.createdByUserId, organizationId: datasetSnapshots.organizationId,
+    entitlementPolicyId: datasetSnapshots.entitlementPolicyId, availableAt: datasetSnapshots.availableAt,
+    expiresAt: datasetSnapshots.expiresAt, contentHash: datasetSnapshots.contentHash,
+  }).from(datasetSnapshots).where(eq(datasetSnapshots.id, request.factorRiskSnapshotId)).limit(1);
+  const now = new Date();
+  if (!metadata || metadata.dataClass !== "factor_risk" || !canAccessDatasetSnapshot(metadata, ctx) ||
+      metadata.createdByUserId !== ctx.userId || metadata.organizationId !== ctx.organizationId ||
+      metadata.availableAt > now || metadata.expiresAt !== null && metadata.expiresAt <= now)
+    throw new ScenarioPipelineError(404, "Factor capture is unavailable in the current ownership scope.");
+  const policy = metadata.entitlementPolicyId ? await getEntitlementPolicyById(metadata.entitlementPolicyId) : null;
+  if (!policy || policy.licenseType === "unknown" || policy.provider !== metadata.provider || policy.dataClass !== metadata.dataClass ||
+      policy.effectiveFrom > now || policy.effectiveTo !== null && policy.effectiveTo <= now ||
+      !uses.every(use => policy.permittedUses.includes(use)))
+    throw new ScenarioPipelineError(403, "Current factor source rights do not permit this calculation.");
+  const factorSnapshot = await runWithRequestIdentity({userId:ctx.userId,organizationId:ctx.organizationId}, () => getFactorRiskSnapshot(request.factorRiskSnapshotId));
+  if (!factorSnapshot || factorSnapshot.contentHash !== metadata.contentHash || factorRiskSnapshotContentHash(factorSnapshot) !== metadata.contentHash)
+    throw new ScenarioPipelineError(409, "Factor capture does not match its immutable source identity.");
+  const factorRequest = { snapshotId: factorSnapshot.snapshotId, portfolioWeights: request.portfolioWeights,
+    scenario: factorScenario(request) };
+  const parameters = { ...factorRequest, contentHash: factorSnapshot.contentHash,
+    modelInput: buildFactorAttributionInput(factorSnapshot, factorRequest), sourceProvenance: factorSnapshot.sources,
+    factorReturnSelection: "arithmetic-average-of-estimated-period-returns" };
+  const provenance = resolveAdvancedQuantInputProvenance(parameters, {
+    dataClassification: "model_derived",
+    derivedFrom: { modelId: "factor-risk-model", modelVersion: "1.0.0", outputSnapshotHash: factorSnapshot.contentHash },
+    sourceBindings: [{ contractFamily: "factor-risk-model", field: "modelInput", connectorId: "factor-risk-model", provider: "factor_risk_model",
+      priority: "primary", sourceReference: `dataset-snapshot:${factorSnapshot.snapshotId}`,
+      asOf: `${factorSnapshot.request.asOf}T00:00:00.000Z`, retrievedAt: factorSnapshot.capturedAt, freshness: "cached-derived-model",
+      snapshot: { id: factorSnapshot.snapshotId, contentHash: factorSnapshot.contentHash },
+      transformations: ["factor-risk:arithmetic-average-of-estimated-period-returns"] }], transformations: [],
+  });
+  if (!provenance.success) throw new ScenarioPipelineError(422, "Factor capture provenance is invalid.");
+  const assertCurrent = async () => {
+    await assertIntegratedModelDatasetSourceCurrent(ctx, financial.snapshot.id, financial.revision, uses);
+    await admitTerminalExecutionSources(ctx, provenance.data, parameters, undefined, false, uses, "/api/factor-risk/decompose");
+  };
+  await assertCurrent();
+  return { dataset: { ...financial.snapshot, payload: financial.snapshot.payload } as unknown as PointInTimeDatasetSnapshot, factorSnapshot, assertCurrent };
+}
+
+/** Recheck live input authority before releasing a durable queued result. */
+export async function assertScenarioPipelineResultCurrent(ctx: TenantContext, raw: unknown, result: unknown) {
+  const request = scenarioPipelineRequestSchema.parse(raw) as ScenarioPipelineRequest;
+  const admitted = await loadScenarioSources(ctx, request);
+  const identity = z.object({ trace: z.object({
+    financialDataset: z.object({ snapshotId:z.string(), contentHash:z.string() }),
+    factorRisk: z.object({ snapshotId:z.string(), contentHash:z.string() }),
+  }) }).parse(result);
+  if (identity.trace.financialDataset.snapshotId !== admitted.dataset.id ||
+      identity.trace.financialDataset.contentHash !== admitted.dataset.contentHash ||
+      identity.trace.factorRisk.snapshotId !== admitted.factorSnapshot.snapshotId ||
+      identity.trace.factorRisk.contentHash !== admitted.factorSnapshot.contentHash)
+    throw new ScenarioPipelineError(409,"Saved calculation no longer matches its exact admitted source identities.");
+  await admitted.assertCurrent();
+}
+
+export async function runScenarioPipeline(rawRequest: ScenarioPipelineRequest, ctx: TenantContext): Promise<ScenarioPipelineResult> {
   const parsed = scenarioPipelineRequestSchema.safeParse(rawRequest);
   if (!parsed.success) throw new ScenarioPipelineError(422, parsed.error.issues.map((issue) => `${issue.path.join(".") || "request"}: ${issue.message}`).join("; "));
   const request = parsed.data as ScenarioPipelineRequest;
-  const deps = { ...defaultDependencies, ...injected };
-  const dataset = await deps.getDatasetSnapshot(request.financialDatasetSnapshotId);
-  if (!dataset || dataset.dataClass !== "financial_statements") throw new ScenarioPipelineError(404, "Financial dataset snapshot not found.");
+  const { dataset, factorSnapshot, assertCurrent } = await loadScenarioSources(ctx, request);
   const payload = freeze(structuredClone(dataset.payload));
   let baseline: IntegratedFinancialModelResult;
   let scenario: IntegratedFinancialModelResult;
   try {
-    baseline = deps.runIntegratedFinancialModel({ datasetSnapshotId: dataset.id, payload, assumptions: request.baseAssumptions });
-    scenario = deps.runIntegratedFinancialModel({ datasetSnapshotId: dataset.id, payload, assumptions: request.scenarioAssumptions });
+    baseline = runIntegratedFinancialModel({ datasetSnapshotId: dataset.id, payload, assumptions: request.baseAssumptions });
+    scenario = runIntegratedFinancialModel({ datasetSnapshotId: dataset.id, payload, assumptions: request.scenarioAssumptions });
   } catch (error) { throw new ScenarioPipelineError(422, `Integrated financial model failed: ${error instanceof Error ? error.message : "invalid calculation"}`); }
   if (!baseline.checks.passed || !scenario.checks.passed) throw new ScenarioPipelineError(422, "Integrated financial model checks did not pass for both baseline and scenario.");
   const baselineValuation = valueIntegratedForecast(baseline, request.valuation);
   const scenarioValuation = valueIntegratedForecast(scenario, request.valuation);
-  const factorSnapshot = await deps.getFactorRiskSnapshot(request.factorRiskSnapshotId);
-  if (!factorSnapshot) throw new ScenarioPipelineError(404, "Factor-risk snapshot not found or expired.");
   let decomposition: FactorRiskDecomposeResult;
   try {
-    decomposition = await deps.decomposeFactorRiskSnapshot(request.factorRiskSnapshotId, { portfolioWeights: request.portfolioWeights, scenario: { id: request.scenarioId, label: request.scenarioName, factorShocks: request.factorShocks, specificShocks: request.specificShocks, provenance: request.source as never } });
+    decomposition = await runWithRequestIdentity({userId:ctx.userId,organizationId:ctx.organizationId}, () =>
+      decomposeFactorRiskSnapshot(request.factorRiskSnapshotId, { portfolioWeights: request.portfolioWeights, scenario: factorScenario(request) }));
   } catch (error) { throw new ScenarioPipelineError(422, `Factor-risk decomposition failed: ${error instanceof Error ? error.message : "invalid calculation"}`); }
   const scenarioPnl = decomposition.result.scenario;
   if (!scenarioPnl || scenarioPnl.securities.length !== factorSnapshot.securities.length) throw new ScenarioPipelineError(422, "Factor-risk decomposition did not return complete per-security scenario P&L.");
   const source: ScenarioSource = { ...request.source, status: "provider", source: `factor-risk-snapshot:${factorSnapshot.snapshotId}:${factorSnapshot.contentHash}`, provider: "factorRiskModel", asOf: factorSnapshot.request.asOf, period: factorSnapshot.capturedAt, unit: "return" };
   const derivedAssetImpacts: ScenarioAssetImpact[] = scenarioPnl.securities.map((security) => ({ assetId: security.securityId, scenarioImpact: security.totalPnl, riskImpact: Math.abs(security.totalPnl), ...source }));
   const actionInput: ScenarioActionInput = { assetImpacts: derivedAssetImpacts, currentWeights: { ...request.portfolioWeights }, actionAlternatives: request.actionAlternatives, constraints: request.constraints, costs: request.costs, source };
-  const actionResult = deps.calculateScenarioActionCandidates(actionInput);
+  const actionResult = calculateScenarioActionCandidates(actionInput);
   const traceWithoutHash = { schemaVersion: 1 as const, scenario: { id: request.scenarioId, name: request.scenarioName, provenance: request.source ?? {}, factorScenarioProvenance: (request.source ?? null) }, financialDataset: { snapshotId: dataset.id, contentHash: dataset.contentHash, dataClass: dataset.dataClass, payload }, models: { baseline, scenario, baselineChecks: baseline.checks, scenarioChecks: scenario.checks }, valuation: { inputs: request.valuation, baseline: baselineValuation, scenario: scenarioValuation, delta: scenarioValuation.intrinsicValuePerShare - baselineValuation.intrinsicValuePerShare }, factorRisk: { snapshotId: factorSnapshot.snapshotId, contentHash: factorSnapshot.contentHash, decomposition, derivedAssetImpacts }, action: { input: actionInput, result: actionResult, coverage: actionResult.inputCoverage }, rankedCandidates: actionResult.candidates, recommendation: actionResult.recommendedAction, sourceBindings: { financialDatasetSnapshot: { id: dataset.id, contentHash: dataset.contentHash, provider: dataset.provider }, factorRiskSnapshot: { id: factorSnapshot.snapshotId, contentHash: factorSnapshot.contentHash, asOf: factorSnapshot.request.asOf }, model: { baseline: baseline.modelVersion, scenario: scenario.modelVersion }, scenario: { id: request.scenarioId, source: request.source ?? null } }, limitations: ["Static assumptions are applied to the full forecast; no point-in-time estimate history is inferred.", "Valuation uses explicit scenario discount/growth/net debt/share inputs; those remain source-bound only when caller supplies authoritative snapshot-bound values.", "Factor P&L uses provider factor snapshot's estimated exposures/covariance and supplied factor shocks; no action is executed.", "Existing decision approval/monitor routes govern the returned receiptCalculation after attachment; preview itself is not an approval."] };
   const traceHash = hash(traceWithoutHash);
   const trace = freeze({ ...traceWithoutHash, traceHash }) as ScenarioPipelineTrace;
   const receiptCalculation: ScenarioPipelineReceiptCalculation = { name: "Scenario-to-action pipeline", deterministicRef: `scenario-pipeline:${traceHash}`, modelVersion: "scenario-pipeline-v1", value: trace.valuation.delta, scenarioPipelineArtifact: trace };
+  await assertCurrent();
   return freeze({ trace, receiptCalculation });
 }
 

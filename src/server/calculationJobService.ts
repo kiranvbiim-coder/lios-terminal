@@ -49,18 +49,23 @@ export type CalculationJobRunner<TInput = unknown, TResult = unknown> = (
 ) => Promise<TResult>;
 
 const runners = new Map<string, CalculationJobRunner>();
+const readGuards = new Map<string, (job: CalculationJob, scope: CalculationJobScope) => Promise<void>>();
 
 /** Registers the runner invoked for every job enqueued with this `kind`. Re-registering replaces it. */
 export function registerCalculationJobRunner<TInput = unknown, TResult = unknown>(
   kind: string,
   runner: CalculationJobRunner<TInput, TResult>,
+  options?: { authorizeRead: (job: CalculationJob, scope: CalculationJobScope) => Promise<void> },
 ): void {
   runners.set(kind, runner as CalculationJobRunner);
+  if (options) readGuards.set(kind, options.authorizeRead);
+  else readGuards.delete(kind);
 }
 
 /** Test-only state reset; not used by runtime code. */
 export function resetCalculationJobRunnersForTests(): void {
   runners.clear();
+  readGuards.clear();
 }
 
 // A single worker (this process) at a time -- the desktop terminal runs one
@@ -134,6 +139,7 @@ export async function enqueueCalculationJob<TInput = unknown>(
 export async function getCalculationJob(id: string, scope: CalculationJobScope): Promise<CalculationJob | null> {
   const db = getDb();
   const [job] = await db.select().from(calculationJobs).where(and(eq(calculationJobs.id, id), scopeCondition(scope))).limit(1);
+  if (job?.result != null) await readGuards.get(job.kind)?.(job, scope);
   return job ? cloneJobRecord(job) : null;
 }
 
@@ -149,12 +155,13 @@ export async function listCalculationJobs(
     .where(and(...conditions))
     .orderBy(desc(calculationJobs.queuedAt))
     .limit(Math.max(1, Math.min(filters?.limit ?? 100, 500)));
+  for (const job of rows) if (job.result != null) await readGuards.get(job.kind)?.(job, scope);
   return rows.map(cloneJobRecord);
 }
 
 export async function requestCalculationJobCancellation(id: string, scope: CalculationJobScope): Promise<CalculationJob | null> {
   const db = getDb();
-  const [existing] = await db.select().from(calculationJobs).where(and(eq(calculationJobs.id, id), scopeCondition(scope))).limit(1);
+  const existing = await getCalculationJob(id, scope);
   if (!existing) return null;
 
   if (existing.status === "queued") {
@@ -184,8 +191,7 @@ export async function requestCalculationJobCancellation(id: string, scope: Calcu
   // Already terminal by the time we got here (finished, failed, or
   // cancelled by a concurrent caller) -- cancellation on a terminal job is
   // a no-op, never a restart.
-  const [current] = await db.select().from(calculationJobs).where(and(eq(calculationJobs.id, id), scopeCondition(scope))).limit(1);
-  return current ? cloneJobRecord(current) : null;
+  return getCalculationJob(id, scope);
 }
 
 async function heartbeatTick(id: string, controller: AbortController): Promise<void> {
