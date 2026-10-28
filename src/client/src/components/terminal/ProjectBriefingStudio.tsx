@@ -196,7 +196,7 @@ export function ProjectBriefingStudio({
               </li>;
             })}
           </ul> : <p role="status" className="rounded-lg border border-dashed border-border/60 p-4 text-sm text-muted-foreground">
-            No current saved Project sources match this search. Clear it, or create a saved Artifact first.
+            No saved Project sources match this search in the current Project. Clear it, or create a saved Artifact first.
           </p>}
           {offered.length > 40 && <p className="text-xs text-muted-foreground">Showing 40 of {offered.length}. Narrow the search to find more.</p>}
         </section>
