@@ -15,7 +15,8 @@ const states=(events:ConversationRuntimeEvent[],busy=false,stopRequested=false)=
  projectRecordedAgentSteps(events,R,{busy,stopRequested}).map(s=>s.state);
 
 test("C04 only exact run and plan steps; foreign event and orphan step cannot overwrite recorded work",()=>{
- assert.deepEqual(states([plan,e("tool_start",{stepId:"s1",label:"Start",componentId:"tool"},OTHER),e("tool_result",{stepId:"outside",outcome:"completed",label:"fake",summary:"",deterministic:true})]),["queued","queued","queued"]);
+ // While the run is active, unrelated tool events must not advance planned steps.
+ assert.deepEqual(states([plan,e("tool_start",{stepId:"s1",label:"Start",componentId:"tool"},OTHER),e("tool_result",{stepId:"outside",outcome:"completed",label:"fake",summary:"",deterministic:true})],true),["queued","queued","queued"]);
  assert.deepEqual(projectRecordedAgentSteps([plan],OTHER,{busy:true}),[]);
  assert.deepEqual(projectRecordedAgentSteps([],R,{busy:false}),[]);
 });
