@@ -16,13 +16,15 @@
 const fs = require("node:fs");
 const path = require("node:path");
 const crypto = require("node:crypto");
-const { verifyBetaManifest } = require("../betaReleaseManifest.cjs");
+const { verifyBetaManifest, MAX_RELEASE_ASSET_BYTES } = require("../betaReleaseManifest.cjs");
+const { verifyInstallerParts } = require("../betaReleaseParts.cjs");
 const { evaluateP14PackagedPerformance } = require("../p14PerformanceBudget.cjs");
 
-const FIELDS = Object.freeze([
+const REQUIRED_FIELDS = Object.freeze([
   "manifest", "asset-dir", "trusted-key", "commit",
   "mac-self-test", "win-self-test", "mac-ux", "win-ux",
 ]);
+const FIELDS = Object.freeze([...REQUIRED_FIELDS, "multipart-dir"]);
 const UX_CHECKS = Object.freeze([
   "signedIn", "sourceAccess", "briefingSavedAndReopened",
   "artifactVersionReopened", "offlineAndReconnect", "keyboardOnly",
@@ -186,7 +188,9 @@ function inspectNativeEvidence(uxFile, evidencePaths) {
   return evidence;
 }
 function parseFlags(argv) {
-  assert(argv.length === FIELDS.length * 2, "all eight evidence paths and source commit are required.");
+  assert(argv.length === REQUIRED_FIELDS.length * 2 ||
+    argv.length === FIELDS.length * 2,
+    "all eight release inputs and optional multipart directory are required.");
   const out = {};
   for (let i = 0; i < argv.length; i += 2) {
     const key = argv[i], value = argv[i + 1];
@@ -195,7 +199,7 @@ function parseFlags(argv) {
     assert(FIELDS.includes(name) && !(name in out), "unknown or duplicate flag.");
     out[name] = value;
   }
-  assert(FIELDS.every(key => out[key]), "required evidence missing.");
+  assert(REQUIRED_FIELDS.every(key => out[key]), "required evidence missing.");
   return out;
 }
 function readJson(file) {
@@ -204,10 +208,12 @@ function readJson(file) {
 }
 async function auditBetaRelease(args) {
   const fields = parseFlags(args);
+  const independentKey = readPinnedLocalEvidenceFile(path.resolve(fields["trusted-key"]),
+    64_000, "independent public key").toString("utf8");
   const verified = await verifyBetaManifest({
     manifest: readJson(fields.manifest),
     assetDir: fields["asset-dir"],
-    trustedPublicKeyPem: readPinnedLocalEvidenceFile(path.resolve(fields["trusted-key"]), 64_000, "independent public key").toString("utf8"),
+    trustedPublicKeyPem: independentKey,
     expectedCommit: fields.commit,
   });
   assert(verified.verified === true && verified.qualification === "release_asset_integrity_only" &&
@@ -217,6 +223,29 @@ async function auditBetaRelease(args) {
   const mac = verified.assetHashes.find(row => row.name.includes("-mac-arm64-beta.dmg"));
   const win = verified.assetHashes.find(row => row.name.includes("-win-x64-beta.exe"));
   assert(mac && win && byName.size === 3, "canonical DMG, ZIP and NSIS installers are required.");
+  // The full assembled installer stays in owner staging for integrity checks.
+  // Free hosting distributes ONLY its signed numbered parts, each <=2 GB.
+  // A root manifest without matching, independently signed real part bytes
+  // is not an approved publishable release when an installer exceeds 2 GB.
+  const oversized = verified.assetHashes.filter(asset => asset.bytes > MAX_RELEASE_ASSET_BYTES);
+  assert(Boolean(fields["multipart-dir"]) === (oversized.length > 0),
+    "multipart directory is required exactly when local installers exceed the free per-asset limit.");
+  const multiparts = [];
+  for (const item of oversized) {
+    assert(item.target === "mac-arm64-dmg" || item.target === "mac-arm64-zip",
+      "only Mac assembled installers may use the approved multipart path.");
+    const multipartDir = path.resolve(fields["multipart-dir"]);
+    const index = readJson(path.join(multipartDir, item.name + ".parts.json"));
+    const checked = await verifyInstallerParts({
+      manifest: index, partsDir: multipartDir, trustedPublicKey: independentKey,
+    });
+    assert(checked.name === item.name && checked.bytes === item.bytes &&
+      checked.sha256 === item.sha256 && checked.partCount >= 2 &&
+      checked.qualification === "authenticated_transport_only",
+      "signed multipart transport does not match the exact reviewed installer manifest.");
+    multiparts.push({target:item.target, partCount:checked.partCount, bytes:checked.bytes,
+      sha256:checked.sha256, verified:true});
+  }
   const selfTests = [
     checkNativeSelfTest(readJson(fields["mac-self-test"]), "darwin", "arm64", verified.version, verified.commit),
     checkNativeSelfTest(readJson(fields["win-self-test"]), "win32", "x64", verified.version, verified.commit),
@@ -237,6 +266,7 @@ async function auditBetaRelease(args) {
     productionQualified: false,
     independentHumanAcceptanceStillRequired: true,
     channel: "beta", sourceCommit: verified.commit, checkedAssets: verified.assetCount,
+    multipartTransportChecked: multiparts,
     nativeSelfTests: selfTests, ux,
     qualification: "local_beta_evidence_gate_only",
   };
