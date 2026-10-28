@@ -61,6 +61,8 @@ interface Props {
   onKeepArtifact?: (artifact: ConversationArtifactDraft) => void;
   /** C06: navigate to the exact recorded P4 revision; the owner must recheck current scope and rights. */
   onOpenSavedArtifact?: (artifactId: string, version: number, projectId: number | null, requestId: string) => void;
+  /** C07: only opens existing inactive-by-default P9 review; never schedules a run. */
+  onPrepareAutomation?: () => void;
   onRecoveryAction?: (action: string) => void;
   /** Prefills the composer with a suggested next request; never sends it. */
   onFollowUp?: (prompt: string, binding?: RecordedClaimReview) => void;
@@ -165,6 +167,7 @@ export default function ConversationRuntimeTrace({
   onMutationCancel,
   onKeepArtifact,
   onOpenSavedArtifact,
+  onPrepareAutomation,
   onRecoveryAction,
   onFollowUp,
   onRetry,
@@ -668,6 +671,19 @@ export default function ConversationRuntimeTrace({
             Open saved v{artifact.persistedArtifact.version}
           </button>
         </section>
+      )}
+
+      {!busy && done?.type === "done" && done.status === "completed" && onPrepareAutomation && (
+        <div data-testid="c07-chat-automation-draft"
+          className="mb-2 flex flex-wrap items-center justify-between gap-2 rounded-lg border border-border/55 px-3 py-2">
+          <p className="font-ui text-xs leading-5 text-muted-foreground">
+            Prepare a draft from this exact Project Chat run. No monitoring starts without a separate P9 activation review.
+          </p>
+          <button type="button" onClick={onPrepareAutomation}
+            className="min-h-11 rounded-lg border border-amber-300/35 px-3 py-2 font-ui text-sm text-foreground focus-visible:outline focus-visible:outline-2 focus-visible:outline-amber-300">
+            Prepare automation draft
+          </button>
+        </div>
       )}
 
       {visualAnswerRequest && <GovernedVisualAnswer
