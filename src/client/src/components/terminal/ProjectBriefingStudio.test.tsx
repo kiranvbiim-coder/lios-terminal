@@ -67,6 +67,11 @@ test("D01/D02 briefing offers source-ID search and readable accessible movement 
   assert.match(src, /item\.id\.toLocaleLowerCase\(\)\.includes/);
   assert.match(src, /Find by saved title, type or Artifact ID/);
   assert.match(src, /min-h-11 min-w-11 place-items-center/);
+  assert.match(src, /aria-label="Close Briefing Studio"\s*\n\s*className="grid min-h-11 min-w-11/);
+  assert.match(src, /placeholder="Find by saved title, type or Artifact ID…"\s*\n\s*className="min-h-11 w-full/);
+  const preview = readFileSync(new URL("./ProjectArtifactGalleryPreview.tsx", import.meta.url), "utf8");
+  assert.match(preview, /onClick=\{onOpen\} className="inline-flex min-h-11 items-center/);
+
   assert.match(src, /Move \$\{source\.title\} earlier/);
   assert.match(src, /Move \$\{source\.title\} later/);
   assert.match(src, /No saved Project sources match this search in the current Project/);
