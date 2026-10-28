@@ -543,3 +543,41 @@ test("C08 errors and interrupted runs only offer read-only reconciliation, never
     event({type:"done",status:"failed"})],{onRetry:noop,onFollowUp:undefined});
   assert.doesNotMatch(noSource,/data-testid="c08-reconcile-run"|data-testid="trace-error-retry"/);
 });
+
+test("C08 completed Chat does not obscure unresolved tool reports or offer a blind retry", () => {
+  const denied = render([
+    planEvent,
+    event({ type: "tool_result", stepId: "step-1", label: "Fetch filings",
+      summary: "PRIVATE_TOOL_OUTPUT", deterministic: false, sourceRefs: [], outcome: "denied" }),
+    doneOk,
+  ], { onRetry: noop, onFollowUp: noop });
+  assert.match(denied, /data-testid="c08-recorded-action-recovery"/);
+  assert.match(denied, /1 denied/);
+  assert.match(denied, /Overall run completion does not override/);
+  assert.match(denied, /data-testid="c08-review-recorded-actions"/);
+  assert.match(denied, /data-testid="c08-reconcile-partial-actions"/);
+  assert.doesNotMatch(denied, /PRIVATE_TOOL_OUTPUT|trace-error-retry/);
+
+  const unfinished = render([
+    planEvent, event({ type: "tool_start", stepId: "step-1",
+      label: "Fetch filings", componentId: "research" }), doneOk,
+  ]);
+  assert.match(unfinished, /1 started tool action/);
+  assert.match(unfinished, /c08-recorded-action-recovery/);
+
+  const completed = render([
+    planEvent, event({ type: "tool_result", stepId: "step-1", label: "Fetch filings",
+      summary: "", deterministic: true, sourceRefs: [], outcome: "completed" }), doneOk,
+  ]);
+  assert.doesNotMatch(completed, /c08-recorded-action-recovery/);
+});
+
+test("C08 partial reconciliation is only a read-only draft and never offers an automatic tool replay", () => {
+  const output = render([
+    planEvent, event({ type: "tool_result", stepId: "step-1", label: "Fetch filings",
+      summary: "", deterministic: true, sourceRefs: [], outcome: "failed" }), doneOk,
+  ], { onFollowUp: undefined, onRetry: noop });
+  assert.match(output, /data-testid="c08-review-recorded-actions"/);
+  assert.doesNotMatch(output, /data-testid="c08-reconcile-partial-actions"|data-testid="trace-error-retry"/);
+  assert.match(output, /No automatic retry, tool execution or permission grant is performed/);
+});
