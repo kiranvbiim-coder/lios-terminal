@@ -2686,11 +2686,10 @@ export default function ProjectExperienceShell({
                     if (!isCurrentSavedArtifactHandoff(saved, { projectId: original.projectId, chatId: originalChatId },
                          sandboxSelectionRef.current, runtimeHandoffRequestIdRef.current) ||
                         traceOwnerChatRef.current !== originalChatId ||
-                        busyRef.current || keepingArtifactRef.current || sendInFlightRef.current) {
+                        busyRef.current || keepingArtifactRef.current || sendInFlightRef.current || artifactDraftDirtyRef.current) {
                       setLifecycleNotice("Project, Chat, or run changed during review. Nothing was opened.");
                       return;
                     }
-                    artifactDraftDirtyRef.current = false;
                     setArtifactFocusMode(false);
                     setConversationArtifactRef(saved.artifactId);
                     setArtifactViewVersion(saved.version);

@@ -3,6 +3,7 @@ import { z } from "zod";
 import { bindConversationExecutionSignal, linkAbortSignal } from "./exec/execution-scope";
 import { deadlineSignal } from "./deadlineSignal";
 import { checkClaims } from "./claimChecker";
+import { p6PersonalFinanceRequestSchema } from "@shared/p6FinanceContracts";
 import { looksLikeNamedSecurityRequest, parsePlannerChoice, PLANNER_CATALOG, plannerMessages, routedRequest } from "./aiPlannerFallback";
 import { naturalResearchEntry } from "./naturalResearchEntry";
 import crypto from "crypto";
@@ -2367,7 +2368,7 @@ async function executeNodeFinanceSnapshot(input: ConversationRuntimeInput, plan:
   const report = parsed.output.report;
   const text = ["### Node-local personal-finance snapshot", tool.summary, `As of ${report.asOf} · ${report.currency ?? "No currency recorded"}`, `Net worth: ${report.netWorth}; assets: ${report.assets}; liabilities: ${report.liabilities}.`, `Monthly income: ${report.trailingMonthlyIncome}; expenses: ${report.trailingMonthlyExpenses}; cash flow: ${report.trailingMonthlyCashFlow}.`, `Exact input: ${report.source.inputHash}`, `Node: ${parsed.output.outcome.binding.deviceId} · generation ${parsed.output.outcome.binding.generationId}`, "Authenticated remote-reported result; no independent attestation, provider/broker action or inference. Raw accounts remain on the node."].join("\n");
   const receipt = createReceipt({ requestId, operation: "node_finance_snapshot", componentId, startedAt, deterministic: true, aiDerived: false, input: { policy }, output: parsed.output, sourceRefs: tool.sourceRefs });
-  await emit(input, { ...eventBase(requestId), type: "tool_result", stepId: "node-finance", label: "Node-local P6 result", summary: tool.summary, deterministic: true, sourceRefs: tool.sourceRefs });
+  await emit(input, { ...eventBase(requestId), type: "tool_result", outcome: "completed", stepId: "node-finance", label: "Node-local P6 result", summary: tool.summary, deterministic: true, sourceRefs: tool.sourceRefs });
   await emit(input, { ...eventBase(requestId), type: "receipt", receipt });
   const draft = conversationArtifactDraftSchema.parse({
     schemaVersion: "1", artifactId: crypto.randomUUID(), artifactType: "report", title: `Node-local personal-finance snapshot · ${report.asOf}`, projectId: input.projectId,
@@ -2794,6 +2795,7 @@ async function executeP2CapabilityBundle(
     await emit(input, {
       ...eventBase(requestId),
       type: "tool_result",
+      outcome: "completed",
       stepId: "calculate-technical",
       label: "Market calculations complete",
       summary: technicalTool.summary,
@@ -2904,6 +2906,7 @@ async function executeP2CapabilityBundle(
     await emit(input, {
       ...eventBase(requestId),
       type: "tool_result",
+      outcome: "completed",
       stepId: "run-backtest",
       label: "Historical simulation complete",
       summary: `Total return ${(result.metrics.totalReturn * 100).toFixed(2)}%; Sharpe ${result.metrics.sharpe.toFixed(2)}; max drawdown ${(result.metrics.maxDrawdown * 100).toFixed(2)}%.`,
@@ -3028,7 +3031,7 @@ async function executeP6Backtest(
   await emit(input, { ...eventBase(requestId), type: "tool_start", stepId: "resolve-security", label: "Resolve " + symbol, componentId: "lios.instrument-master" });
   const resolvedTool = await invokeConversationTool("lios.instrument-master", { symbol }, signal, createConversationToolCall(input, "workflow", await activeResearchSourcePolicy(input)));
   if (!resolvedTool.output) throw new Error("LiOS could not resolve " + symbol + " in the Global Instrument Master.");
-  await emit(input, { ...eventBase(requestId), type: "tool_result", stepId: "resolve-security", label: "Security resolved", summary: resolvedTool.summary, deterministic: true, sourceRefs: resolvedTool.sourceRefs });
+  await emit(input, { ...eventBase(requestId), type: "tool_result", outcome: "completed", stepId: "resolve-security", label: "Security resolved", summary: resolvedTool.summary, deterministic: true, sourceRefs: resolvedTool.sourceRefs });
 
   await emit(input, { ...eventBase(requestId), type: "tool_start", stepId: "retrieve-market-data", label: "Retrieve governed historical data", componentId: "lios.market-data" });
   const marketTool = await invokeConversationTool("lios.market-data", { symbol }, signal, createConversationToolCall(input, "workflow"));
@@ -3038,7 +3041,7 @@ async function executeP6Backtest(
     historyProvenance?: OHLCVProvenance;
     dataPlans?: UniversalDataPlan[];
   };
-  await emit(input, { ...eventBase(requestId), type: "tool_result", stepId: "retrieve-market-data", label: "Historical data retrieved", summary: marketTool.summary, deterministic: false, sourceRefs: marketTool.sourceRefs });
+  await emit(input, { ...eventBase(requestId), type: "tool_result", outcome: "completed", stepId: "retrieve-market-data", label: "Historical data retrieved", summary: marketTool.summary, deterministic: false, sourceRefs: marketTool.sourceRefs });
 
   const bars = marketOutput.bars.map((bar) => {
     const at = /^\d{4}-\d{2}-\d{2}$/.test(bar.date) ? bar.date + "T00:00:00.000Z" : new Date(bar.date).toISOString();
@@ -3069,6 +3072,7 @@ async function executeP6Backtest(
   await emit(input, {
     ...eventBase(requestId),
     type: "tool_result",
+    outcome: "completed",
     stepId: "run-backtest",
     label: "Historical simulation complete",
     summary: "Total return " + (result.metrics.totalReturn * 100).toFixed(2) + "%; Sharpe " + result.metrics.sharpe.toFixed(2) + "; max drawdown " + (result.metrics.maxDrawdown * 100).toFixed(2) + "%.",
@@ -3194,10 +3198,14 @@ async function executeP6PersonalFinance(
     label: "Validate user-owned personal-finance inputs",
     componentId: "lios.personal-finance.core-v1",
   });
+  p6PersonalFinanceRequestSchema.parse(personalFinance);
+  await emit(input, { ...eventBase(requestId), type: "tool_result", outcome: "completed", stepId: "validate-personal-finance-inputs", label: "Personal-finance inputs validated", summary: "Explicit user-owned inputs match the canonical schema.", deterministic: true, sourceRefs });
+  await emit(input, { ...eventBase(requestId), type: "tool_start", stepId: "run-personal-finance", label: "Calculate personal-finance snapshot", componentId: "lios.personal-finance.core-v1" });
   const snapshot = calculatePersonalFinanceSnapshot(personalFinance);
   await emit(input, {
     ...eventBase(requestId),
     type: "tool_result",
+    outcome: "completed",
     stepId: "run-personal-finance",
     label: "Personal-finance calculation complete",
     summary: `Net worth ${formatNumber(snapshot.netWorth)}; monthly cash flow ${formatNumber(snapshot.trailingMonthlyCashFlow)}.`,
@@ -3303,6 +3311,7 @@ async function executeTechnical(
   if (!resolvedTool.output) throw new Error(`LiOS could not resolve ${symbol} in the Global Instrument Master. No identity was invented.`);
   await emit(input, {
     ...eventBase(requestId), type: "tool_result", stepId: "resolve-security", label: "Security resolved",
+    outcome: "completed",
     summary: resolvedTool.summary, deterministic: resolvedTool.deterministic, sourceRefs: resolvedTool.sourceRefs,
   });
 
@@ -3319,6 +3328,7 @@ async function executeTechnical(
   const sourceRefs = marketTool.sourceRefs;
   await emit(input, {
     ...eventBase(requestId), type: "tool_result", stepId: "retrieve-market-data", label: "Market data retrieved",
+    outcome: "completed",
     summary: marketTool.summary, deterministic: marketTool.deterministic, sourceRefs,
   });
 
@@ -3327,6 +3337,7 @@ async function executeTechnical(
   const snapshot = technicalTool.output as TechnicalSnapshot;
   await emit(input, {
     ...eventBase(requestId), type: "tool_result", stepId: "calculate-technical", label: "Technical calculations complete",
+    outcome: "completed",
     summary: technicalTool.summary, deterministic: technicalTool.deterministic, sourceRefs: technicalTool.sourceRefs,
   });
 
@@ -3398,7 +3409,7 @@ async function executeResolve(
     outputEvidence: match ? { match } : { match: null },
     sourceRefs: tool.sourceRefs,
   });
-  await emit(input, { ...eventBase(requestId), type: "tool_result", stepId: "resolve-security", label: "Identity resolution complete", summary: tool.summary, deterministic: tool.deterministic, sourceRefs: tool.sourceRefs });
+  await emit(input, { ...eventBase(requestId), type: "tool_result", outcome: "completed", stepId: "resolve-security", label: "Identity resolution complete", summary: tool.summary, deterministic: tool.deterministic, sourceRefs: tool.sourceRefs });
   await emit(input, { ...eventBase(requestId), type: "receipt", receipt });
   await emit(input, { ...eventBase(requestId), type: "text", text, label: "deterministic" });
   return { text, label: "deterministic", plan, receiptIds: [receipt.id], artifacts: [], cancelled: false, awaitingApproval: false };
@@ -3604,7 +3615,7 @@ async function executeP5ProfessionalBundle(
       });
     }
     identityRefs = identity.sourceRefs;
-    await emit(input, { ...eventBase(requestId), type: "tool_result", stepId: "resolve-security", label: "Security resolved", summary: identity.summary, deterministic: true, sourceRefs: identity.sourceRefs });
+    await emit(input, { ...eventBase(requestId), type: "tool_result", outcome: "completed", stepId: "resolve-security", label: "Security resolved", summary: identity.summary, deterministic: true, sourceRefs: identity.sourceRefs });
   }
 
   type ProfessionalMarketOutput = { quote: Quote; bars: OHLCVBar[]; historyProvenance?: OHLCVProvenance; dataPlans?: UniversalDataPlan[] };
@@ -3622,12 +3633,12 @@ async function executeP5ProfessionalBundle(
       marketOutput = market.output as ProfessionalMarketOutput;
       marketRefs = market.sourceRefs;
       if (!marketOutput?.quote) throw new Error("Professional company research requires a current governed quote.");
-      await emit(input, { ...eventBase(requestId), type: "tool_result", stepId: "retrieve-market-data", label: "Market observations retrieved", summary: market.summary, deterministic: market.deterministic, sourceRefs: market.sourceRefs });
+      await emit(input, { ...eventBase(requestId), type: "tool_result", outcome: "completed", stepId: "retrieve-market-data", label: "Market observations retrieved", summary: market.summary, deterministic: market.deterministic, sourceRefs: market.sourceRefs });
 
       await emit(input, { ...eventBase(requestId), type: "tool_start", stepId: "calculate-research-technicals", label: "Calculate deterministic market technicals", componentId: "lios.finance.technical" });
       const technicalTool = await invokeConversationTool("lios.finance.technical", { bars: marketOutput.bars, sourceRefs: market.sourceRefs }, signal);
       technical = technicalTool.output as TechnicalSnapshot;
-      await emit(input, { ...eventBase(requestId), type: "tool_result", stepId: "calculate-research-technicals", label: "Market technicals complete", summary: technicalTool.summary, deterministic: true, sourceRefs: technicalTool.sourceRefs });
+      await emit(input, { ...eventBase(requestId), type: "tool_result", outcome: "completed", stepId: "calculate-research-technicals", label: "Market technicals complete", summary: technicalTool.summary, deterministic: true, sourceRefs: technicalTool.sourceRefs });
     }
 
     await emit(input, { ...eventBase(requestId), type: "tool_start", stepId: "retrieve-financial-statements", label: "Resolve multi-provider financial statements", componentId: "lios.company-intelligence" });
@@ -3637,6 +3648,7 @@ async function executeP5ProfessionalBundle(
     await emit(input, {
       ...eventBase(requestId),
       type: "tool_result",
+      outcome: "completed",
       stepId: "retrieve-financial-statements",
       label: "Financial statements resolved",
       summary: companyIntelligence.summary,
@@ -3704,7 +3716,7 @@ async function executeP5ProfessionalBundle(
         });
     artifacts.push(primary);
     await emit(input, { ...eventBase(requestId), type: "artifact", artifact: primary });
-    await emit(input, { ...eventBase(requestId), type: "tool_result", stepId: primaryStepId, label: "Artifact created", summary: primary.title, deterministic: true, sourceRefs: [] });
+    await emit(input, { ...eventBase(requestId), type: "tool_result", outcome: "completed", stepId: primaryStepId, label: "Artifact created", summary: primary.title, deterministic: true, sourceRefs: [] });
     await emit(input, { ...eventBase(requestId), type: "receipt", receipt });
 
     if (wantsResearch && marketOutput && wantsReport) {
@@ -3723,7 +3735,7 @@ async function executeP5ProfessionalBundle(
       });
       artifacts.push(report);
       await emit(input, { ...eventBase(requestId), type: "artifact", artifact: report });
-      await emit(input, { ...eventBase(requestId), type: "tool_result", stepId: "emit-research-report-artifact", label: "Artifact created", summary: report.title, deterministic: true, sourceRefs: [] });
+      await emit(input, { ...eventBase(requestId), type: "tool_result", outcome: "completed", stepId: "emit-research-report-artifact", label: "Artifact created", summary: report.title, deterministic: true, sourceRefs: [] });
     }
 
     if (wantsResearch) {
@@ -3853,6 +3865,7 @@ async function executeP5ProfessionalBundle(
         await emit(input, {
           ...eventBase(requestId),
           type: "tool_result",
+          outcome: "completed",
           stepId: "assemble-professional-report",
           label: "Professional report assembled",
           summary: "Report assembled from " + sourceVersionRef + " without recalculating deterministic source outputs.",
@@ -3949,6 +3962,7 @@ async function executeP5ProfessionalBundle(
       await emit(input, {
         ...eventBase(requestId),
         type: "tool_result",
+        outcome: "completed",
         stepId,
         label: capability.label + " complete",
         summary: resolved.modelPath + " completed through " + run.receipt.modelId + "@" + run.receipt.modelVersion + "; validation " + run.receipt.validationLevel + "; output " + run.receipt.outputSnapshotHash.slice(0, 12) + "…",
@@ -3970,6 +3984,7 @@ async function executeP5ProfessionalBundle(
       }));
     } catch (error) {
       if (error instanceof AdvancedQuantInputError || error instanceof PythonServiceDataError) {
+        await emit(input, { ...eventBase(requestId), type: "tool_result", stepId, label: "Model inputs or data unavailable", summary: "The requested model operation did not complete.", deterministic: true, sourceRefs: [], outcome: "failed" });
         blocked.push({ capability, detail: error.message });
         continue;
       }
@@ -4109,6 +4124,7 @@ async function executeArtifactEditProposal(
   await emit(input, {
     ...eventBase(requestId),
     type: "tool_result",
+    outcome: "completed",
     stepId: "artifact-proposal",
     label: "Artifact proposal ready",
     summary: text,
@@ -4186,7 +4202,7 @@ async function executeAI(
       ...attachmentWarnings,
     ],
   });
-  await emit(input, { ...eventBase(request.requestId), type: "tool_result", stepId: aiDirect ? "ai-direct-estimate" : "ai-assist", label: "BYOAI response complete", summary: `${result.attribution.provider}${result.attribution.model ? ` · ${result.attribution.model}` : ""}${attachmentWarnings.length ? " · attachment extraction incomplete (see receipt)" : ""}`, deterministic: false, sourceRefs: [...new Set([`ai-provider:${result.attribution.provider}`, ...transmittedAttachmentSourceRefs(input)])] });
+  await emit(input, { ...eventBase(request.requestId), type: "tool_result", outcome: "completed", stepId: aiDirect ? "ai-direct-estimate" : "ai-assist", label: "BYOAI response complete", summary: `${result.attribution.provider}${result.attribution.model ? ` · ${result.attribution.model}` : ""}${attachmentWarnings.length ? " · attachment extraction incomplete (see receipt)" : ""}`, deterministic: false, sourceRefs: [...new Set([`ai-provider:${result.attribution.provider}`, ...transmittedAttachmentSourceRefs(input)])] });
   await emit(input, { ...eventBase(request.requestId), type: "receipt", receipt });
   await emit(input, { ...eventBase(request.requestId), type: "text", text, label: "ai_derived" });
   return { text, label: "ai_derived", plan, receiptIds: [receipt.id], artifacts: [], cancelled: false, awaitingApproval: false };
@@ -5033,6 +5049,7 @@ async function maybeSynthesizeDeterministicResult(
         message: `AI explanation withheld: it cited ${claims.unverified.slice(0, 4).join(", ")}${claims.unverified.length > 4 ? " and more" : ""}, which the LiOS result does not contain. The deterministic result is shown as is.`,
         state: "running",
       });
+      await emit(input, { ...eventBase(request.requestId), type: "tool_result", stepId: "ai-synthesis", label: "AI explanation withheld", summary: "Generated claims did not match the deterministic evidence.", deterministic: false, sourceRefs: [], outcome: "failed" });
       return result;
     }
 
@@ -5071,6 +5088,7 @@ async function maybeSynthesizeDeterministicResult(
     await emit(input, {
       ...eventBase(request.requestId),
       type: "tool_result",
+      outcome: "completed",
       stepId: "ai-synthesis",
       label: "AI synthesis complete",
       summary: `${ai.attribution.provider}${ai.attribution.model ? ` · ${ai.attribution.model}` : ""} · deterministic result preserved`,
@@ -5097,6 +5115,7 @@ async function maybeSynthesizeDeterministicResult(
       message: `AI synthesis unavailable${error instanceof AIProviderError ? ` (${error.message.slice(0, 400)})` : ""}; returning the authoritative deterministic LiOS result.`,
       state: "running",
     });
+    await emit(input, { ...eventBase(request.requestId), type: "tool_result", stepId: "ai-synthesis", label: "AI synthesis unavailable", summary: "The deterministic result remains authoritative.", deterministic: false, sourceRefs: [], outcome: "failed" });
     return result;
   }
 }

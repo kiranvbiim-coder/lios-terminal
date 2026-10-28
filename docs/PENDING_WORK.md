@@ -6,6 +6,13 @@
 
 ## Active work — public production readiness
 
+### Late contributor/release deltas — 2026-10-28
+
+- Separate from frozen #364: normally reconciled #384's exact saved-revision, individual-action recovery and source-run-bound P9 eligibility, plus later Briefing live-title/request-lifetime fixes and inactive/manual workflow defaults. Preserved typed C05 local review, exact P4 target/outcome consent and existing read-only recovery/P9 authorities. #381's implementation-test repin is intentionally superseded by deleting that obsolete suite, not adopted.
+- Corrected review findings: explicit saved-version reopen calls the canonical fresh query owner even with a warm infinite-stale cache; dirty editors are retained and require Save/reset rather than falsely claiming discard; first-send workflow origin uses the actually created Chat. Successful local producer operations now emit explicit completed outcomes at their real return boundaries; Doctor settles its start; P6 validates and settles validation before starting calculation; caught model/input failures and withheld/non-abort AI synthesis failures settle failed. No global “missing outcome means success” default, approval grant or invented external receipt.
+- Real source Chat “LiOS doctor” completed with one explicit settled step and one diagnosis receipt, without a false unfinished-action warning. Warm cached exact revision followed by a controlled403 issued a fresh request and rejected opening; no cached authorization reuse. Browser/Home/data removed.
+- Reconciled signed-beta gate chain #382/#383/#385/#386/#387 while retaining the newer product implementations: read-only clean-source/untracked-file admission, fd-pinned evidence, exact signed version+commit/native-journey binding, root-manifest→authenticated-parts validation, unchanged2GB direct-upload ceiling and16GB assembled Mac ceiling. Fixed the contradictory prior2GB Mac behavioral expectation; Windows still rejects above2GB.32 focused gate/manifest/parts/self-test tests and74 focused product/runtime tests passed; typecheck passed. Gate fixtures use synthetic bytes/ephemeral keys, not real installer qualification or release approval.
+
 ### Post-freeze contributor cutover — 2026-10-28
 
 - Baseline remains protected `main` at `aef0a5dd` (#322 plus ledger #352). The source push run on `ddbe78cc` passed Linux/macOS/Windows; #5's remaining historical review criteria are not automatically closed.

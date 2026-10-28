@@ -65,10 +65,6 @@ interface Props {
   /** Opens existing inactive P9 review; never activates a workflow. */
   onPrepareAutomation?: () => void;
   onInspectRun?: () => void;
-  /** C06: exact recorded P4 saved-revision navigation, not authorization. */
-  onOpenSavedArtifact?: (artifactId: string, version: number, projectId: number | null, requestId: string) => void;
-  /** C07: open existing, inactive-by-default P9 workflow review only. */
-  onPrepareAutomation?: () => void;
   onRecoveryAction?: (action: string) => void;
   /** Prefills the composer with a suggested next request; never sends it. */
   onFollowUp?: (prompt: string, binding?: RecordedClaimReview) => void;
@@ -176,8 +172,6 @@ export default function ConversationRuntimeTrace({
   onOpenSavedArtifact,
   onPrepareAutomation,
   onInspectRun,
-  onOpenSavedArtifact,
-  onPrepareAutomation,
   onRecoveryAction,
   onFollowUp,
   onRetry,
