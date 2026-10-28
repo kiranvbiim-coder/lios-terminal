@@ -1,5 +1,6 @@
 import { z } from "zod";
 
+export const TELEGRAM_CONNECTOR_ID = "telegram" as const;
 export const TELEGRAM_CONNECTION_CONSENT_VERSION = "telegram-channel-data/1";
 const uuid = z.string().uuid();
 const conversationId = z.string().regex(/^-?[1-9][0-9]{0,19}$/);

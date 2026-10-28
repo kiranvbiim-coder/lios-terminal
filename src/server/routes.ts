@@ -62,6 +62,7 @@ import { registerEnvironmentSetupRoutes } from "./environmentSetupRoutes";
 import { resolvePackagedNativeRuntimeBundleAuthority } from "./nativeRuntimeBundle";
 import { configureRuntimeDoctorProvisioning } from "./runtimeDoctorTool";
 import { registerSourceConnectionRoutes } from "./sourceConnectionRoutes";
+import { registerTelegramConnectionRoutes } from "./telegramConnectionRoutes";
 import { registerSourceRegistryRoutes } from "./sourceRegistryRoutes";
 import { registerProjectRoutes } from "./projectRoutes";
 import { registerProjectConversationRoutes } from "./projectConversationRoutes";
@@ -227,6 +228,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     ...(nativeProvisioningInvalid ? { provisioningBlocker: "native_runtime_bundle_invalid" as const } : {}),
   });
   registerSourceConnectionRoutes(app);
+  registerTelegramConnectionRoutes(app);
   registerSourceRegistryRoutes(app);
   registerProjectRoutes(app);
   registerProjectConversationRoutes(app);

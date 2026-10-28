@@ -1,4 +1,5 @@
-import { and, desc, eq } from "drizzle-orm";
+import { and, desc, eq, ne } from "drizzle-orm";
+import { TELEGRAM_CONNECTOR_ID } from "@shared/telegramConnection";
 import { getDb } from "./db";
 import { auditActor, recordAuditEvent } from "./auditEvents";
 import { getConnectorById, getConnectorRegistrySnapshot, getUserScopedConnectorRegistrySnapshot, testConnectorCredential } from "./connectorService";
@@ -147,14 +148,15 @@ function apiCredential(connection: SourceConnection): string | null {
 
 export async function listSourceConnections(userId: number): Promise<SourceConnection[]> {
   const db = getDb();
-  return db.select().from(sourceConnections).where(eq(sourceConnections.userId, userId)).orderBy(desc(sourceConnections.updatedAt));
+  return db.select().from(sourceConnections).where(and(eq(sourceConnections.userId, userId), ne(sourceConnections.connectorId, TELEGRAM_CONNECTOR_ID))).orderBy(desc(sourceConnections.updatedAt));
 }
 async function ownedSourceConnection(userId: number, connectionId: number): Promise<SourceConnection | null> {
   const [connection] = await getDb().select().from(sourceConnections).where(and(
     eq(sourceConnections.id, connectionId),
     eq(sourceConnections.userId, userId),
   )).limit(1);
-  return connection ?? null;
+  // Channel sources have their own owner-scoped lifecycle; generic API/database paths must never resolve their credentials.
+  return connection && connection.connectorId !== TELEGRAM_CONNECTOR_ID ? connection : null;
 }
 
 export async function discoverDatabaseSource(
@@ -297,6 +299,11 @@ export async function upsertSourceConnection(
   const config = await normalizeSourceConfig(input.sourceType, input.config);
   const credentialRef = input.credentialRef ?? null;
 
+  if (input.connectorId === TELEGRAM_CONNECTOR_ID) throw new Error("Telegram connections are managed through the Telegram connection flow.");
+  if (input.id !== undefined) {
+    const [prior] = await db.select({ connectorId: sourceConnections.connectorId }).from(sourceConnections).where(and(eq(sourceConnections.id, input.id), eq(sourceConnections.userId, userId))).limit(1);
+    if (prior?.connectorId === TELEGRAM_CONNECTOR_ID) throw new Error("Telegram connections are managed through the Telegram connection flow.");
+  }
   if (input.id !== undefined) {
     const [updated] = await db.update(sourceConnections).set({
       organizationId,
@@ -362,7 +369,7 @@ export async function upsertSourceConnection(
 export async function deleteSourceConnection(userId: number, connectionId: number, actor: Pick<User, "id" | "email">): Promise<boolean> {
   const db = getDb();
   const [connection] = await db.select().from(sourceConnections).where(and(eq(sourceConnections.id, connectionId), eq(sourceConnections.userId, userId))).limit(1);
-  if (!connection) return false;
+  if (!connection || connection.connectorId === TELEGRAM_CONNECTOR_ID) return false;
   await db.delete(sourceConnections).where(and(eq(sourceConnections.id, connectionId), eq(sourceConnections.userId, userId)));
   clearProviderExecutionCache();
   await recordAuditEvent(actor.id, "source_connection_deleted", { connectionId, connectorId: connection.connectorId, organizationId: connection.organizationId, ...auditActor(actor) });
@@ -389,7 +396,7 @@ export function unprobedConnectionResult(state: ConnectorRuntimeState | null | u
 export async function testSourceConnection(userId: number, connectionId: number, actor: Pick<User, "id" | "email">): Promise<SourceConnectionTestResult | null> {
   const db = getDb();
   const [connection] = await db.select().from(sourceConnections).where(and(eq(sourceConnections.id, connectionId), eq(sourceConnections.userId, userId))).limit(1);
-  if (!connection) return null;
+  if (!connection || connection.connectorId === TELEGRAM_CONNECTOR_ID) return null;
 
   let status: SourceConnection["status"] = "unreachable";
   let detail = "Source did not respond.";

@@ -7805,6 +7805,42 @@
   },
   {
    "method": "GET",
+   "path": "/api/setup/telegram-connections",
+   "reachableBy": [
+    "client_user",
+    "client_admin",
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "POST",
+   "path": "/api/setup/telegram-connections",
+   "reachableBy": [
+    "client_user",
+    "client_admin",
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "DELETE",
+   "path": "/api/setup/telegram-connections/:id",
+   "reachableBy": [
+    "client_user",
+    "client_admin",
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "GET",
    "path": "/api/supplychain/indicator/:seriesId",
    "reachableBy": [
     "client_user",
