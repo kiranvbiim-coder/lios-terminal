@@ -102,7 +102,7 @@ test("D06 visible Project authority follows live Artifact changes without cached
   const src = readFileSync(new URL("./ProjectBriefingStudio.tsx", import.meta.url), "utf8");
   assert.match(src, /const byId = new Map\(available\.map\(item => \[item\.id, item\]\)\)/);
   assert.doesNotMatch(src, /useMemo\(\(\) => new Map\(available/);
-  assert.match(src, /visual\.title !== source\.title/);
+  assert.match(src, /!isRecordedBriefingVisualTitleCurrent\(visual, source\)/);
   assert.match(src, /visual\.content\.kind !== source\.kind/);
   assert.match(src, /currentProjectBriefingVisuals\(pinnedVisuals, chosen, byId, projectId\)/);
 });
