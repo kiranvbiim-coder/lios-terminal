@@ -167,7 +167,7 @@ export function ProjectBriefingStudio({
           </p>
         </div>
         <button type="button" onClick={onClose} disabled={busy} aria-label="Close Briefing Studio"
-          className="grid min-h-10 min-w-10 shrink-0 place-items-center rounded-lg border border-border/70 focus-visible:outline focus-visible:outline-2 focus-visible:outline-amber-300 disabled:opacity-50">
+          className="grid min-h-11 min-w-11 shrink-0 place-items-center rounded-lg border border-border/70 focus-visible:outline focus-visible:outline-2 focus-visible:outline-amber-300 disabled:opacity-50">
           <X className="h-4 w-4" aria-hidden="true" />
         </button>
       </header>
@@ -207,7 +207,7 @@ export function ProjectBriefingStudio({
             <span className="sr-only">Search saved Project sources for briefing</span>
             <input type="search" value={search} onChange={event => setSearch(event.target.value)}
               disabled={busy} placeholder="Find by saved title, type or Artifact ID…"
-              className="min-h-10 w-full rounded-lg border border-border/70 bg-background px-3 text-sm focus-visible:outline focus-visible:outline-2 focus-visible:outline-amber-300" />
+              className="min-h-11 w-full rounded-lg border border-border/70 bg-background px-3 text-sm focus-visible:outline focus-visible:outline-2 focus-visible:outline-amber-300" />
           </label>
           {offered.length ? <ul className="max-h-80 space-y-2 overflow-y-auto">
             {offered.slice(0, 40).map(artifact => {
