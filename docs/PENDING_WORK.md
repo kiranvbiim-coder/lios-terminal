@@ -14,9 +14,9 @@
 
 - [x] P1.01 Confirm this repo is `kiranvbiim-coder/lios-terminal`, record exact `main` SHA, owner-fork path/commit and the approved pinned `openclaw/openclaw@c074824a27c96d3983043f9eeb33823cd1772d8c`; never assume a fork's HEAD is approved.
 - [x] P1.02 Inventory current LiOS Gateway, Home, supervisors, execution, P13 plugin/skills/MCP, AI auth/access, memory, P9 automation, TC chat, P4 Artifacts, connectors and devices; link existing code/tests/PRs and classify landed vs branch-only.
-- [ ] P1.03 Inventory **every relevant useful** upstream channel and capability family, not only chat sending: Telegram, WhatsApp, applicable other channels, sessions, agent/tool orchestration, browser/computer-use, coding, memory, scheduling, media, search, notifications, devices and diagnostics.
+- [x] P1.03 Inventory **every relevant useful** upstream channel and capability family, not only chat sending: Telegram, WhatsApp, applicable other channels, sessions, agent/tool orchestration, browser/computer-use, coding, memory, scheduling, media, search, notifications, devices and diagnostics.
 - [ ] P1.04 Decompose candidate upstream packages into reusable mechanisms, related tests, dependencies and source pins; document `DIRECT_REUSE/IMPORT/ADAPT/REPURPOSE/COMBINE/GENERALIZE/INNOVATE/DEFER/REJECT` under the existing donor policy.
-- [ ] P1.05 Produce a specific Telegram and WhatsApp per-feature capability matrix: supported transport/account login, 1:1/groups, inbound/outbound, replies, edits, reactions, media, identity, delivery, state sync, automated responses and platform/API limits.
+- [x] P1.05 Produce a specific Telegram and WhatsApp per-feature capability matrix: supported transport/account login, 1:1/groups, inbound/outbound, replies, edits, reactions, media, identity, delivery, state sync, automated responses and platform/API limits.
 - [ ] P1.06 Review exact source licenses, notices, external API terms, redistribution rights, auth method, data retention, user privacy, dependencies and known security issues before selecting imported code.
 - [ ] P1.07 Map each mechanism to exactly one existing LiOS owner and stable interface; identify high-conflict files/migrations, active PRs and implementation ownership before parallel work.
 - [ ] P1.08 Define versioned typed request/event/error/receipt and attachment contracts for existing LiOS Gateway ↔ isolated service, without parallel Project/Chat/Artifact/permission/secret/auth/automation authorities.
@@ -25,6 +25,9 @@
 **Package 1 proof:** complete owner/fork/upstream source map; channel feature matrix; legal/security findings; existing-code crosswalk; one existing-owner task/PR per integration seam.
 
 **P1.01/P1.02 inventory evidence (source only):** [Blueprint §0.2](technical/OPENCLAW_ASSIMILATION_BLUEPRINT.md#02-package-1-source-inventory-and-integration-constraints--2026-10-28) records main `8ab41b15`, decision PR #392 head `486d2826`, the resolved approved upstream pin/tree, observed owner-fork SHA, existing LiOS owners and test candidates. The isolated supporting service and Telegram/WhatsApp adapters were not located in current main; PR392 is documentation-only. Current strict LEP refusal, conversation-only placement, donor runtime version, channel dependency/rights and account-custody constraints remain open. These checked items attest an inventory, not exercised integration. No tests, installs, builds or new CI runs for the source inventory.
+
+**P1.03/P1.05 inventory evidence (source only):** the same blueprint §0.2 now includes the approved-pin family/channel breadth register and per-feature Telegram/WhatsApp matrix, with `PARTIAL`/`NOT_INSPECTED`, `ADAPT_REQUIRED`, explicit unknown/deferred features and rights gates. These inventory checkmarks do not attest that all bodies/dependencies/tests are audited, imported or supported. P1.04 still owns selected-package/fork dependency and test disposition; P1.06 still owns full rights/security review. Telegram MiniApp/native commands and the remaining feature-specific unknowns remain visible, not silently excluded.
+
 
 
 ### Package 2 — Supervised isolated supporting service (SI-06; existing GM/Home/Gateway and GM-11/P13 security owners)
