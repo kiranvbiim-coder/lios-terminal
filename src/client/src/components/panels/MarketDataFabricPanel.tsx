@@ -1,6 +1,7 @@
 import { useTerminalArtifactState } from "@/lib/terminalArtifactState";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { latestMarketCapture, marketCaptureKnownOn, type MarketCaptureComparison } from "@shared/marketEvidenceTimeMachine";
+import { latestMarketCapture, type MarketCaptureComparison } from "@shared/marketEvidenceTimeMachine";
+import { useRecordedAsOfSnapshot } from "@/lib/useRecordedAsOfSnapshot";
 import { Database, RefreshCw, ShieldCheck, TriangleAlert } from "lucide-react";
 import type { MarketDatasetRevisionReport, PointInTimeMarketSnapshot } from "@shared/pointInTimeData";
 
@@ -32,7 +33,12 @@ export default function MarketDataFabricPanel({ symbol }: { symbol: string }) {
   const [tab, setTab] = useTerminalArtifactState<"bars" | "actions" | "lineage">("MarketDataFabricPanel.tab", "bars");
   // Do not expose a previous symbol\'s retained captures while switching tabs.
   const current = latestMarketCapture(snapshots, upper);
-  const historical = asKnownDay ? marketCaptureKnownOn(snapshots, upper, asKnownDay) : null;
+  const lookup = useRecordedAsOfSnapshot<PointInTimeMarketSnapshot>({
+    url:`/api/data-snapshots/markets/${encodeURIComponent(upper)}/as-of`,
+    entityKey:upper,datasetKey:`market:${upper}:1d`,dataClass:"market_series",
+    day:asKnownDay,revision:current?.id,
+  });
+  const historical = lookup.snapshot;
   const visibleComparison = comparison?.baseline.id === historical?.id &&
     comparison?.current.id === current?.id && comparison.baseline.entityKey === upper ? comparison : null;
 
@@ -157,7 +163,11 @@ export default function MarketDataFabricPanel({ symbol }: { symbol: string }) {
               className="mt-1 block min-h-11 rounded-lg border border-border/70 bg-background px-3 font-ui text-sm text-foreground focus-visible:outline focus-visible:outline-2 focus-visible:outline-amber-300"/>
           </label>
         </div>
-        {asKnownDay && (!historical ?
+        {asKnownDay && (lookup.status === "loading" ?
+          <p role="status" className="font-ui text-xs text-muted-foreground">Inspecting retained historical market snapshots…</p>
+          : lookup.status === "unavailable" ?
+          <p role="alert" className="font-ui text-xs text-rose-200">{lookup.error || "Historical capture lookup is unavailable."}</p>
+          : !historical ?
           <p role="status" className="font-ui text-sm text-amber-200">
             No retained {upper} market capture was actually available on that date. Historical values are not reconstructed.
           </p> : <div className="space-y-3">
