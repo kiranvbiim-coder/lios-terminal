@@ -43,5 +43,5 @@ export default function RecordedEvidenceSankey({ projection }: { projection: Rec
   }, [option]);
 
   return <div ref={container} className="h-full w-full" data-testid="recorded-evidence-sankey-svg"
-    role="img" aria-label="Decorative three-stage flow of exactly recorded evidence relationship counts. Use the accessible relationship table below to inspect each source." />;
+    aria-hidden="true" />;
 }

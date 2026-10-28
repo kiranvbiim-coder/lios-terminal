@@ -94,3 +94,28 @@ export function observeNewsFeed(
 export function newsStoryRevisions(history: readonly NewsStoryRevision[], exactUrl: string): NewsStoryRevision[] {
   return history.filter(item => item.url === exactUrl).slice(0, MAX_NEWS_REVISIONS_PER_STORY);
 }
+
+/**
+ * B03: exact-URL "as observed then" comparison over the existing bounded
+ * in-session feed observations. Not a publisher revision ledger or evidence
+ * of what the world knew before the panel opened.
+ */
+export interface NewsObservedComparison {
+  earlier: NewsStoryRevision;
+  later: NewsStoryRevision;
+  changedFields: StoryChangedField[];
+}
+export function compareRecordedNewsObservations(
+  history: readonly NewsStoryRevision[],
+  exactUrl: string,
+  earlierObservedAt: string,
+): NewsObservedComparison | null {
+  const versions = newsStoryRevisions(history, exactUrl)
+    .filter(version => Number.isFinite(Date.parse(version.observedAt)))
+    .sort((a, b) => Date.parse(b.observedAt) - Date.parse(a.observedAt));
+  const earlier = versions.find(version => version.observedAt === earlierObservedAt);
+  const later = versions[0];
+  if (!earlier || !later || later.observedAt === earlier.observedAt ||
+    Date.parse(earlier.observedAt) >= Date.parse(later.observedAt)) return null;
+  return { earlier, later, changedFields: changedNewsFields(earlier, later) };
+}

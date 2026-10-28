@@ -5,6 +5,7 @@ import type { Express, Request, Response, NextFunction } from "express";
 import { z } from "zod";
 import { capturePulseReviewedSnapshot, comparePulseWithReviewedSnapshot } from "./pulseReviewContinuity";
 import { effectivePulseFollowingSubjects, normalizePulseSubjectKey, suppressMutedPulseCards, updatePulseSubjectPreferences } from "@shared/pulseSubjectPreferences";
+import { removePulseDiscoveryView, savePulseDiscoveryView } from "@shared/pulseSavedViews";
 import { requireRole } from "./auth";
 import { requireExecutableTrialOrClient, requireTrialOrClient } from "./trialAccess";
 import { storage } from "./storage";
@@ -185,6 +186,12 @@ const pulseSubjectWriteSchema = z.object({
     code: z.ZodIssueCode.custom, message: "Clear requires exactly one card or already-saved subject.", path: ["subjectKey"],
   });
 });
+
+const pulseSavedViewCreateSchema = z.object({
+  name: z.string().trim().min(1).max(60),
+  channel: z.enum(["for_you", "following", "markets", "research"]),
+  subjectKey: z.string().trim().min(1).max(160).nullable(),
+}).strict();
 
 const pulseCardSchema = z.object({
   media: editorialMediaSchema.optional(),
@@ -452,7 +459,7 @@ export function registerWaveDRoutes(app: Express, sources: PulseSources = LIVE_P
         : requestedFilter;
       const cards = filterPulseCards(suppressMutedPulseCards(result.cards, preferences), filter);
       const discoveryChanges = comparePulseWithReviewedSnapshot(cards, result.storedState.pulseReview);
-      res.json({ discoveryChanges, contractVersion: getWaveDReadiness().contractVersion, asOf: result.now.toISOString(), status: cards.some((card) => card.status === "unread") ? "attention" : "caught_up", filter, cards, preferences, actionInbox: result.actionInbox, monitoring: { activeRules: result.alerts.filter((item) => !item.triggered).length + (result.storedState?.signalRules.filter((item) => item.enabled).length ?? 0), watchlistSymbols: result.watchlist.length } });
+      res.json({ savedViews: result.storedState.pulseSavedViews, discoveryChanges, contractVersion: getWaveDReadiness().contractVersion, asOf: result.now.toISOString(), status: cards.some((card) => card.status === "unread") ? "attention" : "caught_up", filter, cards, preferences, actionInbox: result.actionInbox, monitoring: { activeRules: result.alerts.filter((item) => !item.triggered).length + (result.storedState?.signalRules.filter((item) => item.enabled).length ?? 0), watchlistSymbols: result.watchlist.length } });
     } catch (error) {
       res.status(502).json({ status: "unavailable", reason: error instanceof Error ? error.message : "Pulse data unavailable." });
     }
@@ -512,6 +519,48 @@ export function registerWaveDRoutes(app: Express, sources: PulseSources = LIVE_P
       res.json({ status: "saved", persisted: true, preferences: next.pulseSubjects, updatedAt: next.updatedAt });
     } catch (error) {
       res.status(502).json({ status: "unavailable", reason: error instanceof Error ? error.message : "Discovery preference could not be saved." });
+    }
+  });
+
+  // Saved views are scoped to the existing authorized Wave D preference
+  // document. The server never persists RSS articles or arbitrary URLs here.
+  app.get("/api/wave-d/pulse/views", requireWaveDRetailRead, async (req, res) => {
+    try {
+      const state = await getWaveDState(waveUser(req));
+      res.setHeader("Cache-Control", "no-store");
+      res.json({ status: "ready", savedViews: state.pulseSavedViews });
+    } catch {
+      res.status(502).json({ status: "unavailable", error: "Saved discovery views unavailable." });
+    }
+  });
+
+  // The server never persists RSS articles or arbitrary URLs here.
+  app.post("/api/wave-d/pulse/views", requireWaveDRetailRead, async (req, res) => {
+    const parsed = pulseSavedViewCreateSchema.safeParse(req.body);
+    if (!parsed.success) return res.status(400).json({ error: "Invalid saved discovery view.", issues: parsed.error.issues });
+    try {
+      const saved = await updateWaveDState(waveUser(req), state => ({
+        ...state, pulseSavedViews: savePulseDiscoveryView(
+          state.pulseSavedViews, parsed.data, state.pulseSubjects.followed, crypto.randomUUID(),
+        ),
+      }));
+      res.status(201).json({ status: "saved", persisted: true, savedViews: saved.pulseSavedViews });
+    } catch (error) {
+      const denied = error instanceof Error && /limit|not followed|Invalid/.test(error.message);
+      res.status(denied ? 400 : 502).json({ error: denied ? "Saved view selection is no longer available or limit reached." : "Saved view could not be persisted." });
+    }
+  });
+  app.delete("/api/wave-d/pulse/views/:id", requireWaveDRetailRead, async (req, res) => {
+    const savedViewId = req.params.id;
+    if (typeof savedViewId !== "string" || !/^[0-9a-f-]{36}$/i.test(savedViewId)) return res.status(400).json({ error: "Invalid saved view ID." });
+    try {
+      const saved = await updateWaveDState(waveUser(req), state => ({
+        ...state, pulseSavedViews: removePulseDiscoveryView(state.pulseSavedViews, savedViewId),
+      }));
+      res.json({ status: "deleted", persisted: true, savedViews: saved.pulseSavedViews });
+    } catch (error) {
+      const missing = error instanceof Error && /Saved view not found/.test(error.message);
+      res.status(missing ? 404 : 502).json({ error: missing ? "Saved view not found in this account." : "Saved view could not be removed." });
     }
   });
 

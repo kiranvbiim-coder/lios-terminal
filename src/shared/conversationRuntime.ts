@@ -267,9 +267,17 @@ export const conversationAttachmentRefSchema = z.object({
 }).strict();
 export type ConversationAttachmentRef = z.infer<typeof conversationAttachmentRefSchema>;
 
+export const recordedClaimReviewSchema = z.object({
+  sourceRequestId: z.string().uuid(),
+  trustId: z.string().uuid(),
+  claimId: z.string().min(1).max(240),
+}).strict();
+export type RecordedClaimReview = z.infer<typeof recordedClaimReviewSchema>;
+
 export const conversationRequestSchema = z.object({
   requestId: z.string().uuid(),
   continuationOf: z.string().uuid().nullable().default(null),
+  recordedClaimReview: recordedClaimReviewSchema.optional(),
   message: z.string().trim().min(1).max(50_000),
   sourceScope: conversationSourceScopeSchema.default("auto"),
   executionMode: conversationExecutionModeSchema.default("deterministic_first"),

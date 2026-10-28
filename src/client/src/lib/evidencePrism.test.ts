@@ -8,9 +8,11 @@ import { trustManifestSchema, type TrustManifest } from "@shared/trustContracts"
 import {
   describeObservationRights,
   inspectEvidenceClaim,
+  inspectEvidenceClaimObservedBy,
+  claimObservedTimeChoices,
   readableAssumptionValue,
 } from "./evidencePrism";
-import EvidencePrism from "../components/terminal/EvidencePrism";
+import EvidencePrism, { recordedClaimObservationTimestamp } from "../components/terminal/EvidencePrism";
 
 const REQUEST_ID = "11111111-1111-4111-8111-111111111111";
 const CLAIM_ID = "22222222-2222-4222-8222-222222222222";
@@ -111,11 +113,12 @@ test("WS-30: claim list is interactive but evidence stays behind deliberate disc
   assert.match(html, /aria-controls=/);
   assert.doesNotMatch(html, /Paid access required|assumption:period|No matching observation/, "closed claims do not expose detailed evidence");
   const src = readFileSync(fileURLToPath(new URL("../components/terminal/EvidencePrism.tsx", import.meta.url)), "utf8");
-  assert.match(src, /onClick=\{\(\) => setSelectedId/);
+  assert.match(src, /onClick=\{\(\) => \{ setSelectedId/);
   assert.match(src, /role="region"/);
   assert.match(src, /Unit: /);
   assert.match(src, /Not recorded in trust manifest/);
-  assert.match(src, /inspectEvidenceClaim\(manifest, selectedId\)/);
+  assert.match(src, /inspectEvidenceClaimObservedBy\(manifest, selectedId, observedBy \|\| null\)/);
+  assert.match(src, /claimObservedTimeChoices\(manifest, selectedId\)/);
   assert.match(src, /describeObservationRights\(observation\)/);
   const panel = readFileSync(fileURLToPath(new URL("../components/terminal/ConversationTrustPanel.tsx", import.meta.url)), "utf8");
   assert.match(panel, /<EvidencePrism key=\{manifest.trustId\} manifest=\{manifest\}/);
@@ -124,4 +127,43 @@ test("WS-30: claim list is interactive but evidence stays behind deliberate disc
 test("WS-30: empty claims render no extra inspector chrome", () => {
   const manifest = { ...fixture(), claims: [] };
   assert.equal(renderToStaticMarkup(React.createElement(EvidencePrism, { manifest })), "");
+});
+
+test("B05–B06 Evidence Time Machine selects exact recorded P3 observations without reclassifying the claim", () => {
+  const { inspectEvidenceClaimObservedBy, claimObservedTimeChoices } = requirePrismTimeExports();
+  const initial=fixture();
+  const recent=initial.evidence[0];
+  const manifest: TrustManifest={...initial,evidence:[
+    {...recent,evidenceId:"77777777-7777-4777-8777-777777777777",observedAt:"2026-10-24T08:00:00Z",providerLabel:"Earlier recorded provider"},
+    recent,
+  ]};
+  const times=claimObservedTimeChoices(manifest,CLAIM_ID);
+  assert.deepEqual(times,["2026-10-24T08:00:00.000Z","2026-10-24T09:00:00.000Z"]);
+  const earlier=inspectEvidenceClaimObservedBy(manifest,CLAIM_ID,times[0]);
+  assert.deepEqual(earlier?.sources[0].observations.map(item=>item.providerLabel),["Earlier recorded provider"]);
+  assert.equal(earlier?.missingSourceCount,1);
+  assert.equal(earlier?.claim.status,"partial");
+  const missing=inspectEvidenceClaimObservedBy(manifest,CLAIM_ID,"2026-10-24T07:00:00Z");
+  assert.equal(missing?.sources[0].observations.length,0);
+  assert.equal(missing?.missingSourceCount,2);
+  assert.equal(inspectEvidenceClaimObservedBy(manifest,CLAIM_ID,"2026-10-24T08:00:00"),null);
+  assert.equal(inspectEvidenceClaimObservedBy(manifest,CLAIM_ID,"2026-02-30T08:00:00Z"),null);
+  assert.equal(inspectEvidenceClaimObservedBy(manifest,CLAIM_ID,null)?.sources[0].observations.length,2);
+  assert.deepEqual(initial.evidence.map(x=>x.providerLabel),["FRED macro"]);
+});
+function requirePrismTimeExports() {
+  return { inspectEvidenceClaimObservedBy, claimObservedTimeChoices };
+}
+
+test("B06 Claim Lens refuses malformed source-observed/as-of display dates", () => {
+  for (const invalid of [
+    null, "1", "2026-10-27", "2026-10-27T12:00:00",
+    "2026-02-30T09:00:00Z", "2026-10-27T24:00:00Z",
+  ]) {
+    assert.equal(recordedClaimObservationTimestamp(invalid), "Not recorded", String(invalid));
+  }
+  assert.equal(recordedClaimObservationTimestamp("2026-10-27T15:30:00+05:30"),
+    "2026-10-27T10:00:00.000Z");
+  assert.equal(recordedClaimObservationTimestamp("2026-10-27T10:00:00.123Z"),
+    "2026-10-27T10:00:00.123Z");
 });

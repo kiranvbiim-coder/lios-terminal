@@ -65,7 +65,11 @@ export function resolveGovernedVisualAnswer(
     artifact.status !== "active" || artifact.kind !== request.data.kind) return BLOCKED;
 
   const canonicalRefs = new Set(version.sourceRefs);
-  if (!canonicalRefs.size || request.data.sourceRefs.some(ref => !canonicalRefs.has(ref))) return BLOCKED;
+  const requestedRefs = new Set(request.data.sourceRefs);
+  // A chart/table renders the WHOLE saved version, not only selected points.
+  // Requiring a subset could hide a denied or stale source used by that version.
+  if (!canonicalRefs.size || requestedRefs.size !== canonicalRefs.size ||
+      request.data.sourceRefs.some(ref => !canonicalRefs.has(ref))) return BLOCKED;
 
   // Saved P3 entitlement posture is not a fresh provider authorization; it
   // can only further RESTRICT an otherwise authenticated P4 read.
@@ -73,12 +77,14 @@ export function resolveGovernedVisualAnswer(
   // explicitly denied; re-auth the Artifact on every click via P4 first.
   const manifest = version.trustManifest;
   if (manifest?.evidence.length) {
-    const observed = new Map(manifest.evidence.map(item => [item.sourceRef, item]));
     for (const ref of request.data.sourceRefs) {
-      const observation = observed.get(ref);
-      const access = observation?.access;
-      if (!observation || access?.entitlementRequired === true ||
-        (access && /^(blocked|restricted|denied|unauthorized|not_entitled|expired)$/i.test(access.state))) return BLOCKED;
+      // A later "allowed" observation must NEVER erase a recorded denial for
+      // the same source by overwriting a Map entry. Refuse on any denial.
+      const observations = manifest.evidence.filter(item => item.sourceRef === ref);
+      if (!observations.length || observations.some(({ access }) =>
+        access?.entitlementRequired === true ||
+        (access && /^(blocked|restricted|denied|unauthorized|not_entitled|expired)$/i.test(access.state))
+      )) return BLOCKED;
     }
   }
 

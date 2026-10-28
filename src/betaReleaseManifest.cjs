@@ -11,6 +11,13 @@ const fs = require("node:fs");
 const path = require("node:path");
 
 const MAX_RELEASE_ASSET_BYTES = 2_000_000_000;
+// Local assembled Mac installers may exceed the per-file free-host limit.
+// Signed multipart transport is mandatory before publishing these bytes.
+const MAX_LOCAL_MAC_INSTALLER_BYTES = 16_000_000_000;
+function localAssetLimit(target) {
+  return target === "mac-arm64-dmg" || target === "mac-arm64-zip"
+    ? MAX_LOCAL_MAC_INSTALLER_BYTES : MAX_RELEASE_ASSET_BYTES;
+}
 const TARGETS = Object.freeze(["mac-arm64-dmg", "mac-arm64-zip", "win-x64-nsis"]);
 const VERSION = /^\d+\.\d+\.\d+-beta\.[1-9]\d*$/;
 const SHA256 = /^[a-f0-9]{64}$/;
@@ -48,7 +55,7 @@ function validateBody(body) {
     seen.add(entry.target);
     assert(typeof entry.name === "string" && NAME.test(entry.name)
       && entry.name === targetName(body.version, entry.target), "asset filename must match exact beta version/platform.");
-    assert(Number.isSafeInteger(entry.bytes) && entry.bytes > 0 && entry.bytes <= MAX_RELEASE_ASSET_BYTES,
+    assert(Number.isSafeInteger(entry.bytes) && entry.bytes > 0 && entry.bytes <= localAssetLimit(entry.target),
       "asset size invalid or exceeds zero-cost release limit.");
     assert(typeof entry.sha256 === "string" && SHA256.test(entry.sha256), "SHA-256 must be lowercase hex.");
   }
@@ -62,14 +69,14 @@ function publicKeyFingerprint(publicKey) {
   assert(key.asymmetricKeyType === "ed25519", "trusted key must be Ed25519.");
   return crypto.createHash("sha256").update(key.export({ type: "spki", format: "der" })).digest("hex");
 }
-async function hashAsset(folder, name) {
+async function hashAsset(folder, name, limitBytes = MAX_RELEASE_ASSET_BYTES) {
   assert(typeof name === "string" && NAME.test(name) && path.basename(name) === name, "unsafe filename.");
   const directory = fs.lstatSync(folder);
   assert(directory.isDirectory() && !directory.isSymbolicLink(), "asset folder must be a real directory.");
   const filename = path.join(folder, name);
   const before = fs.lstatSync(filename);
   assert(before.isFile() && !before.isSymbolicLink(), "asset must be a regular non-symlink file.");
-  assert(before.size > 0 && before.size <= MAX_RELEASE_ASSET_BYTES,
+  assert(before.size > 0 && before.size <= limitBytes,
     "asset missing content or exceeds free release size limit.");
   const descriptor = await fs.promises.open(filename, fs.constants.O_RDONLY | (fs.constants.O_NOFOLLOW || 0));
   try {
@@ -82,7 +89,7 @@ async function hashAsset(folder, name) {
     let bytes = 0;
     for await (const chunk of descriptor.createReadStream({ autoClose: false })) {
       bytes += chunk.length;
-      assert(bytes <= MAX_RELEASE_ASSET_BYTES, "asset grew beyond free release size limit.");
+      assert(bytes <= limitBytes, "asset grew beyond allowed local installer size limit.");
       hash.update(chunk);
     }
     const after = await descriptor.stat();
@@ -116,7 +123,7 @@ async function signBetaManifest({ version, commit, assetDir, privateKeyPem }) {
   const assets = [];
   for (const target of TARGETS) {
     const name = targetName(version, target);
-    const item = await hashAsset(assetDir, name);
+    const item = await hashAsset(assetDir, name, localAssetLimit(target));
     assets.push({ name, target, bytes: item.bytes, sha256: item.sha256 });
   }
   const body = validateBody({ schema: 1, channel: "beta", version, commit, assets });
@@ -153,19 +160,21 @@ async function verifyBetaManifest({ manifest, assetDir, trustedPublicKeyPem, exp
   assert(crypto.verify(null, payloadBytes(body), key, Buffer.from(signature.value, "base64")),
     "manifest signature failed; no asset trusted.");
   for (const item of body.assets) {
-    const actual = await hashAsset(assetDir, item.name);
+    const actual = await hashAsset(assetDir, item.name, localAssetLimit(item.target));
     assert(actual.bytes === item.bytes && actual.sha256 === item.sha256,
       "asset integrity mismatch for " + item.target + ".");
   }
   return {
     verified: true, channel: body.channel, version: body.version, commit: body.commit,
     assetCount: body.assets.length,
-    assetHashes: body.assets.map(({ name, sha256 }) => ({ name, sha256 })),
+    assetHashes: body.assets.map(({ name, target, bytes, sha256 }) => ({ name, target, bytes, sha256 })),
+    multipartRequiredTargets: body.assets.filter(({ bytes }) => bytes > MAX_RELEASE_ASSET_BYTES)
+      .map(({ target }) => target),
     qualification: "release_asset_integrity_only",
     productionCodeSigning: false, macNotarized: false, installApproved: false,
   };
 }
 module.exports = {
-  MAX_RELEASE_ASSET_BYTES, TARGETS, targetName, validateBody, parseManifest,
+  MAX_RELEASE_ASSET_BYTES, MAX_LOCAL_MAC_INSTALLER_BYTES, TARGETS, targetName, validateBody, parseManifest,
   publicKeyFingerprint, signBetaManifest, verifyBetaManifest,
 };

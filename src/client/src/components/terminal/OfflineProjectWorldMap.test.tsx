@@ -46,3 +46,18 @@ test("bundled Natural Earth asset is pinned and safe to display offline",()=>{
   assert.doesNotMatch(atlas,/<script|<iframe|<foreignObject|onload=|onclick=|http-equiv|xlink:href|<image|<use|url\(https?:|<style/gi);
   assert.equal(atlas.includes("token="),false);
 });
+
+
+test("B01 actual UTC time-window and scrubber live inside the existing offline map",()=>{
+  const html=render(pins);
+  assert.match(html,/data-testid="world-map-time-controls"/);
+  assert.match(html,/Filter by recorded event time/);
+  assert.match(html,/1 distinct recorded UTC day/);
+  assert.doesNotMatch(html, /http[s]?:\/\/[^"]+\.tile|mapbox-gl|maptiler/);
+  const source=readFileSync(new URL("./OfflineProjectWorldMap.tsx",import.meta.url),"utf8");
+  assert.match(source,/type="date"/);
+  assert.match(source,/type="range"/);
+  assert.match(source,/recordedWorldMapDays/);
+  assert.match(source,/setSelectedId\(null\)/);
+  assert.match(source,/fromDate: selectedFrom, throughDate: selectedThrough/);
+});

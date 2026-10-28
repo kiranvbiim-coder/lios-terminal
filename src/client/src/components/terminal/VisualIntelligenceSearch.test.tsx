@@ -1,9 +1,10 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { createElement } from "react";
+import { readFileSync } from "node:fs";
 import { renderToStaticMarkup } from "react-dom/server";
 import type { IntelligenceCard } from "@shared/waveDContracts";
-import VisualIntelligenceSearch, { VisualIntelligenceResultCard } from "./VisualIntelligenceSearch";
+import VisualIntelligenceSearch, { VisualIntelligenceResultCard, VisualIntelligenceSourceDisclosure } from "./VisualIntelligenceSearch";
 
 const card: IntelligenceCard = {
   id: "evidence-case", kind: "research", priority: "important", title: "Water source publication",
@@ -73,4 +74,79 @@ test("Search uses existing approved local images without fetching publisher pixe
   }));
   assert.doesNotMatch(unlinked, /<img\b/);
   assert.match(unlinked, /Water source publication/);
+});
+
+
+test("Visual Search refreshes exact authorized Pulse on foreground return without keystroke fetches", () => {
+  const source = readFileSync(new URL("./VisualIntelligenceSearch.tsx", import.meta.url), "utf8");
+  for (const exact of [
+    'window.addEventListener("focus", onForegroundChange)',
+    'document.addEventListener("visibilitychange", onForegroundChange)',
+    'window.removeEventListener("focus", onForegroundChange)',
+    'document.removeEventListener("visibilitychange", onForegroundChange)',
+    'document.visibilityState === "hidden"',
+    'setSnapshot(null)',
+    'setForegroundRevision(value => value + 1)',
+    '}, [searchReady, foregroundRevision]);',
+    'credentials: "same-origin", cache: "no-store"',
+    'controller.abort()',
+  ]) assert.ok(source.includes(exact), "Missing scoped foreground freshness safeguard: " + exact);
+  assert.ok(!source.includes('[searchReady, activeQuery]'), "Do not refetch provider for each keystroke");
+  assert.ok(!source.includes('localStorage.setItem('), "No duplicate browser-side intelligence cache");
+});
+
+test("A07 search can present exact source results as cards, tabular rows and recorded chronology", () => {
+  const source = readFileSync(new URL("./VisualIntelligenceSearch.tsx", import.meta.url), "utf8");
+  assert.match(source, /"cards" \| "table" \| "timeline"/);
+  assert.match(source, /aria-label="Intelligence results presentation"/);
+  assert.match(source, /aria-label="Recorded intelligence table"/);
+  assert.match(source, /aria-label="Recorded intelligence chronology"/);
+  assert.match(source, /datedResults\.length < found\.results\.length/);
+  assert.match(source, /Ordered by the source card's recorded timestamp/);
+  assert.ok(source.includes("<time dateTime={at}"), "timeline uses the source recorded time");
+  assert.doesNotMatch(source, /syntheticChart|inferredCoordinates|fetch\("https?:/);
+});
+
+test("A07 tabular and chronological source disclosure uses gated source URLs", () => {
+  const available = renderToStaticMarkup(createElement(VisualIntelligenceSourceDisclosure, { card }));
+  assert.match(available, /<details/);
+  assert.match(available, /3 sources/);
+  assert.match(available, /https:\/\/example.org\/public-report/);
+  assert.doesNotMatch(available, /href="javascript:|api_key=PRIVATE|PRIVATE/);
+  assert.match(available, /&lt;unsafe&gt;/);
+  const missing = renderToStaticMarkup(createElement(VisualIntelligenceSourceDisclosure, {
+    card: { ...card, evidence: [] },
+  }));
+  assert.match(missing, /No recorded evidence attached/);
+});
+
+test("A07 relevance graph only charts authorized recorded card scores, never invented financial time series", () => {
+  const source = readFileSync(new URL("./VisualIntelligenceSearch.tsx", import.meta.url), "utf8");
+  assert.match(source, /Relevance chart/);
+  assert.match(source, /aria-label="Recorded intelligence relevance comparison"/);
+  assert.match(source, /Math\.max\(0, Math\.min\(100, card\.score\)\)/);
+  assert.match(source, /aria-valuenow=\{score\}/);
+  assert.match(source, /source.*rankings|retained Pulse rankings/);
+  assert.match(source, /VisualIntelligenceSourceDisclosure card=\{card\}/);
+  assert.doesNotMatch(source, /generateSyntheticData|Math\.random\(/);
+});
+
+test("A07 shows optional rights-safe context when a recorded image fails source-rights checks", () => {
+  const invalid = {
+    kind: "image", assetPath: "/editorial-media/" + "a".repeat(64) + ".webp",
+    sha256: "a".repeat(64), alt: "Rights not linked to this source",
+    attribution: "Unknown", owner: "Unknown", licenseName: "unverified",
+    licenseEvidenceRef: "none", sourceEvidenceId: "unrelated",
+    verifiedBy: "none", verifiedAt: "2026-10-27T00:00:00Z",
+    permission: "commercial_redistribution_and_display", offlineBundlingPermitted: true,
+    state: "approved",
+  };
+  const html = renderToStaticMarkup(createElement(VisualIntelligenceResultCard, {
+    card: { ...card, title: "Solar power stocks rise on report", media: invalid as IntelligenceCard["media"] },
+    disabled: false, onAsk: () => undefined,
+  }));
+  assert.doesNotMatch(html, /<img\b|src="\/editorial-media/);
+  assert.match(html, /Find context picture/);
+  assert.match(html, /after your click/);
+  assert.match(html, /Recorded sources \(3\)/);
 });

@@ -472,7 +472,7 @@ function TablePaging({ offset, shown, available, reported, previousOffset, nextO
   </div>;
 }
 
-function TableArtifactTable({ content }: { content: Extract<ArtifactContent, { kind: "table" }> }) {
+export function TableArtifactTable({ content }: { content: Extract<ArtifactContent, { kind: "table" }> }) {
   const [offset, setOffset] = useState(0);
   const rows = content.rows.slice(offset, offset + TABLE_PAGE_SIZE);
   const available = content.rows.length;

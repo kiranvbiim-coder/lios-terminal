@@ -4,6 +4,7 @@ import { BookOpenText, ExternalLink, Radar, Sparkles } from "lucide-react";
 import type { IntelligenceCard } from "@shared/waveDContracts";
 import { pulseStoryTimestamp, safePulseSourceUrl, pulseStoryMediaSourceIds } from "@/lib/pulseStoryPresentation";
 import { LicensedEditorialImage } from "./LicensedEditorialImage";
+import { RecordedContextPicture } from "./RecordedContextPicture";
 import {
   INTELLIGENCE_SEARCH_FACETS,
   intelligenceSearchCounts,
@@ -43,8 +44,45 @@ export default function VisualIntelligenceSearch({ query, onAsk }: {
   const [actionError, setActionError] = useState<string | null>(null);
   const [stagingId, setStagingId] = useState<string | null>(null);
   const [facet, setFacet] = useState<IntelligenceSearchFacet>("all");
+  const [presentation, setPresentation] = useState<"cards" | "table" | "timeline" | "chart">("cards");
+  const [foregroundRevision, setForegroundRevision] = useState(0);
   const activeQuery = query.trim().slice(0, 120);
   const searchReady = activeQuery.length >= 2;
+
+  useEffect(() => {
+    if (!searchReady) return;
+    // An authenticated snapshot is not valid indefinitely across sign-out,
+    // account switching, permission revocation or saved Follow/Mute changes.
+    // Only recheck when the panel regains foreground; never per keystroke.
+    let lastForegroundCheck = Date.now();
+    const onForegroundChange = () => {
+      if (document.visibilityState === "hidden") {
+        // Hide the last authorized records immediately and abort an in-flight
+        // fetch via the revision-driven effect cleanup.
+        setSnapshot(null);
+        setFailure(null);
+        setPending(false);
+        setForegroundRevision(value => value + 1);
+        lastForegroundCheck = 0;
+        return;
+      }
+      const now = Date.now();
+      // Focus and visibilitychange often arrive together: one network read.
+      if (now - lastForegroundCheck < 500) return;
+      lastForegroundCheck = now;
+      setSnapshot(null);
+      setFailure(null);
+      setActionError(null);
+      setPending(true);
+      setForegroundRevision(value => value + 1);
+    };
+    window.addEventListener("focus", onForegroundChange);
+    document.addEventListener("visibilitychange", onForegroundChange);
+    return () => {
+      window.removeEventListener("focus", onForegroundChange);
+      document.removeEventListener("visibilitychange", onForegroundChange);
+    };
+  }, [searchReady]);
 
   useEffect(() => {
     // Fetch one authorized snapshot when this panel becomes searchable.
@@ -53,12 +91,14 @@ export default function VisualIntelligenceSearch({ query, onAsk }: {
     setSnapshot(null);
     setFailure(null);
     setActionError(null);
-    if (!searchReady) { setPending(false); return; }
+    if (!searchReady || document.visibilityState === "hidden") { setPending(false); return; }
     const controller = new AbortController();
     setPending(true);
     const timer = window.setTimeout(async () => {
       try {
-        const response = await fetch("/api/wave-d/pulse", { signal: controller.signal });
+        const response = await fetch("/api/wave-d/pulse", {
+          signal: controller.signal, credentials: "same-origin", cache: "no-store",
+        });
         if (!response.ok) throw new Error("Current intelligence is unavailable or access was denied.");
         const payload: unknown = await response.json();
         if (!hasRecordedPulseCards(payload)) throw new Error("Current intelligence returned an unsupported response.");
@@ -71,12 +111,15 @@ export default function VisualIntelligenceSearch({ query, onAsk }: {
       }
     }, 160);
     return () => { controller.abort(); window.clearTimeout(timer); };
-  }, [searchReady]);
+  }, [searchReady, foregroundRevision]);
 
   const cards = snapshot?.cards ?? [];
   const counts = useMemo(() => intelligenceSearchCounts(cards), [cards]);
   const found = useMemo(() => searchRecordedIntelligence(cards, activeQuery, facet), [cards, activeQuery, facet]);
   const asOf = pulseStoryTimestamp(snapshot?.asOf);
+  const datedResults = useMemo(() => found.results
+    .flatMap(card => { const at = pulseStoryTimestamp(card.createdAt); return at ? [{ card, at }] : []; })
+    .sort((a, b) => b.at.localeCompare(a.at) || a.card.id.localeCompare(b.card.id)), [found.results]);
 
   const stage = async (card: IntelligenceCard) => {
     if (stagingId) return;
@@ -109,13 +152,91 @@ export default function VisualIntelligenceSearch({ query, onAsk }: {
                 className={`min-h-10 rounded-lg border px-3 py-2 font-ui text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-300/70 ${facet === item.value ? "border-amber-300/40 bg-amber-300/[0.09] text-foreground" : "border-border/60 text-muted-foreground hover:text-foreground"}`}
               >{item.label} <span aria-hidden="true">({counts[item.value]})</span></button>)}
             </div>
+            <div className="flex flex-wrap items-center gap-2 border-b border-border/50 px-3 py-2" role="group" aria-label="Intelligence results presentation">
+              {(["cards", "table", "timeline", "chart"] as const).map(mode => <button key={mode} type="button"
+                aria-pressed={presentation === mode} onClick={() => setPresentation(mode)}
+                className={`min-h-10 rounded-lg border px-3 py-2 font-ui text-xs focus-visible:ring-2 focus-visible:ring-amber-300/70 ${presentation === mode ? "border-amber-300/50 text-foreground" : "border-border/60 text-muted-foreground"}`}>
+                {mode === "timeline" ? "Recorded timeline" : mode === "table" ? "Table" : mode === "chart" ? "Relevance chart" : "Cards"}
+              </button>)}
+            </div>
             <p role="status" className="px-4 py-3 font-ui text-xs text-muted-foreground">
               {found.total} matches within {cards.length} returned intelligence items.
               {asOf && <> Source snapshot <time dateTime={asOf}>{new Date(asOf).toLocaleString()}</time>.</>}
               {found.limited && ` Showing first ${found.results.length}; narrow the query for more.`}
             </p>
             {found.total === 0 ? <p className="px-5 py-8 text-center font-ui text-sm text-muted-foreground">No matching recorded intelligence. Try another subject or filter.</p>
-              : <div className="grid max-h-[50vh] min-w-0 gap-3 overflow-y-auto p-3 sm:grid-cols-2" aria-label="Recorded intelligence matches">
+              : presentation === "chart" ? (
+                <div className="max-h-[50vh] overflow-y-auto p-3" aria-label="Recorded intelligence relevance comparison">
+                  <p className="mb-3 font-ui text-xs leading-5 text-muted-foreground">
+                    Relevance scores are computed from retained Pulse rankings (0–100), not market prices,
+                    verified impact measures or corroboration. Each bar represents one currently authorized card.
+                  </p>
+                  <ol className="space-y-2">
+                    {found.results.map(card => {
+                      const score = Math.max(0, Math.min(100, card.score));
+                      return <li key={card.id} className="min-w-0 rounded-lg border border-border/60 p-3">
+                        <div className="flex flex-wrap items-center justify-between gap-2 font-ui text-xs">
+                          <span className="min-w-0 flex-1 break-words font-semibold text-foreground">{card.title}</span>
+                          <span className="tabular-nums text-muted-foreground">{score.toFixed(0)} / 100</span>
+                        </div>
+                        <div role="meter" aria-label={`Recorded relevance score for ${card.title}`}
+                          aria-valuemin={0} aria-valuemax={100} aria-valuenow={score}
+                          className="mt-2 h-2.5 w-full overflow-hidden rounded-full bg-border/60">
+                          <div className="h-full rounded-full bg-amber-300/65" style={{ width: `${score}%` }} />
+                        </div>
+                        <div className="mt-2 flex flex-wrap items-center justify-between gap-3">
+                          <span className="font-ui text-xs capitalize text-muted-foreground">{card.kind.replaceAll("_", " ")}</span>
+                          <VisualIntelligenceSourceDisclosure card={card} />
+                          <button type="button" disabled={stagingId !== null} onClick={() => void stage(card)}
+                            aria-label={`Ask LiOS about ${card.title}`}
+                            className="min-h-10 rounded-lg border border-border/60 px-3 font-ui text-xs text-foreground focus-visible:ring-2 focus-visible:ring-amber-300/70 disabled:opacity-40">Ask LiOS</button>
+                        </div>
+                      </li>;
+                    })}
+                  </ol>
+                </div>
+              ) : presentation === "table" ? (
+                <div className="max-h-[50vh] overflow-auto p-3" aria-label="Recorded intelligence table">
+                  <table className="w-full min-w-[520px] border-collapse text-left font-ui text-xs">
+                    <caption className="pb-2 text-left text-muted-foreground">Only the currently authorized, recorded source snapshot. No inferred rows.</caption>
+                    <thead><tr className="border-b border-border/60 text-muted-foreground">
+                      <th scope="col" className="p-2">Subject</th><th scope="col" className="p-2">Kind</th>
+                      <th scope="col" className="p-2">Recorded time</th><th scope="col" className="p-2">Sources</th>
+                      <th scope="col" className="p-2">Action</th>
+                    </tr></thead>
+                    <tbody>{found.results.map(card => {
+                      const recordedAt = pulseStoryTimestamp(card.createdAt);
+                      return <tr key={card.id} className="border-b border-border/40">
+                        <th scope="row" className="min-w-[180px] max-w-[340px] break-words p-2 font-medium text-foreground">{card.title}</th>
+                        <td className="p-2 capitalize text-muted-foreground">{card.kind.replaceAll("_", " ")}</td>
+                        <td className="whitespace-nowrap p-2 text-muted-foreground">{recordedAt ? <time dateTime={recordedAt}>{new Date(recordedAt).toLocaleString()}</time> : "Not recorded"}</td>
+                        <td className="p-2 text-muted-foreground"><VisualIntelligenceSourceDisclosure card={card} /></td>
+                        <td className="p-2"><button type="button" disabled={stagingId !== null} onClick={() => void stage(card)}
+                          aria-label={`Ask LiOS about ${card.title}`}
+                          className="min-h-10 rounded-lg border border-border/60 px-3 text-foreground focus-visible:ring-2 focus-visible:ring-amber-300/70 disabled:opacity-40">Ask LiOS</button></td>
+                      </tr>;
+                    })}</tbody>
+                  </table>
+                </div>
+              ) : presentation === "timeline" ? (
+                <div className="max-h-[50vh] overflow-y-auto p-3" aria-label="Recorded intelligence chronology">
+                  <p className="mb-3 font-ui text-xs text-muted-foreground">Ordered by the source card's recorded timestamp, not verified event chronology or publisher revisions.</p>
+                  {datedResults.length ? <ol className="space-y-2 border-l border-border/65 pl-4">{datedResults.map(({ card, at }) =>
+                    <li key={card.id} className="relative rounded-lg border border-border/60 p-3">
+                      <span className="absolute -left-[21px] top-5 h-2.5 w-2.5 rounded-full border border-amber-300/60 bg-background" aria-hidden="true"/>
+                      <time dateTime={at} className="font-ui text-xs text-muted-foreground">{new Date(at).toLocaleString()}</time>
+                      <h3 className="mt-1 font-ui text-sm font-semibold text-foreground">{card.title}</h3>
+                      <p className="mt-1 line-clamp-2 font-ui text-xs leading-5 text-muted-foreground">{card.whatHappened}</p>
+                      <div className="mt-2 flex flex-wrap items-center gap-2 font-ui text-xs text-muted-foreground">
+                        <VisualIntelligenceSourceDisclosure card={card} />
+                        <button type="button" disabled={stagingId !== null} onClick={() => void stage(card)}
+                          aria-label={`Ask LiOS about ${card.title}`}
+                          className="min-h-10 rounded-lg border border-border/60 px-3 text-foreground focus-visible:ring-2 focus-visible:ring-amber-300/70 disabled:opacity-40">Ask LiOS</button>
+                      </div>
+                    </li>)}</ol> : <p role="status" className="font-ui text-xs text-muted-foreground">No source items have valid recorded times. Open Cards or Table to inspect the original records.</p>}
+                  {datedResults.length < found.results.length && <p className="mt-3 font-ui text-xs text-muted-foreground">{found.results.length - datedResults.length} item(s) lack a recorded time and are not placed on this timeline.</p>}
+                </div>
+              ) : <div className="grid max-h-[50vh] min-w-0 gap-3 overflow-y-auto p-3 sm:grid-cols-2" aria-label="Recorded intelligence matches">
                 {found.results.map(card => <VisualIntelligenceResultCard key={card.id} card={card} disabled={stagingId !== null} onAsk={() => void stage(card)} />)}
               </div>}
           </>}
@@ -123,6 +244,34 @@ export default function VisualIntelligenceSearch({ query, onAsk }: {
       )}
     </section>
   );
+}
+
+/**
+ * Compact publisher evidence used by Table and recorded chronology. Every
+ * outbound URL passes the same credential-safe public-source gate as Cards.
+ * Never infer supporting references from a news title or provider label.
+ */
+export function VisualIntelligenceSourceDisclosure({ card }: { card: IntelligenceCard }) {
+  const sources = card.evidence ?? [];
+  return <details className="min-w-[90px] font-ui text-xs">
+    <summary className="min-h-10 cursor-pointer rounded-md px-1 py-2 text-foreground focus-visible:outline focus-visible:outline-2 focus-visible:outline-amber-300">
+      {sources.length} source{sources.length === 1 ? "" : "s"}
+    </summary>
+    <ul className="max-w-[250px] space-y-1.5 border-t border-border/50 pt-2">
+      {sources.slice(0, 6).map((source, index) => {
+        const safeUrl = safePulseSourceUrl(source.url);
+        return <li key={`${source.id}:${index}`} className="min-w-0 break-words leading-5 text-muted-foreground">
+          {safeUrl ? <a href={safeUrl} target="_blank" rel="noopener noreferrer" referrerPolicy="no-referrer"
+            className="underline-offset-2 hover:underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-amber-300">
+            {source.source}
+          </a> : <span>{source.source}</span>}
+          {source.provider && <span> · {source.provider}</span>}
+        </li>;
+      })}
+      {sources.length > 6 && <li>{sources.length - 6} more source references in Cards view</li>}
+      {!sources.length && <li>No recorded evidence attached.</li>}
+    </ul>
+  </details>;
 }
 
 export function VisualIntelligenceResultCard({ card, disabled, onAsk }: {
@@ -143,7 +292,10 @@ export function VisualIntelligenceResultCard({ card, disabled, onAsk }: {
       {timestamp && <time dateTime={timestamp} className="shrink-0 font-ui text-xs text-muted-foreground">{new Date(timestamp).toLocaleDateString()}</time>}
     </div>
     <div className="space-y-2 px-4 py-3">
-      <LicensedEditorialImage media={card.media} sourceIds={pulseStoryMediaSourceIds(evidence)} variant="compact" className="w-full" />
+      <LicensedEditorialImage media={card.media} sourceIds={pulseStoryMediaSourceIds(evidence)}
+        variant="compact" className="w-full"
+        fallback={<RecordedContextPicture title={card.title}
+          hasPublicEvidence={evidence.some(source => safePulseSourceUrl(source.url) !== null)} />} />
       <h3 className="font-ui text-base font-semibold leading-snug text-foreground">{card.title}</h3>
       <p className="line-clamp-3 font-ui text-sm leading-6 text-muted-foreground">{card.whatHappened}</p>
       {card.whyItMattersToUser && <p className="line-clamp-2 font-ui text-sm leading-5 text-foreground/85">{card.whyItMattersToUser}</p>}

@@ -341,6 +341,7 @@ export function registerArtifactRoutes(app: Express): void {
       const body = z.object({
         draft: conversationArtifactDraftSchema,
         requestId: z.string().uuid().nullable().optional(),
+        baseVersion: z.number().int().positive().optional(),
         trustManifest: trustManifestSchema.nullable().optional(),
         dependencyRefs: z.array(z.string().trim().min(1).max(1_000)).max(5_000).default([]),
         refreshSpec: artifactRefreshSpecSchema.nullable().optional(),

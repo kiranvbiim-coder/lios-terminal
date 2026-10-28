@@ -112,11 +112,27 @@ test("existing Wave D → Watermelon-style card handoff uses one shared grouping
   const shell = readFileSync(new URL("../components/terminal/WaveCExperienceShell.tsx", import.meta.url), "utf8");
   const board = readFileSync(new URL("../components/terminal/FusionPulseBoard.tsx", import.meta.url), "utf8");
   const storyCard = readFileSync(new URL("../components/terminal/LiosPulseStoryCard.tsx", import.meta.url), "utf8");
-  assert.match(shell, /setWaveDPulseCards\(Array\.isArray\(pulse\.cards\) \? pulse\.cards\.slice\(0, 24\) : \[\]\)/);
+  // The authorized bounded snapshot is used both for the single Pulse owner and the recorded review projection.
+  assert.match(shell, /const authorizedCards = Array\.isArray\(pulse\.cards\) \? pulse\.cards\.slice\(0, 24\) : \[\]/);
+  assert.match(shell, /setWaveDPulseCards\(authorizedCards\)/);
+  assert.match(shell, /setPulseReview\(normalizePulseReviewPresentation\(pulse\.discoveryChanges, authorizedCards\)\)/);
   assert.match(board, /clusterRecordedPulseStories\(pulseCards, 24\)/);
   assert.match(board, /LiosPulseStoryCard/);
   assert.match(storyCard, /clusteredCount/);
   assert.match(storyCard, /This grouping is not independent corroboration/);
   assert.match(storyCard, /safePulseSourceUrl\(source\.url\)/);
   assert.doesNotMatch(board, /Math\.random|createP9Workflow|fetch\("https?:/);
+});
+
+test("A04 same source-local ID from different publishers never merges unrelated articles", () => {
+  const lead = story("publisher-a", { evidence: [
+    { id: "123", source: "Publisher A", provider: "publisher-a", url: "https://example.org/a" },
+  ] });
+  const other = story("publisher-b", { evidence: [
+    { id: "123", source: "Publisher B", provider: "publisher-b", url: "https://example.org/b" },
+  ] });
+  assert.equal(clusterRecordedPulseStories([lead, other]).length, 2);
+  assert.equal(clusterRecordedPulseStories([lead, { ...other,
+    evidence: [{ ...other.evidence![0], url: "https://example.org/a" }],
+  }]).length, 1);
 });

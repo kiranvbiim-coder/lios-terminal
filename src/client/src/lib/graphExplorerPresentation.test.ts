@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { buildCrossDomainGraph, type CrossDomainGraph } from "./terminalCrossDomainGraph";
-import { graphNodeConnections, presentCrossDomainGraph } from "./graphExplorerPresentation";
+import { graphNodeConnections, presentCrossDomainGraph, summarizeRecordedGraphLinks } from "./graphExplorerPresentation";
 import type { IntelligenceObject } from "./terminalIntelligenceObjects";
 
 const object = (id: string, label: string, relations: IntelligenceObject["relations"] = []): IntelligenceObject => ({
@@ -93,4 +93,33 @@ test("view transforms do not mutate the canonical graph", () => {
   presentCrossDomainGraph(graph, { query: "market", selectedId: "e:market", neighborsOnly: true, bridgesOnly: true });
   graphNodeConnections(graph, "e:market");
   assert.equal(JSON.stringify(graph), before);
+});
+
+test("B07 domain-bridge-only lens hides unrelated objects as well as same-domain edges",()=>{
+  const graph: CrossDomainGraph = {
+    nodes:[
+      {objectId:"a",label:"Policy rule",domain:"policy",strength:.6},
+      {objectId:"b",label:"Market price",domain:"market",strength:.6},
+      {objectId:"c",label:"Other market",domain:"market",strength:.6},
+      {objectId:"d",label:"Isolated source",domain:"research",strength:.6},
+    ],
+    edges:[
+      {sourceId:"a",targetId:"b",relation:"affects",strength:.5},
+      {sourceId:"b",targetId:"c",relation:"supports",strength:.5},
+    ],
+  };
+  const bridges=presentCrossDomainGraph(graph,{bridgesOnly:true});
+  assert.deepEqual(bridges.nodes.map(x=>x.objectId),["a","b"]);
+  assert.deepEqual(bridges.edges.map(x=>[x.sourceId,x.targetId]),[["a","b"]]);
+  assert.equal(bridges.matchingCount,2);
+  assert.deepEqual(presentCrossDomainGraph(graph,{bridgesOnly:true,relation:"supports"}).nodes,[]);
+  assert.deepEqual(presentCrossDomainGraph(graph,{bridgesOnly:true,query:"market"}).nodes.map(x=>x.objectId),["a","b"]);
+});
+test("B08 source-only relationship distribution counts edges rather than summed strengths",()=>{
+  const graph=fixture();
+  const grouped=summarizeRecordedGraphLinks(graph);
+  assert.deepEqual(grouped,[
+    {relation:"affects",count:1},{relation:"supports",count:1},
+  ]);
+  assert.deepEqual(summarizeRecordedGraphLinks({nodes:[],edges:graph.edges}),[]);
 });

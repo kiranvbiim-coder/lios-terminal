@@ -11,7 +11,7 @@ import type {
   ArtifactModelMaintenanceHead, ArtifactModelMaintenanceOptions, ArtifactModelMaintenanceRequest,
   ArtifactModelMaintenanceApplyRequest, ArtifactModelMaintenanceReview, ArtifactModelMaintenanceResult,
 } from "@shared/artifactModelMaintenance";
-import { apiRequest } from "./queryClient";
+import { apiRequest, queryClient } from "./queryClient";
 
 export interface ProjectArtifactRecord {
   id: string; projectId: number | null; owningChatId?: number | null; ownerUserId: number; organizationId: number | null;
@@ -112,11 +112,22 @@ export function useAllArtifacts(status: "active" | "archived" | "trash" = "activ
     },
   });
 }
-export function useArtifact(artifactId: string | null, version?: number | null) {
+const artifactReadOptions = (artifactId: string | null, version?: number | null) => ({
+  queryKey: version ? ["/api/artifacts", artifactId, "version", version] : ["/api/artifacts", artifactId],
+  queryFn: async ({ signal }: { signal: AbortSignal }) => {
+    const res = await fetch(`/api/artifacts/${encodeURIComponent(artifactId!)}${version ? `?version=${version}` : ""}`, { signal, credentials: "same-origin", cache: "no-store" });
+    if (!res.ok) throw new Error(`${res.status}: Artifact request failed.`);
+    return res.json() as Promise<ArtifactDetail>;
+  },
+});
+export function readCurrentArtifactVersion(artifactId: string, version: number) {
+  return queryClient.fetchQuery({ ...artifactReadOptions(artifactId, version), staleTime: 0 });
+}
+export function useArtifact(artifactId: string | null, version?: number | null, requireFreshRead = false) {
   return useQuery<ArtifactDetail>({
-    queryKey: version ? ["/api/artifacts", artifactId, "version", version] : ["/api/artifacts", artifactId],
-    queryFn: async () => { const res = await fetch(`/api/artifacts/${encodeURIComponent(artifactId!)}${version ? `?version=${version}` : ""}`); if (!res.ok) throw new Error(`${res.status}: Artifact request failed.`); return res.json(); },
+    ...artifactReadOptions(artifactId, version),
     enabled: Boolean(artifactId),
+    ...(requireFreshRead ? { refetchOnMount: "always" as const, staleTime: 0 } : {}),
     // No prior revision is safe to render as an exact requested P4 version.
     // Permission and version are rechecked by the authenticated GET.
   });
@@ -291,6 +302,7 @@ export async function keepConversationDraft(target: number | { chatId: number },
 }
 export async function keepConversationDraftVersion(artifactId: string, draft: ConversationArtifactDraft, input?: {
   requestId?: string | null;
+  baseVersion?: number;
   trustManifest?: TrustManifest | null;
   dependencyRefs?: string[];
   refreshSpec?: ArtifactRefreshSpec | null;
@@ -298,6 +310,7 @@ export async function keepConversationDraftVersion(artifactId: string, draft: Co
   return (await apiRequest("POST", `/api/artifacts/${encodeURIComponent(artifactId)}/keep-draft-version`, {
     draft,
     requestId: input?.requestId ?? null,
+    ...(input?.baseVersion ? { baseVersion: input.baseVersion } : {}),
     trustManifest: input?.trustManifest ?? null,
     dependencyRefs: input?.dependencyRefs ?? [],
     refreshSpec: input?.refreshSpec ?? null,

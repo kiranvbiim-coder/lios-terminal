@@ -36,6 +36,7 @@ import {
   type GovernedToolAuthorization,
 } from "./conversationGrantStore";
 import { conversationRequestSchema } from "@shared/conversationRuntime";
+import { resolveRecordedClaimReview } from "./recordedClaimReview";
 import type { ProjectChatMessage, ProjectResource } from "@shared/schemaProjects";
 import type {
   ConversationRequest,
@@ -468,6 +469,10 @@ async function runProjectChat(
   const initialRequest = canonicalRequest(conversationInput);
   const early = restart ? await loadSavedChatState(user, chatId, restart.source.priorHistory) : await loadSavedChatState(user, chatId);
   if (restart && !early) throw new ConversationStartError(404, { code: "interrupted_run_not_found", error: "Interrupted execution not found.", requestId: initialRequest.requestId });
+  if (initialRequest.recordedClaimReview && (agent || !early))
+    throw new ConversationStartError(400, { error: "Recorded claim review requires its saved Chat and does not execute an agent." });
+  const recordedClaimReviewText = initialRequest.recordedClaimReview
+    ? await resolveRecordedClaimReview(tenantContext(user), chatId, initialRequest.recordedClaimReview) : undefined;
   const resolution = resolveWorkingContextRequest(initialRequest, early?.carried ?? null);
   assertWorkingContextResolved(resolution);
   if (early) await assertWorkingContextArtifacts(user, early.chat.scope, early.chat.projectId, chatId, resolution.request, early.carried);
@@ -693,6 +698,7 @@ async function runProjectChat(
             content: message.content,
           })),
           request: runtimeRequest,
+          recordedClaimReviewText,
           ...(agent ? {
             agentLoop: {
               ownerMemoryInspection,
@@ -979,6 +985,7 @@ async function runProjectChat(
             metadata: {
               runtime: "p2",
               runtimeRequestId: request.requestId,
+              ...(result.trustManifest ? { recordedTrustManifest: result.trustManifest } : {}),
               resultLabel: result.label,
               executionReceiptIds: result.receiptIds,
               artifactDraftIds: result.artifacts.map((artifact) => artifact.artifactId),

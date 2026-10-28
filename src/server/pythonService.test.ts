@@ -96,6 +96,29 @@ test("a sidecar that does not enforce our token is never trusted", async () => {
   }
 });
 
+test("canonical packaged Python resolver rejects symlinked distribution and bundle parents", () => {
+  if (process.platform === "win32") return; // directory symlink permission requires Windows Developer Mode
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), "lios-symlinked-sidecar-"));
+  const dist = path.join(root, "python-sidecar-dist");
+  const fakeDir = path.join(root, "user-local-python");
+  try {
+    fs.mkdirSync(fakeDir);
+    fs.writeFileSync(path.join(fakeDir, "lios-python-sidecar"), "synthetic external binary", { mode: 0o700 });
+    fs.symlinkSync(fakeDir, dist, "dir");
+    assert.throws(() => resolvePackagedPythonSidecar(root, "darwin"),
+      /host-interpreter fallback refused/,
+      "a real-looking executable under a symlinked distribution cannot pass as bundled");
+    fs.unlinkSync(dist);
+    fs.mkdirSync(dist);
+    fs.symlinkSync(fakeDir, path.join(dist, "lios-python-sidecar"), "dir");
+    assert.throws(() => resolvePackagedPythonSidecar(root, "darwin"),
+      /host-interpreter fallback refused/,
+      "a symlinked nested parent cannot redirect to a user-local executable");
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
 test("packaged desktop never falls back to an unverified host Python interpreter", () => {
   assert.equal(resolvePackagedPythonSidecar(undefined), null, "source checkout still uses its configured interpreter");
   assert.throws(() => resolvePackagedPythonSidecar("./relative-resources", "darwin"),

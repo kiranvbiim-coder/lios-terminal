@@ -45,3 +45,14 @@ test("no source insights do not yield artificial consequences or actions", () =>
   assert.match(html, /No recorded insights are available/);
   assert.doesNotMatch(html, /Investigate in Chat/);
 });
+
+test("C03 invalid source event date is never displayed as verified Project event history", () => {
+  const invalid = { ...lens, insights: [{
+    ...lens.insights[0], occurredAt: "2026-02-30T11:00:00Z",
+  }] };
+  const html = renderToStaticMarkup(createElement(ProjectInvestigationDesk, {
+    projectId: 9, graph, lens: invalid,
+  }));
+  assert.match(html, /No recorded event date/);
+  assert.doesNotMatch(html, /Invalid Date|2 Mar 2026/);
+});

@@ -102,4 +102,15 @@ try {
 } catch {
   // release verification will catch an unusable executable.
 }
-console.log(`Built self-contained LiOS Python sidecar: ${executable}`);
+// Do not ship an executable that merely exists: the known-answer reverse-DCF
+// and authentication probe must pass in the REAL frozen Python executable.
+// Installed app qualification remains a separate release gate.
+const { qualifyBuiltPythonSidecar } = require("./sidecar_build_acceptance.cjs");
+qualifyBuiltPythonSidecar(executable)
+  .then(() => {
+    console.log("Built Python sidecar passed authenticated calculation and reverse-DCF qualification.");
+  })
+  .catch(() => {
+    console.error("Bundled sidecar build qualification failed. No distributable app is accepted.");
+    process.exitCode = 1;
+  });

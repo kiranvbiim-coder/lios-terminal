@@ -13,6 +13,8 @@ import ChatSourcesControl from "./ChatSourcesControl";
 import ChatExtensionsDialog from "./ChatExtensionsDialog";
 import ConversationArtifactSidecar from "./ConversationArtifactSidecar";
 import { isCurrentArtifactLoad } from "@/lib/artifactSidecarSizing";
+import { exactRuntimeSavedArtifact, isCurrentSavedArtifactHandoff } from "@/lib/exactRuntimeSavedArtifact";
+import { canPrepareProjectAutomationDraft } from "@/lib/projectAutomationDraftEligibility";
 import type { z } from "zod";
 import { ProjectDestinationDialog } from "./ProjectDestinationDialog";
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
@@ -139,6 +141,9 @@ import { uploadRealChatAttachment, type UploadStage } from "@/lib/realFileAttach
 import { ambiguousMentionTokens, eligibleProjectMentions, stageResourceMention } from "@shared/mentionContext";
 import { stageUniversalChatQuestion, type UniversalChatHandoff } from "@/lib/universalChatHandoff";
 import { hasObservedCompletion, stageSafeRunRetry } from "@/lib/observedRunPolicy";
+import { readCurrentArtifactVersion } from "@/lib/useArtifacts";
+import type { RecordedClaimReview } from "@shared/conversationRuntime";
+import type { ChatArtifactSaveTarget, ChatArtifactSaveOutcome } from "@/lib/chatArtifactSaveReview";
 import { clearSubmittedComposerDraft, mayClearComposerDraft, restoreFailedComposerDraft } from "@/lib/composerDraftSafety";
 import ConversationRuntimeTrace from "./ConversationRuntimeTrace";
 import ChatMarkdown from "./ChatMarkdown";
@@ -438,7 +443,19 @@ export default function ProjectExperienceShell({
   busyRef.current = busy;
   const [runtimeEvents, setRuntimeEvents] = useState<ConversationRuntimeEvent[]>([]);
   const [runtimeRequestId, setRuntimeRequestId] = useState<string | null>(null);
+  const runtimeHandoffRequestIdRef = useRef<string | null>(null);
+  runtimeHandoffRequestIdRef.current = runtimeRequestId ?? runtimeEvents.at(-1)?.requestId ?? null;
+
   const [declinedRunAction, setDeclinedRunAction] = useState<{ requestId: string; action: ConversationActionName } | null>(null);
+  const [claimReviewDraft, setClaimReviewDraft] = useState<{ prompt: string; binding: RecordedClaimReview; chatId: number | null } | null>(null);
+  const submittedClaimReview = useRef<typeof claimReviewDraft>(null);
+  const [runInspection, setRunInspection] = useState<{ id: string; projectId: number | null; chatId: number | null } | null>(null);
+  useEffect(() => setRunInspection(null), [selection.chatId, selection.projectId, chatMode]);
+  useEffect(() => {
+    if (submittedClaimReview.current?.chatId !== selection.chatId) submittedClaimReview.current = null;
+    if (!input.trim() || claimReviewDraft?.chatId !== selection.chatId) setClaimReviewDraft(null);
+    if (submittedClaimReview.current?.prompt === input.trim()) setClaimReviewDraft(submittedClaimReview.current);
+  }, [input, selection.chatId]);
   const [executionTerminalOpen, setExecutionTerminalOpen] = useState(false);
   const [sandboxProposal, setSandboxProposal] = useState<SandboxTerminalProposal | null>(null);
   const [sandboxSessionId, setSandboxSessionId] = useState<string | null>(null);
@@ -450,6 +467,8 @@ export default function ProjectExperienceShell({
   sandboxSelectionRef.current = { projectId: selection.projectId, chatId: selection.chatId };
   const [lastSubmittedMessage, setLastSubmittedMessage] = useState("");
   const [lastWorkflowRequest, setLastWorkflowRequest] = useState<Omit<ConversationRequest, "requestId" | "continuationOf"> | null>(null);
+  const [lastWorkflowSourceRequestId, setLastWorkflowSourceRequestId] = useState<string | null>(null);
+  const [lastWorkflowOrigin, setLastWorkflowOrigin] = useState<{projectId: number | null; chatId: number | null} | null>(null);
   const [showSaveWorkflow, setShowSaveWorkflow] = useState(false);
   const composerToolsTrigger = useRef<HTMLButtonElement>(null);
   const pendingComposerDialog = useRef<"workflow" | "resource" | "plugins" | null>(null);
@@ -477,6 +496,7 @@ export default function ProjectExperienceShell({
   const terminalSelectionRef = useRef({ chatId: selection.chatId, setArtifact: setConversationArtifactRef, setVersion: setArtifactViewVersion });
   terminalSelectionRef.current = { chatId: selection.chatId, setArtifact: setConversationArtifactRef, setVersion: setArtifactViewVersion };
   const artifactDraftDirtyRef = useRef(false);
+  const savedArtifactReopenInFlightRef = useRef(false);
   const reopenArtifactFocusRef = useRef<HTMLButtonElement>(null);
   const displayedArtifactRef = useRef<{ artifactId: string; requestedVersion: number | null; version: number } | null>(null);
   const handledWorkbenchReturn = useRef<number | null>(null);
@@ -740,6 +760,8 @@ export default function ProjectExperienceShell({
     setVisibleMessageCount(CHAT_RENDER_BATCH);
     setLastSubmittedMessage("");
     setLastWorkflowRequest(null);
+    setLastWorkflowSourceRequestId(null);
+    setLastWorkflowOrigin(null);
     setVoiceTranscripts([]);
     setVoiceTranscriptReviewed(false);
     setPendingAttachmentFiles([]);
@@ -1437,6 +1459,12 @@ export default function ProjectExperienceShell({
     const message = (override?.message ?? input).trim()
       || (hasStagedAttachments ? "Analyze the attached file(s). Cite each file by name and clearly identify any missing or unreadable content." : "");
     if (!message || busy || busyRef.current || sendInFlightRef.current || chatCreationInFlightRef.current || projectCreationInFlightRef.current) return;
+    const boundReview = claimReviewDraft ?? (submittedClaimReview.current?.chatId === selection.chatId &&
+      submittedClaimReview.current.prompt === message ? submittedClaimReview.current : null);
+    if (boundReview && message !== boundReview.prompt) {
+      setLifecycleNotice("This edited draft no longer matches its selected claim review. Clear the draft to cancel it, or restage the review from Show work.");
+      return;
+    }
     if (voiceRecorder.isPending()) { setLifecycleNotice("Finish voice recording and transcription before Send. Your draft and clip remain in this Chat."); return; }
     if (chatMode === "project" && selection.projectId && transmissionPolicy.allowResourceReferences && (sourceScope === "auto" || sourceScope === "my_data")) {
       const owned = resources.filter(resource => resource.projectId === selection.projectId && resource.status === "active" && !resource.trashedAt);
@@ -1489,7 +1517,7 @@ export default function ProjectExperienceShell({
     if (!override?.approval && !override?.continuationOf && await runCommand(message, () => {
       if (canClearDraft) setInput(current => clearSubmittedComposerDraft(current, originalComposerDraft, message));
     })) return;
-    if (agentComposer.enabled && !agentComposer.ready) {
+    if (!boundReview && agentComposer.enabled && !agentComposer.ready) {
       setLifecycleNotice(agentComposer.guidance);
       return;
     }
@@ -1547,6 +1575,8 @@ export default function ProjectExperienceShell({
       requestId,
       continuationOf: override?.continuationOf ?? null,
       message,
+      ...(boundReview && boundReview.chatId === selection.chatId && !override?.message
+        ? { recordedClaimReview: boundReview.binding } : {}),
       sourceScope: sourceScopeForChatMode(chatMode, sourceScope),
       executionMode,
       aiDirectApproved,
@@ -1560,8 +1590,10 @@ export default function ProjectExperienceShell({
     const voiceReview = voiceTranscripts.length
       ? { transcripts: voiceTranscripts, transcriptReviewed: voiceTranscriptReviewed }
       : undefined;
-    if (!override?.continuationOf && chatMode === "project") {
+    if (!override?.continuationOf && chatMode === "project" && !payload.recordedClaimReview) {
       const projectApprovals = approvals.filter((grant) => grant.scope === "project");
+      setLastWorkflowSourceRequestId(requestId);
+      setLastWorkflowOrigin({ projectId: selection.projectId, chatId: selection.chatId });
       setLastWorkflowRequest({
         message,
         sourceScope,
@@ -1572,9 +1604,14 @@ export default function ProjectExperienceShell({
         attachments: attachmentsForRequest,
         context,
       });
+    } else if (!override?.continuationOf) {
+      setLastWorkflowSourceRequestId(null);
+      setLastWorkflowOrigin(null);
+      setLastWorkflowRequest(null);
     }
 
     recordP1ShellEvent("composer_submit");
+    if (boundReview) submittedClaimReview.current = boundReview;
     busyRef.current = true;
     cancelAcknowledgedRunRef.current = null;
     setCancelAcknowledgedRunId(null);
@@ -1649,6 +1686,8 @@ export default function ProjectExperienceShell({
           void openChat(created, true);
         }
         traceOwnerChatRef.current = chatId;
+        if (!override?.continuationOf && chatMode === "project" && !payload.recordedClaimReview)
+          setLastWorkflowOrigin({ projectId: selection.projectId, chatId });
 
         if (pendingAttachmentFiles.length && !override?.continuationOf) {
           for (const file of [...pendingAttachmentFiles]) {
@@ -1669,7 +1708,7 @@ export default function ProjectExperienceShell({
 
         const result = await runConversation(requireGateway(), {
           chatId,
-          body: { ...payload, agent: agentComposer.enabled, ...(voiceReview ? { voiceReview } : {}) },
+          body: { ...payload, agent: payload.recordedClaimReview ? false : agentComposer.enabled, ...(voiceReview ? { voiceReview } : {}) },
           onEvent: applyRuntimeEvent,
         });
         if (result.status === 428) {
@@ -1966,9 +2005,15 @@ export default function ProjectExperienceShell({
       },
     });
   };
-  const keepArtifact = (artifact: ConversationArtifactDraft) => {
-    if (chatMode === "temporary" || artifact.persistence === "ephemeral") return;
-    const existingArtifactRef = conversationArtifactRef;
+  const artifactSaveTarget: ChatArtifactSaveTarget | undefined = chatMode !== "temporary" && selection.chatId ? {
+    projectId: chatMode === "project" ? selection.projectId : null, chatId: selection.chatId,
+    artifactId: conversationArtifactRef,
+    version: conversationArtifactRef && terminalDetail.data?.artifact.id === conversationArtifactRef ? terminalDetail.data.version.version : null,
+  } : undefined;
+  const keepArtifact = async (artifact: ConversationArtifactDraft, target: ChatArtifactSaveTarget): Promise<ChatArtifactSaveOutcome> => {
+    if (chatMode === "temporary" || artifact.persistence === "ephemeral" || JSON.stringify(target) !== JSON.stringify(artifactSaveTarget) ||
+        (target.artifactId && !target.version)) return "rejected";
+    const existingArtifactRef = target.artifactId;
     const save = async (targetProject: Project | null) => {
       if (keepingArtifactRef.current) throw new Error("This work is already being saved. Wait for it to finish.");
       keepingArtifactRef.current = true;
@@ -2000,6 +2045,7 @@ export default function ProjectExperienceShell({
         const persist = existingArtifactRef
           ? keepConversationDraftVersion(existingArtifactRef, artifact, {
               requestId: runtimeRequestId,
+              baseVersion: target.version!,
               trustManifest,
               dependencyRefs,
               refreshSpec,
@@ -2018,12 +2064,15 @@ export default function ProjectExperienceShell({
             : `Kept "${created.artifact.title}" in ${targetProject ? `"${targetProject.name}"` : "this Chat"}.`);
       } finally { keepingArtifactRef.current = false; }
     };
-    if (chatMode === "project" && home) {
-      void save(home.project).catch((error) => setLifecycleNotice(error instanceof Error ? error.message : "Unable to keep this work. Try again."));
-    } else if (chatMode === "quick" && selection.chatId) {
-      void save(null).catch((error) => setLifecycleNotice(error instanceof Error ? error.message : "Unable to keep this work in Chat."));
-    } else {
-      setLifecycleNotice("Wait for this saved Chat to finish loading before keeping its work.");
+    try {
+      if (chatMode === "project" && home) await save(home.project);
+      else if (chatMode === "quick" && selection.chatId) await save(null);
+      else { setLifecycleNotice("Wait for this saved Chat to finish loading before keeping its work."); return "rejected"; }
+      return "saved";
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Save outcome is unconfirmed. Inspect Artifact history before retrying.";
+      setLifecycleNotice(message);
+      return /^(400|401|403|404|409|422):/.test(message) ? "rejected" : "unconfirmed";
     }
   };
 
@@ -2051,6 +2100,20 @@ export default function ProjectExperienceShell({
       semanticContext: conversationVisualIntensity === "contextual" ? inferVisualSemanticContext(activeView) : "general",
     });
   }, [activeView, busy, chatMode, conversationVisualIntensity, home?.project.name, selection.projectId, streaming, displayMessages.length]);
+
+  const canPrepareChatAutomation = canPrepareProjectAutomationDraft({
+    mode: chatMode,
+    projectId: selection.projectId,
+    chatId: selection.chatId,
+    activeChatScope: activeChat?.scope ?? null,
+    originProjectId: lastWorkflowOrigin?.projectId ?? null,
+    originChatId: lastWorkflowOrigin?.chatId ?? null,
+    sourceRequestId: lastWorkflowSourceRequestId,
+    currentRequestId: runtimeRequestId ?? runtimeEvents.at(-1)?.requestId ?? null,
+    hasSavedRequest: Boolean(lastWorkflowRequest),
+    busy,
+    events: runtimeEvents,
+  });
 
   return (
     <div ref={shellRef} data-context-open={contextOpen && section === "conversation" && !!home && chatMode === "project" && !conversationArtifactRef} className="lios-project-experience-shell flex h-full min-h-0 bg-transparent text-foreground">
@@ -2577,6 +2640,7 @@ export default function ProjectExperienceShell({
                   requestAnimationFrame(() => composerRef.current?.focus());
                 }}
                 onOpenTerminal={visibleExecutionSessionId ? () => setExecutionTerminalOpen(true) : undefined}
+                onInspectRun={runtimeRequestId ? () => setRunInspection({ id: runtimeRequestId, projectId: chatMode === "project" ? selection.projectId : null, chatId: selection.chatId }) : undefined}
                 {...interruptedRun.traceProps}
                 onResume={() => {
                   if (sendInFlightRef.current || cancelInFlightRef.current) return;
@@ -2584,8 +2648,79 @@ export default function ProjectExperienceShell({
                   setCancelAcknowledgedRunId(null);
                   interruptedRun.resume();
                 }}
-                onFollowUp={(prompt) => { setInput(current => stageSafeRunRetry(current, prompt)); requestAnimationFrame(() => composerRef.current?.focus()); }}
+                onFollowUp={(prompt, binding) => {
+                  if (binding) {
+                    if (input.trim() || chatMode === "temporary") { setLifecycleNotice("Save or clear the current draft first. Recorded-claim review requires this saved Chat."); return; }
+                    setClaimReviewDraft({ prompt, binding, chatId: selection.chatId });
+                    setInput(prompt);
+                  } else { setClaimReviewDraft(null); setInput(current => stageSafeRunRetry(current, prompt)); }
+                  requestAnimationFrame(() => composerRef.current?.focus());
+                }}
+                onOpenSavedArtifact={chatMode === "temporary" ? undefined : async (artifactId, version, projectId, requestId) => {
+                  // The P4 sidecar owns the only authenticated read. This pointer grants no rights.
+                  if (savedArtifactReopenInFlightRef.current) return;
+                  const original = { projectId: selection.projectId, chatId: selection.chatId };
+                  const originalChatId = original.chatId;
+                  const candidate = [...runtimeEvents].reverse().find(event =>
+                    event.type === "artifact" && event.requestId === requestId &&
+                    event.persistedArtifact?.id === artifactId && event.persistedArtifact.version === version);
+                  const saved = exactRuntimeSavedArtifact(candidate, {
+                    requestId: runtimeHandoffRequestIdRef.current,
+                    projectId: original.projectId,
+                    chatId: original.chatId,
+                  });
+                  if (!saved || saved.artifactId !== artifactId || saved.version !== version ||
+                      saved.projectId !== projectId || busy || busyRef.current ||
+                      keepingArtifactRef.current || sendInFlightRef.current || !originalChatId ||
+                      traceOwnerChatRef.current !== originalChatId) {
+                    setLifecycleNotice("That saved version is not confirmed for this exact Chat. Inspect Artifact history.");
+                    return;
+                  }
+                  savedArtifactReopenInFlightRef.current = true;
+                  try {
+                    if (artifactDraftDirtyRef.current) {
+                      setLifecycleNotice("Save or reset the current Artifact draft before reopening this recorded version. Your edits are retained.");
+                      return;
+                    }
+                    await readCurrentArtifactVersion(saved.artifactId, saved.version);
+                    if (!isCurrentSavedArtifactHandoff(saved, { projectId: original.projectId, chatId: originalChatId },
+                         sandboxSelectionRef.current, runtimeHandoffRequestIdRef.current) ||
+                        traceOwnerChatRef.current !== originalChatId ||
+                        busyRef.current || keepingArtifactRef.current || sendInFlightRef.current || artifactDraftDirtyRef.current) {
+                      setLifecycleNotice("Project, Chat, or run changed during review. Nothing was opened.");
+                      return;
+                    }
+                    setArtifactFocusMode(false);
+                    setConversationArtifactRef(saved.artifactId);
+                    setArtifactViewVersion(saved.version);
+                  } catch {
+                    setLifecycleNotice("Current Artifact access or exact revision could not be verified. No saved version was opened.");
+                  } finally {
+                    savedArtifactReopenInFlightRef.current = false;
+                  }
+                }}
+                onPrepareAutomation={canPrepareChatAutomation ? () => {
+                  if (!canPrepareProjectAutomationDraft({
+                    mode: chatMode,
+                    projectId: sandboxSelectionRef.current.projectId,
+                    chatId: sandboxSelectionRef.current.chatId,
+                    activeChatScope: activeChat?.scope ?? null,
+                    originProjectId: lastWorkflowOrigin?.projectId ?? null,
+                    originChatId: lastWorkflowOrigin?.chatId ?? null,
+                    sourceRequestId: lastWorkflowSourceRequestId,
+                    currentRequestId: runtimeHandoffRequestIdRef.current,
+                    hasSavedRequest: Boolean(lastWorkflowRequest),
+                    busy: busyRef.current || sendInFlightRef.current ||
+                      keepingArtifactRef.current || artifactDraftDirtyRef.current,
+                    events: runtimeEvents,
+                  })) {
+                    setLifecycleNotice("This completed run no longer belongs to the current Project Chat. Nothing was scheduled.");
+                    return;
+                  }
+                  setShowSaveWorkflow(true);
+                } : undefined}
                 onKeepArtifact={chatMode === "temporary" ? undefined : keepArtifact}
+                artifactSaveTarget={artifactSaveTarget}
                 onSubmitAssumptions={(message) => void send({ message })}
               />
               {executionTerminalOpen && visibleExecutionSessionId && (
@@ -2597,6 +2732,9 @@ export default function ProjectExperienceShell({
                   onClose={() => setExecutionTerminalOpen(false)}
                 />
               )}
+              {runInspection && <ExecutionSessionPanel sessionId={runInspection.id}
+                projectId={runInspection.projectId} chatId={runInspection.chatId} interactiveInputs={[]}
+                onClose={() => setRunInspection(null)} />}
               <div
                 className="lios-conversation-composer relative mx-auto max-w-4xl rounded-xl border border-border/70 bg-[#090909] shadow-2xl"
                 onDragOver={(event) => { if (chatMode !== "temporary") event.preventDefault(); }}
@@ -2846,7 +2984,7 @@ export default function ProjectExperienceShell({
                               <DropdownMenuItem title="Save Session" onSelect={() => void saveCurrentSession()}>Save session</DropdownMenuItem>
                             </>
                           )}
-                          {chatMode === "project" && selection.projectId && activeChat?.scope === "project" && lastWorkflowRequest && runtimeRequestId && runtimeEvents.some(event => event.type === "done" && event.requestId === runtimeRequestId && event.status === "completed") && (
+                          {canPrepareChatAutomation && (
                             <DropdownMenuItem onSelect={() => { pendingComposerDialog.current = "workflow"; }}>Save workflow</DropdownMenuItem>
                           )}
                           {voiceOutputAvailable && (
@@ -2975,10 +3113,10 @@ export default function ProjectExperienceShell({
           requestAnimationFrame(() => composerRef.current?.focus());
         }}
       />
-      {showSaveWorkflow && chatMode === "project" && selection.projectId && activeChat?.scope === "project" && lastWorkflowRequest && runtimeRequestId && (
+      {showSaveWorkflow && canPrepareChatAutomation && selection.projectId && selection.chatId && activeChat?.scope === "project" && lastWorkflowRequest && runtimeRequestId && (
         <SaveWorkflowDialog
           projectId={selection.projectId}
-          chatId={activeChat.id}
+          chatId={selection.chatId}
           sourceRequestId={runtimeRequestId}
           activeArtifactRef={conversationArtifactRef}
           request={lastWorkflowRequest}

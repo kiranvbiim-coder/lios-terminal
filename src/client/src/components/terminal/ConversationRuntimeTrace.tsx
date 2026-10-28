@@ -27,6 +27,10 @@ import { presentRuntimeError } from "@/lib/runtimeErrorKit";
 import { reviewEvidenceExceptions, sourceExceptionCaveats } from "@/lib/evidenceExceptions";
 import { followUpPrompts, formatDuration, summarizeRuntimeTrace } from "@/lib/runtimeTraceSummary";
 import { inspectAgentReceiptActivity } from "@/lib/agentReceiptActivity";
+import { inspectRecordedActionRecovery } from "@/lib/recordedActionRecovery";
+import { projectRecordedAgentSteps, RECORDED_AGENT_STEP_LABELS } from "@/lib/recordedAgentStepTruth";
+import { reviewChatArtifactSave, chatArtifactSaveAcknowledgmentKey } from "@/lib/chatArtifactSaveReview";
+import type { ChatArtifactSaveTarget, ChatArtifactSaveOutcome } from "@/lib/chatArtifactSaveReview";
 import { observedRunActivity } from "@/lib/sprintAObservedActivity";
 import AgentExecutionReceipts from "./AgentExecutionReceipts";
 import { governedReviewRisk, legacyReviewFacts } from "@/lib/approvalReviewTruth";
@@ -38,6 +42,7 @@ import type {
   GovernedToolReviewDecision,
 } from "@shared/conversationRuntime";
 import type { TrustManifest } from "@shared/trustContracts";
+import type { RecordedClaimReview } from "@shared/conversationRuntime";
 
 interface Props {
   events: ConversationRuntimeEvent[];
@@ -53,11 +58,17 @@ interface Props {
   allowProjectApproval: boolean;
   onMutationApply: (action: ConversationActionName) => void;
   onMutationCancel: (action: ConversationActionName) => void;
-  onKeepArtifact?: (artifact: ConversationArtifactDraft) => void;
+  onKeepArtifact?: (artifact: ConversationArtifactDraft, target: ChatArtifactSaveTarget) => Promise<ChatArtifactSaveOutcome>;
+  artifactSaveTarget?: ChatArtifactSaveTarget;
+  /** Navigate to an exact recorded P4 version; P4 rechecks rights independently. */
+  onOpenSavedArtifact?: (artifactId: string, version: number, projectId: number | null, requestId: string) => void;
+  /** Opens existing inactive P9 review; never activates a workflow. */
+  onPrepareAutomation?: () => void;
+  onInspectRun?: () => void;
   onRecoveryAction?: (action: string) => void;
   /** Prefills the composer with a suggested next request; never sends it. */
-  onFollowUp?: (prompt: string) => void;
-  /** Re-sends the last request after a failed run. */
+  onFollowUp?: (prompt: string, binding?: RecordedClaimReview) => void;
+  /** Legacy callback may re-send: C08 must never invoke it from an ambiguous run status. */
   onRetry?: () => void;
   /** Opens the optional read-only Terminal view for this exact execution session. Offered only inside Show Work. */
   onOpenTerminal?: () => void;
@@ -74,16 +85,6 @@ interface Props {
   defaultShowWork?: boolean;
   /** Sends the plain-language assumptions confirmed in the guided inputs form through the normal chat path. */
   onSubmitAssumptions?: (message: string) => void;
-}
-
-function latestByStep(events: ConversationRuntimeEvent[]) {
-  const result = new Map<string, ConversationRuntimeEvent>();
-  for (const event of events) {
-    if ("stepId" in event && typeof event.stepId === "string" && event.stepId) {
-      result.set(event.stepId, event);
-    }
-  }
-  return result;
 }
 
 /** Source limitations the person must always see: missing evidence, conflicts, warnings, low quality. */
@@ -167,6 +168,10 @@ export default function ConversationRuntimeTrace({
   onMutationApply,
   onMutationCancel,
   onKeepArtifact,
+  artifactSaveTarget,
+  onOpenSavedArtifact,
+  onPrepareAutomation,
+  onInspectRun,
   onRecoveryAction,
   onFollowUp,
   onRetry,
@@ -180,6 +185,10 @@ export default function ConversationRuntimeTrace({
   onSubmitAssumptions,
 }: Props) {
   const [showWork, setShowWork] = useState(defaultShowWork);
+  const [reviewedSaveKey, setReviewedSaveKey] = useState<string | null>(null);
+  const [requestedSaveKey, setRequestedSaveKey] = useState<string | null>(null);
+  const [saveOutcome, setSaveOutcome] = useState<ChatArtifactSaveOutcome | null>(null);
+  const saveRequestInFlight = useRef<string | null>(null);
   const [appliedReviewKey, setAppliedReviewKey] = useState<string | null>(null);
   const [pendingReviewKey, setPendingReviewKey] = useState<string | null>(null);
   const [acknowledgedRiskKey, setAcknowledgedRiskKey] = useState<string | null>(null);
@@ -202,11 +211,11 @@ export default function ConversationRuntimeTrace({
   const observedReceipt = [...events].reverse().find(event => event.type === "receipt");
   const recordedSources = collectCitationSources(events);
   const activity = inspectAgentReceiptActivity(events, requestId);
+  const recovery = inspectRecordedActionRecovery(events, requestId);
   // Quiet by default: ordinary runs show only Working + Stop. Technical execution detail is progressive
   // disclosure; approvals, errors, data gaps, source caveats and review-required items are never hidden.
   const workVisible = showWork;
   const followUps = onFollowUp ? followUpPrompts(summary) : [];
-  const stepEvents = latestByStep(events);
   const steps = plan?.type === "plan" ? plan.plan.steps : [];
   const capabilities = plan?.type === "plan" ? plan.plan.capabilities : [];
   const done = [...events].reverse().find((event) => event.type === "done");
@@ -249,14 +258,22 @@ export default function ConversationRuntimeTrace({
     onRecoveryAction?.(action);
   };
   const unsavedArtifact = artifact?.type === "artifact" && !artifact.persistedArtifact ? artifact : null;
+  const artifactSaveReview = unsavedArtifact ? reviewChatArtifactSave(unsavedArtifact.artifact, requestId, artifactSaveTarget) : null;
+  // A changed content/source/destination/run resets effective approval without
+  // writing a second Artifact store or assuming a save response means success.
+  const artifactSaveKey = unsavedArtifact ? chatArtifactSaveAcknowledgmentKey(unsavedArtifact.artifact, requestId, artifactSaveTarget) : null;
+  const saveReviewed = artifactSaveKey !== null && reviewedSaveKey === artifactSaveKey;
+  const saveRequested = artifactSaveKey !== null && requestedSaveKey === artifactSaveKey;
   const visualAnswerRequest = artifact?.type === "artifact" ? visualRequestFromRuntimeArtifact(artifact) : null;
   const working = busy && !terminal;
   const waitingForApproval = Boolean(legacyApproval || governedApproval);
-  const canShowWork = !!plan || !!observedReceipt || trust?.type === "trust" || recordedSources.length > 0 || activity.receipts.length > 0 || activity.mismatched > 0;
+  const canShowWork = !!plan || !!observedReceipt || trust?.type === "trust" || recordedSources.length > 0 || activity.receipts.length > 0 || activity.mismatched > 0 || recovery.needsReconciliation;
   const canResume = !busy && !!resumableRequestId && !!onResume;
   const stepCount = summary.stepCount || summary.settledSteps;
   const duration = formatDuration(summary.durationMs);
   const observed = observedRunActivity(events, steps.length, working, waitingForApproval);
+  const recordedSteps = projectRecordedAgentSteps(events, requestId, { busy: working, stopRequested });
+  const stepPresentation = new Map(recordedSteps.map(step => [step.id, step]));
   const quietControlClass = "inline-flex min-h-11 items-center gap-1 rounded-lg px-3 py-2 font-ui text-sm text-muted-foreground hover:bg-white/[0.04] hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-300/50";
 
   return (
@@ -401,36 +418,46 @@ export default function ConversationRuntimeTrace({
         )}
 
         {workVisible && !!steps.length && (
-          <div className="grid gap-1.5 md:grid-cols-2">
-            {steps.map((step) => {
-              const observed = stepEvents.get(step.id);
-              const complete = (observed?.type === "tool_result" && (observed.outcome === "completed" || (observed.outcome === undefined && step.kind !== "agent")))
-                || (observed?.type === "status" && observed.state === "completed");
-              const running = observed?.type === "tool_start" || (observed?.type === "status" && observed.state === "running");
-              return (
-                <div key={step.id} className="flex items-start gap-2 rounded-lg border border-border/40 bg-white/[0.012] px-2.5 py-2">
-                  {complete
-                    ? <Check className="mt-0.5 h-3 w-3 shrink-0 text-emerald-300" aria-hidden="true" />
-                    : running
-                      ? <Loader2 className="mt-0.5 h-3 w-3 shrink-0 animate-spin text-cyan-300" aria-hidden="true" />
-                      : <Circle className="mt-0.5 h-3 w-3 shrink-0 text-muted-foreground/50" aria-hidden="true" />}
-                  <div className="min-w-0">
-                    <div className="truncate font-ui text-[13px] text-foreground">{step.label}</div>
-                    <div className="mt-0.5 font-terminal text-[12px] uppercase tracking-wider text-muted-foreground">
-                      {step.kind} · {step.permissionClass.replace("_", " ")}
+          <section aria-label="Recorded agent step activity" data-testid="c04-agent-step-activity" className="space-y-2">
+            <p className="font-ui text-xs leading-5 text-muted-foreground">
+              Plan and tool reports are not execution receipts. A reported completion is not proof of an external side effect.
+              Pending approvals and failed or unconfirmed steps never imply permission or success.
+            </p>
+            <ol className="grid gap-1.5 md:grid-cols-2">
+              {steps.map((step) => {
+                const state = stepPresentation.get(step.id)?.state ?? "queued";
+                const complete = state === "reported_complete";
+                const running = state === "running";
+                const attention = state === "reported_failed" || state === "denied" || state === "cancelled";
+                return (
+                  <li key={step.id} data-step-state={state}
+                    className="flex min-w-0 items-start gap-2 rounded-lg border border-border/40 bg-white/[0.012] px-2.5 py-2">
+                    {complete
+                      ? <Check className="mt-0.5 h-3 w-3 shrink-0 text-emerald-300" aria-hidden="true" />
+                      : running
+                        ? <Loader2 className="mt-0.5 h-3 w-3 shrink-0 animate-spin motion-reduce:animate-none text-cyan-300" aria-hidden="true" />
+                        : attention
+                          ? <X className="mt-0.5 h-3.5 w-3.5 shrink-0 text-rose-300" aria-hidden="true" />
+                          : <Circle className="mt-0.5 h-3 w-3 shrink-0 text-muted-foreground/50" aria-hidden="true" />}
+                    <div className="min-w-0">
+                      <div className="break-words font-ui text-[13px] text-foreground">{step.label}</div>
+                      <div className="mt-0.5 font-ui text-xs text-muted-foreground">
+                        {step.kind} · {step.permissionClass.replace("_", " ")}
+                      </div>
+                      <div className={`mt-1 font-ui text-xs ${attention ? "text-rose-200" : "text-muted-foreground"}`}
+                        role={attention ? "status" : undefined}>
+                        {RECORDED_AGENT_STEP_LABELS[state]}
+                      </div>
                     </div>
-                    {observed?.type === "tool_result" && (
-                      <div className="mt-1 line-clamp-2 font-ui text-[12px] leading-5 text-muted-foreground">{observed.summary}</div>
-                    )}
-                  </div>
-                </div>
-              );
-            })}
-          </div>
+                  </li>
+                );
+              })}
+            </ol>
+          </section>
         )}
 
         {workVisible && trust?.type === "trust" && (
-          <ConversationTrustPanel manifest={trust.manifest} onRecoveryAction={recover} />
+          <ConversationTrustPanel manifest={trust.manifest} onRecoveryAction={recover} onReviewDecision={onFollowUp} />
         )}
 
         {workVisible && artifact?.type === "artifact" && artifact.persistedArtifact && (
@@ -460,7 +487,38 @@ export default function ConversationRuntimeTrace({
       {activity.hasReceiptProblems && (
         <div role="alert" data-testid="trace-agent-receipt-warning" className="mb-2 rounded-lg border border-amber-300/30 px-3 py-2 font-ui text-[13px] text-amber-200">
           Recorded run receipts require review: {activity.failed} failed, {activity.cancelled} cancelled, {activity.mismatched} ignored because their run identity did not match. Do not assume these operations completed or that an external action succeeded. Open Show work to inspect matching receipts.
+          <p className="mt-1 text-xs leading-5">A failed or cancelled receipt does not establish that an external side effect did not happen. Reconcile original outcomes before repeating any work.</p>
         </div>
+      )}
+
+      {done?.type === "done" && done.status === "completed" &&
+        (recovery.failedToolReports > 0 || recovery.deniedToolReports > 0 ||
+          recovery.skippedToolReports > 0 || recovery.unconfirmedToolReports > 0 ||
+          recovery.unfinishedToolStarts > 0) && (
+        <section role="alert" aria-label="Recorded action reconciliation" data-testid="c08-recorded-action-recovery"
+          className="mb-2 space-y-2 rounded-lg border border-amber-300/30 p-3 font-ui text-sm text-amber-100">
+          <p className="font-semibold text-foreground">Some individual actions need reconciliation</p>
+          <p className="text-xs leading-5">
+            {recovery.failedToolReports} failed, {recovery.deniedToolReports} denied,
+            {recovery.skippedToolReports} skipped, {recovery.unconfirmedToolReports} unconfirmed,
+            {recovery.unfinishedToolStarts} unfinished tool starts,
+            {recovery.failedReceipts} failed receipts, {recovery.cancelledReceipts} cancelled receipts
+            and {recovery.ignoredForeignReceipts} mismatched receipts.
+            Overall run completion does not override these recorded individual outcomes.
+          </p>
+          <p className="text-xs leading-5">An external side effect might still have occurred. Inspect the original Home history and external target before another request. No tool is replayed or approved here.</p>
+          {onInspectRun
+            ? <button type="button" data-testid="c08-review-recorded-actions" onClick={onInspectRun}
+                className="min-h-11 rounded-lg border border-amber-300/40 px-3 py-2 text-sm font-medium focus-visible:ring-2 focus-visible:ring-amber-300/70">
+                Inspect original run history
+              </button>
+            : canShowWork
+              ? <button type="button" data-testid="c08-review-recorded-actions" onClick={() => setShowWork(true)}
+                  className="min-h-11 rounded-lg border border-amber-300/40 px-3 py-2 text-sm font-medium focus-visible:ring-2 focus-visible:ring-amber-300/70">
+                  Inspect recorded work
+                </button>
+              : <p className="text-xs">No local history is available; verify the original run before retrying.</p>}
+        </section>
       )}
 
       {caveats && (
@@ -539,9 +597,20 @@ export default function ConversationRuntimeTrace({
               {view.recoveries.includes("connect") && onRecoveryAction && (
                 <button type="button" data-testid="trace-error-connect" onClick={() => onRecoveryAction("Open Connection Center")} className="rounded-full border border-border/55 px-2.5 py-1 font-ui text-[12px] text-foreground hover:border-red-300/30">Open Connect</button>
               )}
-              {view.recoveries.includes("retry") && onRetry && !busy && (
-                <button type="button" data-testid="trace-error-retry" onClick={onRetry} className="min-h-10 rounded-full border border-border/55 px-3 py-2 font-ui text-sm text-foreground hover:border-red-300/30">Review request</button>
-              )}
+              {view.recoveries.includes("retry") && !busy && <>
+                {onInspectRun
+                  ? <button type="button" data-testid="c08-reconcile-run" onClick={onInspectRun}
+                      className="min-h-11 rounded-full border border-border/55 px-3 py-2 font-ui text-sm text-foreground focus-visible:ring-2 focus-visible:ring-amber-300/70">
+                      Inspect original run history
+                    </button>
+                  : canShowWork
+                    ? <button type="button" data-testid="c08-inspect-run" onClick={() => setShowWork(true)}
+                        className="min-h-11 rounded-full border border-border/55 px-3 py-2 font-ui text-sm text-foreground focus-visible:ring-2 focus-visible:ring-amber-300/70">
+                        Inspect recorded work
+                      </button>
+                    : <span className="font-ui text-xs text-muted-foreground">Review run history before requesting any new work.</span>}
+                <span className="font-ui text-xs text-amber-200">No automatic retry. Earlier side effects may be unconfirmed.</span>
+              </>}
               {showWork && <span className="ml-auto font-terminal text-[12px] uppercase tracking-wider text-red-200/50">{runtimeError.code}</span>}
             </div>
           </div>
@@ -552,7 +621,22 @@ export default function ConversationRuntimeTrace({
         <div role="alert" data-testid="trace-interrupted" className="mb-2 rounded-lg border border-amber-300/25 px-3 py-2.5 font-ui text-sm">
           <p className="font-semibold">This run has no confirmed final status.</p>
           <p className="mt-1 text-muted-foreground">Partial text is not a completed answer or execution receipt. Inspect the original run before considering a retry.</p>
-          {onRetry && <button type="button" onClick={onRetry} className="mt-2 min-h-10 rounded border px-3">Review previous request</button>}
+          <div className="mt-2 flex flex-wrap items-center gap-2">
+            {onInspectRun
+              ? <button type="button" data-testid="c08-reconcile-interrupted"
+                  onClick={onInspectRun}
+                  className="min-h-11 rounded-lg border border-border/60 px-3 font-ui text-sm focus-visible:ring-2 focus-visible:ring-amber-300/70">
+                  Inspect original run history
+                </button>
+              : canShowWork
+                ? <button type="button" data-testid="c08-inspect-interrupted"
+                    onClick={() => setShowWork(true)}
+                    className="min-h-11 rounded-lg border border-border/60 px-3 font-ui text-sm focus-visible:ring-2 focus-visible:ring-amber-300/70">
+                    Inspect recorded work
+                  </button>
+                : null}
+          </div>
+          <p className="mt-2 text-xs text-amber-200">No automatic retry is offered. The Home may have received the original run or performed an external action.</p>
         </div>
       )}
       {summary.status === "completed" && !observedReceipt && (
@@ -567,21 +651,102 @@ export default function ConversationRuntimeTrace({
         </div>
       )}
 
+      {artifact?.type === "artifact" && artifact.persistedArtifact && onOpenSavedArtifact &&
+        /^artifact:[0-9a-f-]{36}$/i.test(artifact.persistedArtifact.id) &&
+        Number.isSafeInteger(artifact.persistedArtifact.version) && artifact.persistedArtifact.version > 0 && (
+        <section data-testid="c06-open-recorded-artifact" className="mb-2 flex flex-wrap items-center gap-3 rounded-lg border border-fuchsia-300/20 px-3 py-2.5">
+          <div className="min-w-0 flex-1">
+            <p className="break-words font-ui text-sm font-semibold">{artifact.artifact.title}</p>
+            <p className="text-xs text-muted-foreground">
+              Saved exact v{artifact.persistedArtifact.version} · P4 rechecks current permissions on open. This is not an execution receipt.
+            </p>
+          </div>
+          <button type="button" data-testid="c06-open-exact-saved-version"
+            onClick={() => onOpenSavedArtifact(artifact.persistedArtifact!.id, artifact.persistedArtifact!.version, artifact.artifact.projectId, artifact.requestId)}
+            className="min-h-11 rounded-lg border border-fuchsia-300/40 px-3 text-sm focus-visible:ring-2 focus-visible:ring-amber-300/70">
+            Open saved v{artifact.persistedArtifact.version}
+          </button>
+        </section>
+      )}
+
+      {!busy && done?.type === "done" && done.status === "completed" && onPrepareAutomation && (
+        <section data-testid="c07-chat-automation-draft" className="mb-2 flex flex-wrap items-center justify-between gap-3 rounded-lg border border-border/55 p-3">
+          <p className="text-xs text-muted-foreground">
+            Prepare a paused automation from this exact completed Project run. P9 must separately review activation.
+          </p>
+          <button type="button" onClick={onPrepareAutomation}
+            className="min-h-11 rounded-lg border border-amber-300/35 px-3 text-sm focus-visible:ring-2 focus-visible:ring-amber-300/70">
+            Prepare automation draft
+          </button>
+        </section>
+      )}
+
       {visualAnswerRequest && <GovernedVisualAnswer
         key={visualAnswerRequest.artifactId + ":" + visualAnswerRequest.version}
         request={visualAnswerRequest} />}
 
       {unsavedArtifact && (
-        <div className="mb-2 flex items-center gap-2 rounded-lg border border-fuchsia-300/15 bg-fuchsia-300/[0.025] px-3 py-2" data-testid="trace-keep-artifact">
-          <FileBarChart className="h-3.5 w-3.5 text-fuchsia-300" aria-hidden="true" />
-          <div className="min-w-0 flex-1">
-            <div className="truncate font-ui text-[13px] text-foreground">{unsavedArtifact.artifact.title}</div>
-            <div className="mt-0.5 font-ui text-[12px] text-muted-foreground">{onKeepArtifact ? "Not saved yet" : "Not saved — saving isn’t available in this chat"}</div>
+        <section className="mb-2 space-y-3 rounded-lg border border-fuchsia-300/15 bg-fuchsia-300/[0.025] px-3 py-3"
+          aria-label="Review Chat-generated Artifact before saving" data-testid="trace-keep-artifact">
+          <div className="flex items-start gap-2">
+            <FileBarChart className="mt-0.5 h-4 w-4 shrink-0 text-fuchsia-300" aria-hidden="true" />
+            <div className="min-w-0 flex-1">
+              <h3 className="break-words font-ui text-sm font-semibold text-foreground">{unsavedArtifact.artifact.title}</h3>
+              <p className="mt-1 font-ui text-xs text-muted-foreground">
+                Not saved yet. Review the destination and recorded evidence before requesting a P4 save.
+              </p>
+              {!onKeepArtifact && <p role="status" className="mt-1 font-ui text-xs text-muted-foreground">
+                Not saved — saving isn’t available in this chat.
+              </p>}
+            </div>
           </div>
-          {onKeepArtifact && (
-            <button type="button" onClick={() => onKeepArtifact(unsavedArtifact.artifact)} className="rounded border border-fuchsia-300/20 px-2 py-1 font-ui text-[12px] text-fuchsia-200 hover:bg-fuchsia-300/[0.05]">{unsavedArtifact.artifact.persistence === "chat_candidate" ? "Keep in Chat" : "Keep in Project"}</button>
-          )}
-        </div>
+          {artifactSaveReview?.status === "blocked" && <p role="alert" className="font-ui text-xs text-amber-200">
+            {artifactSaveReview.reason}
+          </p>}
+          {artifactSaveReview?.status === "review" && <>
+            <dl className="grid gap-2 rounded-lg border border-border/50 p-3 font-ui text-xs text-muted-foreground sm:grid-cols-2"
+              data-testid="c06-artifact-save-review">
+              <div className="min-w-0"><dt className="font-semibold text-foreground">Save destination</dt>
+                <dd className="break-words">{artifactSaveReview.destination}</dd></div>
+              <div className="min-w-0"><dt className="font-semibold text-foreground">Recorded source references</dt>
+                <dd>{artifactSaveReview.sourceCount}</dd></div>
+              <div className="min-w-0"><dt className="font-semibold text-foreground">Execution receipt references</dt>
+                <dd>{artifactSaveReview.receiptCount} · references are not execution verification</dd></div>
+              <div className="min-w-0 break-all sm:col-span-2"><dt className="font-semibold text-foreground">Draft ID</dt>
+                <dd><code>{artifactSaveReview.artifactId}</code></dd></div>
+            </dl>
+            <p className="font-ui text-xs leading-5 text-muted-foreground">{artifactSaveReview.disclosure}
+              {" "}The P4 server must independently validate the saved record and its current rights.</p>
+            {onKeepArtifact && !saveRequested && <label className="flex items-start gap-2 font-ui text-xs leading-5">
+              <input type="checkbox" className="mt-1 h-4 w-4 shrink-0 accent-amber-300"
+                aria-label="I reviewed this Artifact draft destination and recorded evidence"
+                checked={saveReviewed} onChange={event => setReviewedSaveKey(event.target.checked ? artifactSaveKey : null)}/>
+              I reviewed the saved destination, source limitations and receipt references. This is a request to save, not confirmation that a new version exists.
+            </label>}
+            {onKeepArtifact && !saveRequested && <button type="button"
+              disabled={!saveReviewed || !artifactSaveTarget || saveRequestInFlight.current !== null}
+              onClick={async () => {
+                if (!saveReviewed || !artifactSaveKey || !artifactSaveTarget || saveRequestInFlight.current !== null) return;
+                const key = artifactSaveKey;
+                saveRequestInFlight.current = key;
+                setRequestedSaveKey(key);
+                setSaveOutcome(null);
+                try {
+                  const outcome = await onKeepArtifact(unsavedArtifact.artifact, artifactSaveTarget);
+                  setSaveOutcome(outcome);
+                  if (outcome === "rejected") { setRequestedSaveKey(null); setReviewedSaveKey(null); }
+                } catch { setSaveOutcome("unconfirmed"); }
+                finally { saveRequestInFlight.current = null; }
+              }}
+              className="min-h-11 rounded-lg border border-fuchsia-300/40 px-3 font-ui text-sm text-fuchsia-200 focus-visible:ring-2 focus-visible:ring-amber-300/70 disabled:opacity-40">
+              Request save to {unsavedArtifact.artifact.persistence === "chat_candidate" ? "Chat" : "Project"}
+            </button>}
+            {saveRequested && <p role="status" className="font-ui text-xs text-amber-200">
+              {saveOutcome === "saved" ? "P4 confirmed the saved version. Inspect its canonical Artifact history." : "Save requested; outcome is not confirmed here. Inspect canonical P4 history before retrying."}
+            </p>}
+
+          </>}
+        </section>
       )}
 
       {mutation?.type === "mutation_review" && (() => {

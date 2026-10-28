@@ -910,6 +910,7 @@ export async function keepConversationDraftVersion(
   ctx: TenantContext,
   input: {
     artifactId: string;
+    baseVersion?: number;
     draft: ConversationArtifactDraft;
     requestId?: string | null;
     trustManifest?: TrustManifest | null;
@@ -926,7 +927,7 @@ export async function keepConversationDraftVersion(
   }
   const version = await createArtifactVersion(ctx, {
     artifactId: artifact.id,
-    baseVersion: artifact.headVersion,
+    baseVersion: input.baseVersion ?? artifact.headVersion,
     content,
     sourceRefs: input.draft.sourceRefs,
     executionReceiptIds: input.draft.executionReceiptIds,

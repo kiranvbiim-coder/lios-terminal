@@ -37,18 +37,69 @@ async function splitInstaller({file,outputDir,privateKey,partBytes=1_000_000_000
     return {body,signature:{algorithm:'Ed25519',fingerprint:publicKeyFingerprint(crypto.createPublicKey(key)),value:crypto.sign(null,Buffer.from(JSON.stringify(body)),key).toString('base64')}};
   } catch(e) {for(const f of created)await fs.promises.unlink(f).catch(()=>{});throw e;} finally {await input.close();}
 }
+/** One validation authority for a signed multipart index, used by both
+ * read-only beta approval and recipient reassembly. The index alone
+ * does not authenticate any part bytes or establish OS publisher trust. */
+function validatePartsIndex(manifest,trustedPublicKey) {
+  requireThat(manifest&&typeof manifest==='object'&&manifest.body&&manifest.signature,'Missing multipart manifest');
+  const {body,signature}=manifest;
+  const key=crypto.createPublicKey(trustedPublicKey);
+  requireThat(signature.algorithm==='Ed25519'&&signature.fingerprint===publicKeyFingerprint(key)&&
+    crypto.verify(null,Buffer.from(JSON.stringify(body)),key,Buffer.from(signature.value,'base64')),
+    'Untrusted multipart manifest');
+  requireThat(body.schema===1&&body.kind==='lios-installer-parts'&&Array.isArray(body.parts)&&
+    body.parts.length>0&&body.parts.length<=100,'Invalid multipart manifest');
+  const installer=body.installer;
+  requireThat(installer&&typeof installer.name==='string'&&NAME.test(installer.name)&&
+    Number.isSafeInteger(installer.bytes)&&installer.bytes>0&&installer.bytes<=MAX_INSTALLER&&
+    /^[a-f0-9]{64}$/.test(installer.sha256),'Invalid installer metadata');
+  let sum=0;
+  for(const [i,p] of body.parts.entries()) {
+    requireThat(p.name===installer.name+'.part'+String(i+1).padStart(3,'0')&&
+      Number.isSafeInteger(p.bytes)&&p.bytes>0&&p.bytes<=MAX_RELEASE_ASSET_BYTES&&
+      /^[a-f0-9]{64}$/.test(p.sha256),'Invalid part metadata');
+    sum+=p.bytes;
+  }
+  requireThat(sum===installer.bytes,'Inconsistent total size');
+  return {body,installer};
+}
+
+/** Hash every actual part without assembling, publishing or executing a file. */
+async function verifyInstallerParts({manifest,partsDir,trustedPublicKey}) {
+  directory(partsDir);
+  const {body,installer}=validatePartsIndex(manifest,trustedPublicKey);
+  const total=crypto.createHash('sha256');
+  for(const part of body.parts) {
+    const input=await openRead(child(partsDir,part.name));
+    try {
+      const before=await input.stat();
+      requireThat(before.size===part.bytes,'Part size mismatch');
+      const hash=crypto.createHash('sha256');
+      let bytes=0;
+      for await(const chunk of input.createReadStream({autoClose:false})) {
+        bytes+=chunk.length;
+        requireThat(bytes<=part.bytes,'Oversized part');
+        hash.update(chunk);
+        total.update(chunk);
+      }
+      const after=await input.stat();
+      requireThat(bytes===part.bytes&&before.size===after.size&&
+        before.mtimeMs===after.mtimeMs&&before.ctimeMs===after.ctimeMs&&
+        hash.digest('hex')===part.sha256,'Part integrity mismatch');
+    } finally {await input.close();}
+  }
+  requireThat(total.digest('hex')===installer.sha256,'Installer integrity mismatch');
+  return {name:installer.name,bytes:installer.bytes,sha256:installer.sha256,
+    partCount:body.parts.length,qualification:'authenticated_transport_only',installApproved:false};
+}
 async function reassembleInstaller({manifest,partsDir,outputDir,trustedPublicKey}) {
   directory(partsDir);directory(outputDir);
-  const {body,signature}=manifest;const key=crypto.createPublicKey(trustedPublicKey);
-  requireThat(signature?.algorithm==='Ed25519'&&signature.fingerprint===publicKeyFingerprint(key)&&crypto.verify(null,Buffer.from(JSON.stringify(body)),key,Buffer.from(signature.value,'base64')),'Untrusted multipart manifest');
-  requireThat(body.schema===1&&body.kind==='lios-installer-parts'&&Array.isArray(body.parts)&&body.parts.length>0&&body.parts.length<=100,'Invalid multipart manifest');
-  const installer=body.installer;const destination=child(outputDir,installer.name);
-  requireThat(Number.isSafeInteger(installer.bytes)&&installer.bytes>0&&installer.bytes<=MAX_INSTALLER&&/^[a-f0-9]{64}$/.test(installer.sha256),'Invalid installer metadata');
-  let sum=0;for(const [i,p] of body.parts.entries()){requireThat(p.name===installer.name+'.part'+String(i+1).padStart(3,'0')&&Number.isSafeInteger(p.bytes)&&p.bytes>0&&p.bytes<=MAX_RELEASE_ASSET_BYTES&&/^[a-f0-9]{64}$/.test(p.sha256),'Invalid part metadata');sum+=p.bytes;}requireThat(sum===installer.bytes,'Inconsistent total size');
+  const {body,installer}=validatePartsIndex(manifest,trustedPublicKey);
+  const destination=child(outputDir,installer.name);
   const temporary=child(outputDir,installer.name+'.assembling-'+crypto.randomUUID());const out=await fs.promises.open(temporary,'wx',0o600);let complete=false;
   try {const total=crypto.createHash('sha256');for(const p of body.parts){const input=await openRead(child(partsDir,p.name));try {const h=crypto.createHash('sha256');let bytes=0;for await(const chunk of input.createReadStream({autoClose:false})){bytes+=chunk.length;requireThat(bytes<=p.bytes,'Oversized part');h.update(chunk);total.update(chunk);let written=0;while(written<chunk.length){const w=await out.write(chunk,written,chunk.length-written);requireThat(w.bytesWritten>0,'Short output write');written+=w.bytesWritten;}}requireThat(bytes===p.bytes&&h.digest('hex')===p.sha256,'Part integrity mismatch');}finally{await input.close();}}
     requireThat(total.digest('hex')===installer.sha256,'Installer integrity mismatch');await out.sync();await out.close();await fs.promises.link(temporary,destination);complete=true;
     return {file:destination,bytes:installer.bytes,sha256:installer.sha256,qualification:'authenticated_transport_only',installApproved:false};
   } finally {if(!complete)await out.close().catch(()=>{});await fs.promises.unlink(temporary).catch(()=>{});}
 }
-module.exports={splitInstaller,reassembleInstaller};
+module.exports={splitInstaller,reassembleInstaller,verifyInstallerParts};
