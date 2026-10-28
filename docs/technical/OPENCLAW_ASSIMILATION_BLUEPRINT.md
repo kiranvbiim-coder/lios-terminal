@@ -210,6 +210,13 @@ Bound both directions: frame decoder bytes, queued writer bytes, concurrent requ
 - V3/V4 at the integrated SP-06/SP-07 candidate: installed target and entitled Telegram/WhatsApp operations with real provider facts, retained Chat/P4/Workbench identity, permission/AI-cost refusal, accessible failure/recovery, restart/no duplicate effects and release/rollback evidence. Missing target/accounts/rights remain BLOCKED, never replaced by mock acceptance.
 - Rollback/disable: fence new admission, revoke the worker generation, settle pending operations as failed/unknown accurately, join cleanup and keep canonical LiOS work available. Do not roll back a canonical message/Artifact/receipt merely because the supporting binary rolls back. Exact older binary/protocol compatibility and persisted transport-state migration need verification before enabling upgrades.
 
+### P1.08 executable transport contract — bounded source evidence
+
+`src/shared/supportingServiceContracts.ts` defines internal protocol `lios-supporting-service/1`, separate Home/worker frame unions, exact session/generation/account/launch-nonce binding, typed invocation/adoption/cancel/shutdown, provider event IDs, bounded errors, canonical attachment identity fields and provider accepted/partial/rejected/unknown facts. These facts are **not** canonical execution receipts or proof of recipient delivery. `decodeSupportingServiceFrame` rejects oversized raw bytes before parsing, invalid UTF-8, wrong direction/version/binding and duplicate advertised operation IDs.
+
+Evidence: six focused boundary tests and typecheck passed; an actual Node process stdin smoke preserved a partial-send provider ID and refused stale generation. Narrow independent source reviews found no concrete P1/P2 contract defect or import cycle. No service, channel adapter, account login, durable record, Gateway method or launch permission is enabled by these schemas. Operation-specific payload validation, current account/tenant/Project/source authorization, request correlation, event sequencing, queue limits and native extinction remain runtime integration requirements, not supplied by the frame decoder. Direct schema parsing is not the bounded wire entry point.
+
+
 
 
 ---

@@ -19,7 +19,7 @@
 - [x] P1.05 Produce a specific Telegram and WhatsApp per-feature capability matrix: supported transport/account login, 1:1/groups, inbound/outbound, replies, edits, reactions, media, identity, delivery, state sync, automated responses and platform/API limits.
 - [ ] P1.06 Review exact source licenses, notices, external API terms, redistribution rights, auth method, data retention, user privacy, dependencies and known security issues before selecting imported code.
 - [ ] P1.07 Map each mechanism to exactly one existing LiOS owner and stable interface; identify high-conflict files/migrations, active PRs and implementation ownership before parallel work.
-- [ ] P1.08 Define versioned typed request/event/error/receipt and attachment contracts for existing LiOS Gateway ↔ isolated service, without parallel Project/Chat/Artifact/permission/secret/auth/automation authorities.
+- [x] P1.08 Define versioned typed request/event/error/receipt and attachment contracts for existing LiOS Gateway ↔ isolated service, without parallel Project/Chat/Artifact/permission/secret/auth/automation authorities.
 - [ ] P1.09 Agree bounded acceptance tests, R0–R4/V0–V4 validation levels, target Shipping Point, rollback and actual supported user journeys; record PR/issue claim before coding.
 
 **Package 1 proof:** complete owner/fork/upstream source map; channel feature matrix; legal/security findings; existing-code crosswalk; one existing-owner task/PR per integration seam.
@@ -27,6 +27,9 @@
 **P1.01/P1.02 inventory evidence (source only):** [Blueprint §0.2](technical/OPENCLAW_ASSIMILATION_BLUEPRINT.md#02-package-1-source-inventory-and-integration-constraints--2026-10-28) records main `8ab41b15`, decision PR #392 head `486d2826`, the resolved approved upstream pin/tree, observed owner-fork SHA, existing LiOS owners and test candidates. The isolated supporting service and Telegram/WhatsApp adapters were not located in current main; PR392 is documentation-only. Current strict LEP refusal, conversation-only placement, donor runtime version, channel dependency/rights and account-custody constraints remain open. These checked items attest an inventory, not exercised integration. No tests, installs, builds or new CI runs for the source inventory.
 
 **P1.03/P1.05 inventory evidence (source only):** the same blueprint §0.2 now includes the approved-pin family/channel breadth register and per-feature Telegram/WhatsApp matrix, with `PARTIAL`/`NOT_INSPECTED`, `ADAPT_REQUIRED`, explicit unknown/deferred features and rights gates. These inventory checkmarks do not attest that all bodies/dependencies/tests are audited, imported or supported. P1.04 still owns selected-package/fork dependency and test disposition; P1.06 still owns full rights/security review. Telegram MiniApp/native commands and the remaining feature-specific unknowns remain visible, not silently excluded.
+
+**P1.08 contract evidence (not service acceptance):** `shared/supportingServiceContracts.ts` defines bounded internal Home/worker frames, generation/account/session binding and provider outcome/attachment facts; canonical LiOS authorization and receipts remain separate. Six focused boundary tests, typecheck and an actual process-stdin parser smoke passed. No service is launched or exposed; no channel/provider support is credited. See blueprint §0.2 for runtime enforcement still required.
+
 
 
 
