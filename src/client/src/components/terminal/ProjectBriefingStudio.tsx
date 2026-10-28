@@ -20,6 +20,8 @@ export function ProjectBriefingStudio({
   const [title, setTitle] = useState("My intelligence briefing");
   const [introduction, setIntroduction] = useState("");
   const [search, setSearch] = useState("");
+  // D04: local, reversible visual focus. It does not change sources or report payloads.
+  const [quietReview, setQuietReview] = useState(false);
   const [previewId, setPreviewId] = useState<string | null>(null);
   const [pinnedVisuals, setPinnedVisuals] = useState<PinnedBriefingVisual[]>([]);
   const [pinningId, setPinningId] = useState<string | null>(null);
@@ -46,6 +48,7 @@ export function ProjectBriefingStudio({
     setBusy(false);
     setError(null);
     setSearch("");
+    setQuietReview(false);
     visualRequestRef.current?.abort();
     return () => visualRequestRef.current?.abort();
   }, [projectId]);
@@ -175,8 +178,19 @@ export function ProjectBriefingStudio({
         </label>
       </div>
 
-      <div className="grid gap-4 xl:grid-cols-2">
-        <section className="min-w-0 space-y-3 rounded-xl border border-border/60 p-3" aria-label="Choose Project sources">
+      <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-border/60 bg-white/[0.015] p-3">
+        <p className="font-ui text-sm text-muted-foreground">
+          {quietReview ? "Focused storyboard review: source library hidden, selected frames unchanged." : "Choose sources, then switch to a calmer storyboard review."}
+        </p>
+        <button type="button" aria-pressed={quietReview} aria-label="Focus on selected briefing storyboard"
+          onClick={() => setQuietReview(current => !current)}
+          className="min-h-11 rounded-lg border border-border/70 px-4 py-2 font-ui text-sm text-foreground focus-visible:outline focus-visible:outline-2 focus-visible:outline-amber-300">
+          {quietReview ? "Show source library" : "Focus on storyboard"}
+        </button>
+      </div>
+
+      <div className={`grid gap-4 ${quietReview ? "grid-cols-1" : "xl:grid-cols-2"}`}>
+        {!quietReview && <section className="min-w-0 space-y-3 rounded-xl border border-border/60 p-3" aria-label="Choose Project sources">
           <div className="flex items-center justify-between gap-2">
             <h3 className="text-sm font-semibold">Saved Project sources</h3>
             <span className="text-xs text-muted-foreground">{chosen.length}/{MAX_BRIEFING_SOURCES} selected</span>
@@ -210,7 +224,7 @@ export function ProjectBriefingStudio({
             No saved Project sources match this search in the current Project. Clear it, or create a saved Artifact first.
           </p>}
           {offered.length > 40 && <p className="text-xs text-muted-foreground">Showing 40 of {offered.length}. Narrow the search to find more.</p>}
-        </section>
+        </section>}
 
         <section className="min-w-0 space-y-3 rounded-xl border border-border/60 p-3" aria-label="Review briefing storyboard">
           <div className="flex items-center justify-between gap-2">
