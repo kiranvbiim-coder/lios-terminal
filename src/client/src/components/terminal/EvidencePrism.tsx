@@ -36,7 +36,10 @@ export default function EvidencePrism({ manifest, onReviewDecision }: { manifest
         {manifest.claims.map(claim => {
           const expanded = selected?.claim.claimId === claim.claimId;
           const detailsId = `${prefix}-claim-${claim.claimId}`;
-          const decision = expanded && onReviewDecision ? sourceGroundedDecisionReview(manifest, claim.claimId) : null;
+          // An as-observed filtered inspection is historical; require the unfiltered
+          // current manifest before preparing a new opt-in Chat review.
+          const decision = expanded && onReviewDecision && !observedBy
+            ? sourceGroundedDecisionReview(manifest, claim.claimId) : null;
           return (
             <li key={claim.claimId} className="min-w-0 rounded border border-border/45 bg-black/20" data-claim-id={claim.claimId}>
               <button
@@ -138,6 +141,11 @@ export default function EvidencePrism({ manifest, onReviewDecision }: { manifest
                   {decision?.status === "blocked" && (
                     <p role="status" className="text-xs text-amber-200" data-testid="c05-decision-review-blocked">
                       {decision.reason}
+                    </p>
+                  )}
+                  {!!observedBy && onReviewDecision && (
+                    <p role="status" className="text-xs text-amber-200">
+                      This is a historical observation filter. Choose all observations before drafting a new decision review.
                     </p>
                   )}
                   <p className="text-[11px] leading-4">This inspection displays recorded metadata; it does not establish source correctness, redistributable rights or a verified numerical unit.</p>
