@@ -29,9 +29,9 @@ test("C1 uses current authenticated P4 GET and original renderer, not client-tru
   assert.match(hook,/refetchOnMount: "always"/);
   assert.match(view,/resolveGovernedVisualAnswer\(request, remote\)/);
   assert.match(view,/<ArtifactChart content=\{decision\.content\} artifactSourceRefs=\{decision\.sourceRefs\} readOnly\s*\/>/);
-  assert.match(view,/Not recorded/);
+  assert.match(view,/Authorization or saved revision is unavailable/);
   assert.match(view,/Recorded source IDs/);
-  assert.match(view,/current\.decision\?\.status === "ready"/);
+  assert.match(view,/resolved\?\.status === "ready"/);
   assert.doesNotMatch(view,/localStorage|sessionStorage|setTimeout\(|postMessage\(|eval\(|dangerouslySetInnerHTML|createArtifact\(|createP9Workflow\(/);
 });
 test("C1 P4 read authorization remains governed by existing server Artifact API",()=>{
