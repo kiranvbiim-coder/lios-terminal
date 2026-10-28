@@ -51,8 +51,14 @@ function keysExactly(value, keys, label) {
   assert(value && typeof value === "object" && !Array.isArray(value), label + " is not an object.");
   assert(JSON.stringify(Object.keys(value).sort()) === JSON.stringify(keys.slice().sort()), label + " has missing or unexpected fields.");
 }
-function checkNativeSelfTest(value, platform, arch) {
+function checkNativeSelfTest(value, platform, arch, expectedVersion) {
   assert(value && typeof value === "object", platform + " packaged self-test missing.");
+  // This is populated by the actual packaged Electron app.getVersion().
+  // A previous beta's valid self-test must never qualify another manifest.
+  assert(typeof expectedVersion === "string" &&
+    /^[0-9]+[.][0-9]+[.][0-9]+-beta[.][1-9][0-9]*$/.test(expectedVersion) &&
+    value.packageVersion === expectedVersion,
+    platform + " native self-test version does not match the signed beta manifest.");
   assert(value.status === "verified" && value.platform === platform && value.arch === arch, platform + " packaged self-test is not from this target.");
   assert(value.nativeSecretCustody?.mode === "native_protected" &&
     value.nativeSecretCustody?.protectedAtRest === true &&
@@ -209,8 +215,8 @@ async function auditBetaRelease(args) {
   const win = verified.assetHashes.find(row => row.name.includes("-win-x64-beta.exe"));
   assert(mac && win && byName.size === 3, "canonical DMG, ZIP and NSIS installers are required.");
   const selfTests = [
-    checkNativeSelfTest(readJson(fields["mac-self-test"]), "darwin", "arm64"),
-    checkNativeSelfTest(readJson(fields["win-self-test"]), "win32", "x64"),
+    checkNativeSelfTest(readJson(fields["mac-self-test"]), "darwin", "arm64", verified.version),
+    checkNativeSelfTest(readJson(fields["win-self-test"]), "win32", "x64", verified.version),
   ];
   const ux = [
     checkNativeUX(readJson(fields["mac-ux"]), "mac-arm64-dmg", mac.sha256),
