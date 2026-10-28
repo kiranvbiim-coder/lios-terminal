@@ -17,7 +17,7 @@ async function preparedFixture() {
   const authority: ExecutionPlacementAuthority = { requestId, homeServiceId: serviceId, owner,
     target: { nodeId: "owned-home", kind: "container", owner, generation: "runtime-1", available: true, revoked: false, backend, endpoint },
     policy: { revision, allowedKinds: ["container"], allowHomeService: true, dataLocality: "runtime-only", secretLocality: "none" } };
-  const request: ExecutionBackendRequest = { argv: ["/usr/bin/node", "-e", "process.exit(0)"], stdinMode: "pipe-open", interactiveInputPolicy: "sandbox-broker-rpc", scopeKey: `home-service:${serviceId}:${requestId}`,
+  const request: ExecutionBackendRequest = { argv: [process.execPath, "-e", "process.exit(0)"], stdinMode: "pipe-open", interactiveInputPolicy: "sandbox-broker-rpc", scopeKey: `home-service:${serviceId}:${requestId}`,
     isolation: { filesystem: "sandbox", network: "deny", processes: "sandbox" }, resources: { maxWallTimeMs: 5000, maxCapturedOutputChars: 4096 } };
   const controller = new AbortController();
   const placement = ExecutionPlacementGrant.select({ authority, request, currentAuthority: () => authority, signal: controller.signal });

@@ -208,7 +208,7 @@ function homeServiceFixture() {
   f.request.scopeKey = `home-service:${serviceId}:${REQUEST_ID}`;
   f.request.isolation = { filesystem: "sandbox", network: "deny", processes: "sandbox" };
   delete f.request.cwd;
-  f.request.argv = ["/usr/local/bin/node", "-e", "process.stdout.write('safe')"];
+  f.request.argv = [process.execPath, "-e", "process.stdout.write('safe')"];
   return f;
 }
 

@@ -355,6 +355,23 @@ Evidence: 39 directly relevant normalizer/account/adoption/ledger/migration-chai
 
 Evidence: five controller behaviors (including a reproduced failing-before spin that exposed a missing pacing floor), 39 earlier relevant behaviors and typecheck passed; the actual Home server booted in a scratch data root with the runtime inert and exited on SIGTERM. A real enabled-source loop against Telegram was **not** run (no provider/account), and hosted-Postgres, installed-vault, UI/consent, outbound and native/entitled proof remain open.
 
+### Other text channels — approved-pin inventory and hybrid-service disposition (2026-10-28)
+
+**Source evidence:** every approved-pin `extensions/<id>` channel `package.json` was read; transport is source-verified only where marked. No extension declares `engines` or a package `license`; only the root MIT license and Node `>=24.16.0 <25 || >=26.1.0` are evidence. Every channel imports the host `openclaw/plugin-sdk/*` (state/config/session/cron coupling unverified), so none is standalone. Direct npm dependency licenses checked via deps.dev are MIT/Apache-2.0/Unlicense (`nostr-tools`); several packages (`@azure/identity`, `@microsoft/teams.api`, `express`, `@aws-sdk/*`, `@twurple/{api-call,auth}`, `@noble/{ciphers,hashes}`, GFM table packages) were not license-checked. deps.dev lists advisories for `undici@8.10.2` (8), `markdown-it@15.0.2` (2), `music-metadata@11.15.0` (4) and `zod@4.6.5` (1); applicability unassessed. **No clearance is claimed.**
+
+| Channel(s) | Transport (verified/inferred) | Credential / rights facts | Hybrid disposition |
+| --- | --- | --- | --- |
+| discord, mattermost, slack(Socket Mode), feishu(WS), reef, twitch, tlon(SSE), clickclack, nostr/buzz (relay WS) | WebSocket/SSE long-lived egress (discord/mattermost/tlon/nostr/feishu/reef source-verified) | Bot/app tokens; nostr/buzz/reef private keys | Needs ONE Home-brokered WS-egress adapter (explicit `maxPayload`, handshake timeout, reconnect/resume) and Home-side signing/secret custody; the deny-network container never holds tokens/keys. |
+| msteams, googlechat, line, sms(Twilio), synology-chat, nextcloud-talk, zalo(webhook), feishu(webhook), slack(HTTP) | Inbound public webhook with signature/JWT verification + REST egress | Service accounts/app secrets/HMAC secrets | Requires a Home-owned authenticated ingress (no public worker listener), shared body-size/in-flight guards (`webhook-ingress` family) and persist-before-ACK; local desktop Homes need a user-owned tunnel decision first. |
+| signal | HTTP/SSE JSON-RPC to a `signal-cli` daemon (source-verified) | Linked-device keys on disk; `signal-cli` is **GPL-3.0** (separate daemon, not an npm dep) | Same distribution rule as WhatsApp: no GPL binary shipped; optional user-installed add-on only, after rights review; keys Home-side. |
+| imessage | Spawns local `imsg rpc` over stdio on a signed-in Mac (source-verified) | macOS Full Disk Access; sensitive Messages DB; unofficial local bridge | macOS-only optional add-on run by Home (not containerizable); explicit consent + minimal projection; no default enablement. |
+| irc, zalo(long-poll) | Raw TCP/TLS or bot long-poll | Server password / bot token | Home-proxied socket/poll; zalo polling is the simplest deny-network path. |
+| zalouser | Unofficial personal-account automation (`zca-js`, QR session cookies) | Terms-of-service risk | `DEFER_WITH_TRIGGER`: not enabled by default; needs owner/rights decision. |
+| matrix | `matrix-js-sdk` sync + Rust crypto bindings | Access token + persistent crypto/device store | Home-held crypto store; WASM/native crypto packaging and licenses (Apache-2.0) need review before any enablement. |
+| a2a, raft, qa-channel | A2A protocol; loopback CLI bridge; QA fixture | Peer tokens / local profile | a2a: evaluate under agent/delegation family; raft: local CLI add-on only; `qa-channel` is a test fixture, never a user integration. |
+
+**Reusable shared mechanisms (candidates for ONE Home-side port, SDK sources still unread):** `webhook-ingress`/`webhook-request-guards`/`webhook-targets` (bounded raw-body, pre-auth limiter, route conflict rules), `ssrf-runtime` (`fetchWithSsrFGuard`, a natural hook for the Home-brokered egress policy; reconcile with existing P13 DNS pinning), `security-runtime`/`secret-*` (map to the Home vault/SecretRef), durable-spool/persist-before-ACK patterns (`webhook-spool`, `ingress-spool`, `monitor-durable`; match the already-built canonical adoption), the existing byte framer, and the common `ws` client shape. Per-channel `config-schema`/`accounts`/`setup-*`/`doctor` are donor-config scaffolding to replace with the existing connection/consent flow, not import.
+
 
 
 
