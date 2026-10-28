@@ -4,6 +4,8 @@ import crypto from "node:crypto";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
+import express from "express";
+import {createServer} from "node:http";
 import { eq } from "drizzle-orm";
 import { financialDatasetPayloadSchema } from "@shared/pointInTimeData";
 import type { FactorRiskSnapshot } from "./factorRiskModel";
@@ -19,6 +21,7 @@ const {hashLedgerValue}=await import("./ledgerStore");
 const {factorRiskSnapshotContentHash}=await import("./factorRiskModel");
 const {registerBuiltInCalculationJobRunners}=await import("./calculationJobRunners");
 const jobs=await import("./calculationJobService");
+const {registerScenarioPipelineRoutes}=await import("./scenarioPipelineRoutes");
 
 const payload=financialDatasetPayloadSchema.parse({symbol:"TEST",periods:[{
  period:"FY",fiscalYear:"2023",periodEnd:"2023-12-31",filingDate:"2024-02-15",availableAt:"2024-02-15T00:00:00.000Z",currency:"USD",sources:[{statementType:"income",provider:"user_supplied"}],
@@ -84,4 +87,15 @@ test("scenario computation and durable result reads require current exact source
  await getDb().update(dataEntitlementPolicies).set({permittedUses:["display"]}).where(eq(dataEntitlementPolicies.id,inputPolicy.id));
  await assert.rejects(runScenarioPipeline(manualRequest,ctx),denied);
  await assert.rejects(jobs.getCalculationJob(queued.id,scope),denied);
+ const app=express();app.use(express.json());app.use((req,_res,next)=>{
+  req.user=actor;req.isAuthenticated=(()=>true) as typeof req.isAuthenticated;next();
+ });
+ registerScenarioPipelineRoutes(app);
+ const server=createServer(app);
+ await new Promise<void>(resolve=>server.listen(0,"127.0.0.1",resolve));
+ try{
+  const address=server.address();assert.ok(address&&typeof address!=="string");
+  const response=await fetch(`http://127.0.0.1:${address.port}/api/scenario-pipeline/preview`,{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify(manualRequest)});
+  assert.equal(response.status,403,"Revoked factor upstream rights retain their denial status through the actual integrated HTTP path");
+ }finally{server.closeAllConnections();await new Promise<void>(resolve=>server.close(()=>resolve()));}
 });

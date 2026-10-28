@@ -33,6 +33,7 @@ import type { TenantContext } from "./tenantContext";
 import { factorRiskSnapshotContentHash, buildFactorAttributionInput } from "./factorRiskModel";
 import { resolveAdvancedQuantInputProvenance } from "@shared/quantModelRegistry";
 import { admitTerminalExecutionSources } from "./terminalArtifactTool";
+import { FactorRiskAccessError } from "./factorRiskInputCapture";
 
 const finite = z.number().finite();
 const boundedMap = z.record(z.string().trim().min(1).max(160), finite).superRefine((value, ctx) => {
@@ -282,7 +283,10 @@ export async function runScenarioPipeline(rawRequest: ScenarioPipelineRequest, c
   try {
     decomposition = await runWithRequestIdentity({userId:ctx.userId,organizationId:ctx.organizationId}, () =>
       decomposeFactorRiskSnapshot(request.factorRiskSnapshotId, { portfolioWeights: request.portfolioWeights, scenario: factorScenario(request) }));
-  } catch (error) { throw new ScenarioPipelineError(422, `Factor-risk decomposition failed: ${error instanceof Error ? error.message : "invalid calculation"}`); }
+  } catch (error) {
+    if (error instanceof FactorRiskAccessError) throw error;
+    throw new ScenarioPipelineError(422, `Factor-risk decomposition failed: ${error instanceof Error ? error.message : "invalid calculation"}`);
+  }
   const scenarioPnl = decomposition.result.scenario;
   if (!scenarioPnl || scenarioPnl.securities.length !== factorSnapshot.securities.length) throw new ScenarioPipelineError(422, "Factor-risk decomposition did not return complete per-security scenario P&L.");
   const source: ScenarioSource = { ...request.source, status: "provider", source: `factor-risk-snapshot:${factorSnapshot.snapshotId}:${factorSnapshot.contentHash}`, provider: "factorRiskModel", asOf: factorSnapshot.request.asOf, period: factorSnapshot.capturedAt, unit: "return" };

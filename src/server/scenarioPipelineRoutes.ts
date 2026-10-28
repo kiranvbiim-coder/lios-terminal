@@ -10,6 +10,7 @@ import {
 import { tenantContext, type TenantContext } from "./tenantContext";
 import { IntegratedModelArtifactError } from "./integratedModelArtifact";
 import { TerminalSourceAccessError } from "./terminalArtifactTool";
+import { FactorRiskAccessError } from "./factorRiskInputCapture";
 
 export const READ_ROLES = ["internal_admin", "internal_analyst", "internal_compliance"] as const;
 export const SCENARIO_PIPELINE_READ_ROLES = READ_ROLES;
@@ -35,7 +36,7 @@ export function createScenarioPipelineRouteHandlers(service: ScenarioPipelineRou
       const result = await service.runScenarioPipeline(parsed.data as ScenarioPipelineRequest, tenantContext(req.user!));
       res.status(200).json({ trace: result.trace, receiptCalculation: result.receiptCalculation });
     } catch (error) {
-      const status = error instanceof ScenarioPipelineError ? error.statusCode : error instanceof IntegratedModelArtifactError || error instanceof TerminalSourceAccessError ? error.status : 422;
+      const status = error instanceof ScenarioPipelineError ? error.statusCode : error instanceof IntegratedModelArtifactError || error instanceof TerminalSourceAccessError || error instanceof FactorRiskAccessError ? error.status : 422;
       res.status(status).json({ error: errorMessage(error) });
     }
   }

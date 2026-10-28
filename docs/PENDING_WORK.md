@@ -6,6 +6,14 @@
 
 ## Active work — public production readiness
 
+### Landed source consolidation and current completion branch — 2026-10-28
+
+- Protected #364 landed as `7c4cb8cde873695a3105c2a8b5e4296471c231ed`; exact head `dc0790d4db4236b3b40a2e8a899d484592287c85` passed Source/Linux, macOS and Windows in run40640288614. Landed tree equality was checked before successor disposition. Main was synchronized without changing the installed Desktop app or owner Home.
+- Closed27 successor PRs on exact-head ancestry proof and five (#318/#324/#327/#362/#388) on recorded source-disposition evidence; the latter are not ancestry claims. #388 only restored `readFileSync`/`assert.match` implementation-string assertions, not executable regression behavior; real Briefing/native visual/Office behaviors remain. No open PR remained at the final disposition read. Issues and native/release obligations were not falsely closed.
+- The runtime, Apple state, MapLibre, P10 and finance fixes documented below are integrated in the separate completion branch, not yet a protected-main/native-release claim. The factor/scenario cutover additionally preserves typed factor-policy denials through preview/decomposition instead of reclassifying them as422.
+- Remaining direct requirements include end-to-end typed model visual dispatch, Windows native Core/file custody/AMD64 sandbox, installed accessibility/offline/manual-upgrade journeys, operational beta trust and owner release approval. Strict$0 spending remains; production P14 signing is not bypassed.
+
+
 ### P10 acceptance contract correction — 2026-10-28
 
 - Removed the obsolete source-text assertion demanding automatic install-on-quit. The existing updater requires explicit safe-default confirmation; beta never checks/downloads/installs through the production updater. No updater behavior or production trust gate was weakened.
