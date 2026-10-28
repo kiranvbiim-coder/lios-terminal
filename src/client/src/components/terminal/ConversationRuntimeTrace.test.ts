@@ -603,3 +603,20 @@ test("C06 exact P4 reopen is visible only for saved versions when current Chat p
     { onOpenSavedArtifact: noop });
   assert.doesNotMatch(unsaved, /c06-open-recorded-artifact/);
 });
+
+test("C07 saved Project run offers only the existing reviewed automation draft", () => {
+  const visible = render([planEvent, sourceResult, doneOk], { onPrepareAutomation: noop });
+  assert.match(visible, /data-testid="c07-chat-automation-draft"/);
+  assert.match(visible, /Prepare automation draft/);
+  assert.match(visible, /No monitoring starts without a separate P9 activation review/);
+
+  const failed = render([planEvent, event({ type: "done", status: "failed" })],
+    { onPrepareAutomation: noop });
+  assert.doesNotMatch(failed, /c07-chat-automation-draft/);
+
+  const active = render([planEvent], { onPrepareAutomation: noop, busy: true });
+  assert.doesNotMatch(active, /c07-chat-automation-draft/);
+
+  const noProject = render([planEvent, doneOk], { onPrepareAutomation: undefined });
+  assert.doesNotMatch(noProject, /c07-chat-automation-draft/);
+});
