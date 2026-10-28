@@ -9,6 +9,8 @@ import {
   type LiOSDataProviderAdapter,
 } from "./providerSdk";
 import type { TenantContext } from "./tenantContext";
+import crypto from "node:crypto";
+import { bindConversationExecutionSignal, withConversationExecutionScope } from "./exec/execution-scope";
 
 const ctx = { userId: 1, organizationId: null, role: "internal_admin" } as TenantContext;
 
@@ -417,4 +419,39 @@ test("SI-06.31 policy change while connecting closes stream even if provider sti
   });
   await assert.rejects(startProviderStream("connecting-policy-change", streamingRequest(), ctx, registry), /entitlement changed/);
   assert.equal(stopped, 1);
+});
+
+test("cancellation wins provider success, failure and asynchronous admission without fallback dispatch", async () => {
+  for (const boundary of ["success", "failure", "entitlement", "normalize", "quota"] as const) {
+    const controller = new AbortController();
+    const registry = new ProviderSdkRegistry();
+    let fallbackCalls = 0;
+    const stop = () => controller.abort(new Error("PRIVATE-CANCELLATION-SENTINEL"));
+    registry.register({
+      id: "first", label: "Controlled source", priority: 1, capabilities: ["prices"], pointInTimeModes: ["latest"],
+      entitlement: boundary === "entitlement" ? async () => {
+        stop();
+        throw new Error("provider cleanup failed");
+      } : undefined,
+      normalize: boundary === "normalize" ? async data => { stop(); return data; } : undefined,
+      quota: boundary === "quota" ? async () => { stop(); return null; } : undefined,
+      fetch: async () => {
+        if (boundary === "success" || boundary === "failure") stop();
+        if (boundary === "failure") throw new Error("provider returned an error after Stop");
+        return { data: { price: 7 }, sourceRefs: ["controlled:quote"] };
+      },
+    });
+    registry.register({
+      id: "fallback", label: "Must not dispatch", priority: 2, capabilities: ["prices"], pointInTimeModes: ["latest"],
+      fetch: async () => { fallbackCalls++; return { data: { price: 9 } }; },
+    });
+    const requestId = crypto.randomUUID();
+    await withConversationExecutionScope(requestId, async () => {
+      bindConversationExecutionSignal(requestId, controller.signal);
+      await assert.rejects(executeCanonicalDataRequest(streamingRequest(), ctx, registry), error =>
+        error instanceof DOMException && error.name === "AbortError" && !error.message.includes("PRIVATE-CANCELLATION"),
+      );
+    });
+    assert.equal(fallbackCalls, 0, boundary);
+  }
 });

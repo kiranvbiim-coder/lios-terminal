@@ -9,7 +9,7 @@
   "controlledForkCount": 10,
   "sourceSnapshot": {
     "baselineSha": "ad77f2d53189a7d98583e9d9996d532b79e4686d",
-    "componentsSha": "0b77be1fdb8d4a1a1bc4bdab112bbf6621e6ec2d",
+    "componentsSha": "b12e03cdda1449166001705e7047f23ae9d2ed13",
     "upstreamPinsSha": "bfafe1ddf251fb05fd99b75864a3d4436a7550cb",
     "controlledForkSha": "142ff14c5e6b5d6804b20a346d5e31435db2f33b"
   },
@@ -2132,6 +2132,7 @@
         "src/process/bounded-line-framer.test.ts",
         "src/cron/service/jobs-scheduling.ts",
         "src/agents/mcp-startup-backoff.ts",
+        "src/web-search/runtime-execution.ts",
         "src/shared/bounded-buffer.test.ts",
         "src/utils/utf8-truncate.test.ts",
         "src/process/pipe-output.test.ts",
@@ -2220,6 +2221,7 @@
         "server/p9AutomationEngine.ts",
         "server/p9AutomationStore.ts",
         "server/mcpStartupBackoff.ts",
+        "server/providerSdk.ts",
         "server/exec/bounded-buffer.test.ts",
         "server/exec/utf8-truncate.test.ts",
         "server/exec/pipe-output.test.ts",
