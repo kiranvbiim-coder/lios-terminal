@@ -42,6 +42,7 @@ export function currentProjectBriefingVisuals(
     const source = selectedHere.get(visual.artifactId);
     return visual.projectId === projectId && Boolean(source &&
       visual.version === source.headVersion &&
+      visual.title === source.title &&
       visual.content.kind === source.kind &&
       isReviewedBriefingSourceCurrent(source, liveById.get(source.id), projectId));
   });
