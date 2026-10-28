@@ -207,7 +207,7 @@ async function auditBetaRelease(args) {
   const verified = await verifyBetaManifest({
     manifest: readJson(fields.manifest),
     assetDir: fields["asset-dir"],
-    trustedPublicKeyPem: fs.readFileSync(fields["trusted-key"], "utf8"),
+    trustedPublicKeyPem: readPinnedLocalEvidenceFile(path.resolve(fields["trusted-key"]), 64_000, "independent public key").toString("utf8"),
     expectedCommit: fields.commit,
   });
   assert(verified.verified === true && verified.qualification === "release_asset_integrity_only" &&
@@ -221,12 +221,16 @@ async function auditBetaRelease(args) {
     checkNativeSelfTest(readJson(fields["mac-self-test"]), "darwin", "arm64", verified.version, verified.commit),
     checkNativeSelfTest(readJson(fields["win-self-test"]), "win32", "x64", verified.version, verified.commit),
   ];
+  // Pin each report to one validated local snapshot. A second pathname read
+  // must never choose a different evidence file list after rights/shape review.
+  const macReport = readJson(fields["mac-ux"]);
+  const winReport = readJson(fields["win-ux"]);
   const ux = [
-    checkNativeUX(readJson(fields["mac-ux"]), "mac-arm64-dmg", mac.sha256),
-    checkNativeUX(readJson(fields["win-ux"]), "win-x64-nsis", win.sha256),
+    checkNativeUX(macReport, "mac-arm64-dmg", mac.sha256),
+    checkNativeUX(winReport, "win-x64-nsis", win.sha256),
   ];
-  ux[0].actualEvidence = inspectNativeEvidence(fields["mac-ux"], readJson(fields["mac-ux"]).evidencePaths);
-  ux[1].actualEvidence = inspectNativeEvidence(fields["win-ux"], readJson(fields["win-ux"]).evidencePaths);
+  ux[0].actualEvidence = inspectNativeEvidence(fields["mac-ux"], macReport.evidencePaths);
+  ux[1].actualEvidence = inspectNativeEvidence(fields["win-ux"], winReport.evidencePaths);
   return {
     evidenceChecksPassed: true,
     releasePublished: false,
