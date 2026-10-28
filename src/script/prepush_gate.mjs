@@ -24,7 +24,8 @@ const changed = [...new Set([
   ...git("diff", "--name-only", `${base}...HEAD`),
   ...git("diff", "--name-only", "HEAD"),
   ...git("ls-files", "--others", "--exclude-standard"),
-])].filter((file) => fs.existsSync(path.join(repo, file)));
+])];
+const deleted = new Set(changed.filter((file) => !fs.existsSync(path.join(repo, file))).map((file) => file.replace(/^src\//, "")));
 
 const inSrc = changed.filter((file) => file.startsWith("src/")).map((file) => file.slice(4));
 const code = (file) => /\.(?:ts|tsx|js|cjs|mjs)$/.test(file);
@@ -51,23 +52,26 @@ function resolveImport(from, spec) {
   else if (spec.startsWith("@/")) target = `client/src/${spec.slice(2)}`;
   else return null;
   for (const candidate of [target, ...[".ts", ".tsx", ".js", ".cjs", ".mjs"].map((e) => target + e), ...["/index.ts", "/index.tsx"].map((e) => target + e)]) {
-    if (known.has(candidate)) return candidate;
+    if (known.has(candidate) || deleted.has(candidate)) return candidate;
   }
   return null;
 }
 
 const dependents = new Map();
+function link(file, spec) {
+  const target = resolveImport(file, spec);
+  if (!target || target === file) return;
+  if (!dependents.has(target)) dependents.set(target, new Set());
+  dependents.get(target).add(file);
+}
 for (const file of files) {
   const text = fs.readFileSync(path.join(src, file), "utf8");
-  for (const match of text.matchAll(/(?:from\s+|import\s*\(\s*|require\s*\(\s*|import\s+)["']([^"']+)["']/g)) {
-    const target = resolveImport(file, match[1]);
-    if (!target) continue;
-    if (!dependents.has(target)) dependents.set(target, new Set());
-    dependents.get(target).add(file);
-  }
+  for (const match of text.matchAll(/(?:from\s+|import\s*\(\s*|require\s*\(\s*|import\s+)["']([^"']+)["']/g)) link(file, match[1]);
+  // Source-reading tests (readFileSync(new URL("../x.tsx", import.meta.url))) depend on files they never import.
+  if (isTest(file)) for (const match of text.matchAll(/["'`](\.{1,2}\/[^"'`\s]+\.(?:tsx?|cjs|mjs|js))["'`]/g)) link(file, match[1]);
 }
 
-const seeds = inSrc.filter((file) => code(file) && known.has(file));
+const seeds = inSrc.filter((file) => code(file) && (known.has(file) || deleted.has(file)));
 const reached = new Set(seeds);
 const distance = new Map(seeds.map((file) => [file, 0]));
 let frontier = seeds;
@@ -85,7 +89,7 @@ const tests = [...reached].filter(isTest).sort((a, b) => distance.get(a) - dista
 const steps = [["npm", ["run", "check"]]];
 const touched = (pattern) => changed.some((file) => pattern.test(file));
 if (touched(/^src\/(?:package\.json|script\/)|^\.github\//)) steps.push(["npm", ["run", "check:manifests"]]);
-if (touched(/^src\/server\/.*\.ts$/) && !touched(/^src\/server\/.*\.test\./) || touched(/ROUTE_MANIFEST|routes?\.ts$/i)) steps.push(["npm", ["run", "check:routes"]]);
+if (changed.some((file) => /^src\/server\/.*\.ts$/.test(file) && !isTest(file)) || touched(/ROUTE_MANIFEST/i)) steps.push(["npm", ["run", "check:routes"]]);
 if (touched(/^third_party\//)) steps.push(["npm", ["run", "audit:oss"]]);
 
 console.log(`Changed vs ${base}: ${changed.length} files, ${seeds.length} first-party sources, ${tests.length} dependent tests.`);
