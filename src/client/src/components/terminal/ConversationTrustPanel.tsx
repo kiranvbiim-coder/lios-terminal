@@ -20,13 +20,14 @@ import { BeuiCitations } from "@/components/vendor/beui/BeuiCitations";
 interface Props {
   manifest: TrustManifest;
   onRecoveryAction?: (action: string) => void;
+  onReviewDecision?: (prompt: string) => void;
 }
 
 function titleCase(value: string): string {
   return value.replaceAll("_", " ").replace(/\b\w/g, (character) => character.toUpperCase());
 }
 
-export default function ConversationTrustPanel({ manifest, onRecoveryAction }: Props) {
+export default function ConversationTrustPanel({ manifest, onRecoveryAction, onReviewDecision }: Props) {
   const [expanded, setExpanded] = useState(false);
   const toggle = () => {
     const next = !expanded;
@@ -102,7 +103,7 @@ export default function ConversationTrustPanel({ manifest, onRecoveryAction }: P
             </ol>
           </section>
 
-          <EvidencePrism key={manifest.trustId} manifest={manifest} />
+          <EvidencePrism key={manifest.trustId} manifest={manifest} onReviewDecision={onReviewDecision} />
           <EvidenceExceptionDetails key={`${manifest.trustId}:exceptions`} manifest={manifest} />
 
           {!!manifest.assumptions.length && (
