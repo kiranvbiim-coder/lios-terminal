@@ -227,11 +227,13 @@ async function verifyBetaMultipartTransport({
   assert(Boolean(multipartDir) === (oversized.length > 0),
     "multipart directory is required exactly when local installers exceed the free per-asset limit.");
   const multiparts = [];
+  const allowedStagingNames = new Set();
   for (const item of oversized) {
     assert(item.target === "mac-arm64-dmg" || item.target === "mac-arm64-zip",
       "only Mac assembled installers may use the approved multipart path.");
     const directory = path.resolve(multipartDir);
-    const index = readJson(path.join(directory, item.name + ".parts.json"));
+    const indexName = item.name + ".parts.json";
+    const index = readJson(path.join(directory, indexName));
     const checked = await verifyInstallerParts({
       manifest: index, partsDir: directory, trustedPublicKey,
     });
@@ -239,8 +241,20 @@ async function verifyBetaMultipartTransport({
       checked.sha256 === item.sha256 && checked.partCount >= 2 &&
       checked.qualification === "authenticated_transport_only",
       "signed multipart transport does not match the exact reviewed installer manifest.");
+    allowedStagingNames.add(indexName);
+    for (const part of index.body.parts) allowedStagingNames.add(part.name);
     multiparts.push({target:item.target, partCount:checked.partCount, bytes:checked.bytes,
       sha256:checked.sha256, verified:true});
+  }
+  if (oversized.length) {
+    // This directory is the intended public upload set, not a general scratch
+    // folder. Refuse stray files (including .env, prior part sets or symlinks).
+    // The signed verifier above already authenticated every allowed part.
+    const entries = fs.readdirSync(path.resolve(multipartDir), { withFileTypes: true });
+    assert(entries.length === allowedStagingNames.size &&
+      entries.every(entry => entry.isFile() && !entry.isSymbolicLink() &&
+        allowedStagingNames.has(entry.name)),
+      "multipart staging directory contains extra, missing or unreviewed files.");
   }
   return multiparts;
 }
