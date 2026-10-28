@@ -29,6 +29,7 @@ import { followUpPrompts, formatDuration, summarizeRuntimeTrace } from "@/lib/ru
 import { inspectAgentReceiptActivity } from "@/lib/agentReceiptActivity";
 import { projectRecordedAgentSteps, RECORDED_AGENT_STEP_LABELS } from "@/lib/recordedAgentStepTruth";
 import { reviewChatArtifactSave, chatArtifactSaveAcknowledgmentKey } from "@/lib/chatArtifactSaveReview";
+import { reconcileUnconfirmedRunPrompt } from "@/lib/runRecoveryReconciliation";
 import { observedRunActivity } from "@/lib/sprintAObservedActivity";
 import AgentExecutionReceipts from "./AgentExecutionReceipts";
 import { governedReviewRisk, legacyReviewFacts } from "@/lib/approvalReviewTruth";
@@ -59,7 +60,7 @@ interface Props {
   onRecoveryAction?: (action: string) => void;
   /** Prefills the composer with a suggested next request; never sends it. */
   onFollowUp?: (prompt: string) => void;
-  /** Re-sends the last request after a failed run. */
+  /** Legacy callback may re-send: C08 must never invoke it from an ambiguous run status. */
   onRetry?: () => void;
   /** Opens the optional read-only Terminal view for this exact execution session. Offered only inside Show Work. */
   onOpenTerminal?: () => void;
@@ -257,6 +258,7 @@ export default function ConversationRuntimeTrace({
   const stepCount = summary.stepCount || summary.settledSteps;
   const duration = formatDuration(summary.durationMs);
   const observed = observedRunActivity(events, steps.length, working, waitingForApproval);
+  const recoveryPrompt = reconcileUnconfirmedRunPrompt(requestId);
   const recordedSteps = projectRecordedAgentSteps(events, requestId, { busy: working, stopRequested });
   const stepPresentation = new Map(recordedSteps.map(step => [step.id, step]));
   const quietControlClass = "inline-flex min-h-11 items-center gap-1 rounded-lg px-3 py-2 font-ui text-sm text-muted-foreground hover:bg-white/[0.04] hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-300/50";
@@ -551,9 +553,20 @@ export default function ConversationRuntimeTrace({
               {view.recoveries.includes("connect") && onRecoveryAction && (
                 <button type="button" data-testid="trace-error-connect" onClick={() => onRecoveryAction("Open Connection Center")} className="rounded-full border border-border/55 px-2.5 py-1 font-ui text-[12px] text-foreground hover:border-red-300/30">Open Connect</button>
               )}
-              {view.recoveries.includes("retry") && onRetry && !busy && (
-                <button type="button" data-testid="trace-error-retry" onClick={onRetry} className="min-h-10 rounded-full border border-border/55 px-3 py-2 font-ui text-sm text-foreground hover:border-red-300/30">Review request</button>
-              )}
+              {view.recoveries.includes("retry") && !busy && <>
+                {onFollowUp && recoveryPrompt
+                  ? <button type="button" data-testid="c08-reconcile-run" onClick={() => onFollowUp(recoveryPrompt)}
+                      className="min-h-11 rounded-full border border-border/55 px-3 py-2 font-ui text-sm text-foreground focus-visible:ring-2 focus-visible:ring-amber-300/70">
+                      Prepare run-status check in Chat
+                    </button>
+                  : onRetry && canShowWork
+                    ? <button type="button" data-testid="c08-inspect-run" onClick={() => setShowWork(true)}
+                        className="min-h-11 rounded-full border border-border/55 px-3 py-2 font-ui text-sm text-foreground focus-visible:ring-2 focus-visible:ring-amber-300/70">
+                        Inspect recorded work
+                      </button>
+                    : <span className="font-ui text-xs text-muted-foreground">Review run history before requesting any new work.</span>}
+                <span className="font-ui text-xs text-amber-200">No automatic retry. Earlier side effects may be unconfirmed.</span>
+              </>}
               {showWork && <span className="ml-auto font-terminal text-[12px] uppercase tracking-wider text-red-200/50">{runtimeError.code}</span>}
             </div>
           </div>
@@ -564,7 +577,22 @@ export default function ConversationRuntimeTrace({
         <div role="alert" data-testid="trace-interrupted" className="mb-2 rounded-lg border border-amber-300/25 px-3 py-2.5 font-ui text-sm">
           <p className="font-semibold">This run has no confirmed final status.</p>
           <p className="mt-1 text-muted-foreground">Partial text is not a completed answer or execution receipt. Inspect the original run before considering a retry.</p>
-          {onRetry && <button type="button" onClick={onRetry} className="mt-2 min-h-10 rounded border px-3">Review previous request</button>}
+          <div className="mt-2 flex flex-wrap items-center gap-2">
+            {onFollowUp && recoveryPrompt
+              ? <button type="button" data-testid="c08-reconcile-interrupted"
+                  onClick={() => onFollowUp(recoveryPrompt)}
+                  className="min-h-11 rounded-lg border border-border/60 px-3 font-ui text-sm focus-visible:ring-2 focus-visible:ring-amber-300/70">
+                  Prepare run-status check in Chat
+                </button>
+              : onRetry && canShowWork
+                ? <button type="button" data-testid="c08-inspect-interrupted"
+                    onClick={() => setShowWork(true)}
+                    className="min-h-11 rounded-lg border border-border/60 px-3 font-ui text-sm focus-visible:ring-2 focus-visible:ring-amber-300/70">
+                    Inspect recorded work
+                  </button>
+                : null}
+          </div>
+          <p className="mt-2 text-xs text-amber-200">No automatic retry is offered. The Home may have received the original run or performed an external action.</p>
         </div>
       )}
       {summary.status === "completed" && !observedReceipt && (

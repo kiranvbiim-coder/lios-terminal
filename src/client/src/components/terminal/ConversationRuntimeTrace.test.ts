@@ -112,11 +112,11 @@ test("approvals stay visible by default, and only the approval decisions are off
 });
 
 test("errors and data gaps are always visible, with recovery actions, without opening Show work", () => {
-  const failed = render([event({ type: "error", code: "ai_provider_failed", message: "The provider rejected the API key." }), event({ type: "done", status: "failed" })], { onRetry: noop, onRecoveryAction: noop });
+  const failed = render([event({ type: "error", code: "ai_provider_failed", message: "The provider rejected the API key." }), event({ type: "done", status: "failed" })], { onRetry: noop, onRecoveryAction: noop, onFollowUp: noop });
   assert.match(failed, /data-testid="trace-error"/);
   assert.match(failed, /role="alert"/);
   assert.match(failed, /The provider rejected the API key\./);
-  assert.match(failed, /data-testid="trace-error-retry"/);
+  assert.match(failed, /data-testid="c08-reconcile-run"/);
   assert.match(failed, /data-testid="trace-error-connect"/);
   assert.doesNotMatch(failed, /Terminal/);
 
@@ -526,4 +526,20 @@ test("C06 save flow requires explicit acknowledgement, no P4 writes or silent su
   assert.match(html,/disabled=""/);
   assert.match(html,/Recorded source references are not proof of current entitlement/);
   assert.doesNotMatch(html,/confidence:"not verified"|private:source/);
+});
+
+test("C08 errors and interrupted runs only offer read-only reconciliation, never blind resend",()=>{
+  const failed=render([planEvent,event({type:"error",code:"TIMEOUT",message:"The outcome is unconfirmed."}),
+    event({type:"done",status:"failed"})],{onRetry:noop,onFollowUp:noop});
+  assert.match(failed,/data-testid="c08-reconcile-run"/);
+  assert.match(failed,/No automatic retry/);
+  assert.doesNotMatch(failed,/data-testid="trace-error-retry"/);
+  const interrupted=render([planEvent,sourceResult],{onRetry:noop,onFollowUp:noop});
+  assert.match(interrupted,/data-testid="c08-reconcile-interrupted"/);
+  assert.match(interrupted,/Home may have received the original run/);
+  const inspectOnly=render([planEvent,sourceResult],{onRetry:noop,onFollowUp:undefined});
+  assert.match(inspectOnly,/data-testid="c08-inspect-interrupted"/);
+  const noSource=render([event({type:"error",code:"TIMEOUT",message:"Outcome unknown"}),
+    event({type:"done",status:"failed"})],{onRetry:noop,onFollowUp:undefined});
+  assert.doesNotMatch(noSource,/data-testid="c08-reconcile-run"|data-testid="trace-error-retry"/);
 });
