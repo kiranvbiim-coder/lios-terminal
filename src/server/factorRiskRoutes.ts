@@ -21,6 +21,7 @@ import { validateTerminalExecutionTarget } from "./terminalArtifactTool";
 import { createTerminalArtifactEngineVersion } from "./artifactStore";
 import { executeOriginalFactorDecomposition } from "./advancedQuantExecution";
 import type { FactorRiskSnapshot } from "./factorRiskModel";
+import { FactorRiskAccessError } from "./factorRiskInputCapture";
 type SnapshotShape = Parameters<typeof buildFactorAttributionInput>[0];
 const READ_ROLES = ["internal_admin", "internal_analyst", "internal_compliance"] as const;
 const AUTHOR_ROLES = ["internal_admin", "internal_analyst"] as const;
@@ -95,7 +96,7 @@ export function createFactorRiskRouteHandlers(service: FactorRiskRouteService = 
       const result = normalizeCaptureResult(await service.captureFactorRiskSnapshot(parsed.data));
       res.status(result.cache === "hit" ? 200 : 201).json({ ...result.snapshot, cache: result.cache });
     } catch (error) {
-      const status = error instanceof FactorRiskValidationError ? error.statusCode : 502;
+      const status = error instanceof FactorRiskAccessError ? error.status : error instanceof FactorRiskValidationError ? error.statusCode : 502;
       res.status(status).json({ error: errorMessage(error, "Factor risk snapshot capture failed.") });
     }
   }
@@ -160,7 +161,7 @@ export function createFactorRiskRouteHandlers(service: FactorRiskRouteService = 
       const result = normalizeCaptureResult(await service.captureFactorRiskSnapshot(originalRequest.data));
       res.status(result.cache === "hit" ? 200 : 201).json({ ...result.snapshot, cache: result.cache });
     } catch (error) {
-      const status = error instanceof FactorRiskValidationError ? error.statusCode : 502;
+      const status = error instanceof FactorRiskAccessError ? error.status : error instanceof FactorRiskValidationError ? error.statusCode : 502;
       res.status(status).json({ error: errorMessage(error, "Factor risk snapshot refresh failed.") });
     }
   }
@@ -171,7 +172,7 @@ export function createFactorRiskRouteHandlers(service: FactorRiskRouteService = 
       if (!snapshot) { res.status(404).json({ error: "Factor risk snapshot not found or expired." }); return; }
       res.json(snapshot);
     } catch (error) {
-      res.status(500).json({ error: errorMessage(error, "Factor risk snapshot lookup failed.") });
+      res.status(error instanceof FactorRiskAccessError ? error.status : 500).json({ error: errorMessage(error, "Factor risk snapshot lookup failed.") });
     }
   }
 
@@ -212,7 +213,7 @@ export function createFactorRiskRouteHandlers(service: FactorRiskRouteService = 
         result,
       });
     } catch (error) {
-      const status = error instanceof FactorAttributionValidationError ? 400 : 422;
+      const status = error instanceof FactorRiskAccessError ? error.status : error instanceof FactorAttributionValidationError ? 400 : 422;
       res.status(status).json({ error: errorMessage(error, "Factor risk decomposition failed.") });
     }
   }

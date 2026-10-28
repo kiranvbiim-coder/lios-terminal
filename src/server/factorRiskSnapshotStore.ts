@@ -24,6 +24,15 @@ import { and, desc, eq, inArray, isNull, lt } from "drizzle-orm";
 import { datasetSnapshots } from "@shared/schema";
 import { getDb } from "./db";
 import { getRequestIdentity } from "./requestContext";
+import { getApplicableEntitlementPolicy } from "./dataEntitlementStore";
+
+function requestOwnerCondition() {
+  const actor = getRequestIdentity();
+  return actor ? and(
+    actor.userId === null ? isNull(datasetSnapshots.createdByUserId) : eq(datasetSnapshots.createdByUserId, actor.userId),
+    actor.organizationId === null ? isNull(datasetSnapshots.organizationId) : eq(datasetSnapshots.organizationId, actor.organizationId),
+  ) : undefined;
+}
 
 export const FACTOR_RISK_DATA_CLASS = "factor_risk";
 
@@ -205,6 +214,7 @@ export class DbFactorRiskSnapshotStore implements FactorRiskSnapshotStore {
     const request = snapshot.request as { asOf?: unknown } | undefined;
     const asOf = typeof request?.asOf === "string" ? request.asOf : null;
     const now = new Date();
+    const policy = await getApplicableEntitlementPolicy("factor_risk_model", FACTOR_RISK_DATA_CLASS, now);
     await db.insert(datasetSnapshots).values({
       id: snapshotId,
       datasetKey: requestKey,
@@ -229,6 +239,7 @@ export class DbFactorRiskSnapshotStore implements FactorRiskSnapshotStore {
       payload: snapshot,
       createdByUserId: getRequestIdentity()?.userId ?? null,
       organizationId,
+      entitlementPolicyId: policy?.licenseType !== "unknown" ? policy?.id ?? null : null,
       expiresAt: new Date(expiresAt),
     }).onConflictDoNothing();
   }
@@ -236,7 +247,8 @@ export class DbFactorRiskSnapshotStore implements FactorRiskSnapshotStore {
   async getBySnapshotId(snapshotId: string, now = Date.now()): Promise<FactorRiskSnapshotStoreRecord | null> {
     const db = getDb();
     const [row] = await db.select().from(datasetSnapshots)
-      .where(and(eq(datasetSnapshots.id, snapshotId), eq(datasetSnapshots.dataClass, FACTOR_RISK_DATA_CLASS)))
+      .where(and(eq(datasetSnapshots.id, snapshotId), eq(datasetSnapshots.dataClass, FACTOR_RISK_DATA_CLASS),
+        requestOwnerCondition()))
       .limit(1);
     if (!row) return null;
     if (row.expiresAt && row.expiresAt.getTime() <= now) {
@@ -249,7 +261,8 @@ export class DbFactorRiskSnapshotStore implements FactorRiskSnapshotStore {
   async getByRequestKey(requestKey: string, now = Date.now()): Promise<FactorRiskSnapshotStoreRecord | null> {
     const db = getDb();
     const rows = await db.select().from(datasetSnapshots)
-      .where(and(eq(datasetSnapshots.datasetKey, requestKey), eq(datasetSnapshots.dataClass, FACTOR_RISK_DATA_CLASS)))
+      .where(and(eq(datasetSnapshots.datasetKey, requestKey), eq(datasetSnapshots.dataClass, FACTOR_RISK_DATA_CLASS),
+        requestOwnerCondition()))
       .orderBy(desc(datasetSnapshots.createdAt));
     for (const row of rows) {
       if (row.expiresAt && row.expiresAt.getTime() <= now) {
@@ -268,6 +281,8 @@ export class DbFactorRiskSnapshotStore implements FactorRiskSnapshotStore {
     const now = options.now ?? Date.now();
     const db = getDb();
     const conditions = [eq(datasetSnapshots.dataClass, FACTOR_RISK_DATA_CLASS)];
+    const ownerCondition = requestOwnerCondition();
+    if (ownerCondition) conditions.push(ownerCondition);
     if (options.organizationScope !== undefined) {
       const organizationId = parseOrganizationScopeOption(options.organizationScope);
       conditions.push(organizationId === null ? isNull(datasetSnapshots.organizationId) : eq(datasetSnapshots.organizationId, organizationId));
