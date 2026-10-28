@@ -52,6 +52,10 @@ test("D01 Project switching cannot display or save stale source selections or la
   assert.match(src, /if \(activeProjectRef\.current !== reviewedProject\) return/);
   assert.match(src, /buildProjectBriefingReport\(\{ projectId, title, introduction, sources: chosen, visuals: currentVisuals \}\)/);
   assert.match(src, /await onSave\(chosen, title, introduction, currentVisuals\)/);
+  assert.match(src, /inFlight\.current\?\.projectId === projectId/);
+  assert.match(src, /const nextSaveToken = useRef\(0\)/);
+  assert.match(src, /inFlight\.current\?\.token === saveToken/);
+  assert.match(src, /if \(activeProjectRef\.current === reviewedProject\) setBusy\(false\)/);
   assert.match(src, /credentials: "same-origin", cache: "no-store"/);
   assert.doesNotMatch(src, /navigator\.geolocation|new WebSocket|createP9Workflow|generateImage/);
 });
