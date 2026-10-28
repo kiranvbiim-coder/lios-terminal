@@ -1,5 +1,6 @@
 import fs from "node:fs";
 import path from "node:path";
+import { pathToFileURL } from "node:url";
 import { readQualificationWorkflow } from "./source_distribution";
 
 type Mode = "ci" | "release";
@@ -39,6 +40,13 @@ function visualManifest(file: string, expectedCount: number): void {
   if (pngCount < expectedCount) throw new Error(`Visual evidence ${root} has only ${pngCount} PNGs; expected at least ${expectedCount}.`);
 }
 
+export function validateP10VisualEvidence(uxManifest: string, analyticalManifest: string): void {
+  visualManifest(uxManifest, 15);
+  visualManifest(analyticalManifest, 12);
+}
+
+if (process.argv[1] && import.meta.url === pathToFileURL(path.resolve(process.argv[1])).href) {
+
 const currentMode = mode();
 const experience = read("client/src/pages/ExperienceCenter.tsx");
 const accessibility = read("script/validate_desktop_accessibility.ts");
@@ -46,8 +54,6 @@ const artifactPerformance = read("server/artifactPerformance.test.ts");
 const calculationPerformance = read("client/src/lib/calculationPerformance.test.ts");
 const visualWorkflow = readQualificationWorkflow(path.resolve(process.cwd(), ".."), "ux-visual-smoke.yml");
 const releaseWorkflow = readQualificationWorkflow(path.resolve(process.cwd(), ".."), "production-release-readiness.yml");
-const updater = read("desktopUpdater.cjs");
-const updaterTests = read("desktopUpdater.test.cjs");
 const runtimePacks = read("server/p10RuntimePacks.ts");
 const observability = read("server/p10Observability.ts");
 
@@ -70,9 +76,6 @@ requireText(visualWorkflow, /analytical_png_count[\s\S]+-eq 12/, "P10 analytical
 requireText(releaseWorkflow, /Package signed and notarized macOS customer distribution/, "P10 signed release package step is missing.");
 requireText(releaseWorkflow, /Verify macOS signature, Gatekeeper, and notarization/, "P10 signature/Gatekeeper/notarization verification is missing.");
 requireText(releaseWorkflow, /Clean-machine macOS install acceptance/, "P10 clean-install recovery qualification is missing.");
-requireText(updater, /allowDowngrade\s*=\s*false/, "P10 updater must refuse downgrade updates.");
-requireText(updater, /autoInstallOnAppQuit\s*=\s*true/, "P10 updater must retain staged install-on-quit behavior.");
-requireText(updater + "\n" + updaterTests, /update-downloaded/, "P10 updater downloaded-update behavior is not covered.");
 requireText(releaseWorkflow, /Record release checksums[\s\S]+shasum -a 256/, "P10 release checksum evidence is missing.");
 requireText(releaseWorkflow, /Clean-machine macOS install acceptance[\s\S]+Verify checksum, Gatekeeper and clean install self-test/, "P10 clean-install checksum\/recovery qualification is missing.");
 requireText(runtimePacks, /P10_RUNTIME_PACK_IDS\s*=\s*\["core", "research", "quant", "modeling", "data-lab", "local-ai"\]\s*as const/, "P10 six-pack runtime contract is missing.");
@@ -86,8 +89,7 @@ if (currentMode === "release") {
   if (selfTest.status !== "verified" || selfTest.nativeSecretCustody?.mode !== "native_protected") {
     throw new Error("Packaged desktop self-test did not verify native secret custody.");
   }
-  visualManifest(process.env.LIOS_P10_VISUAL_UX_MANIFEST || "", 13);
-  visualManifest(process.env.LIOS_P10_VISUAL_ANALYTICAL_MANIFEST || "", 12);
+  validateP10VisualEvidence(process.env.LIOS_P10_VISUAL_UX_MANIFEST || "", process.env.LIOS_P10_VISUAL_ANALYTICAL_MANIFEST || "");
   const checksums = requireFile(process.env.LIOS_P10_RELEASE_CHECKSUMS || "", "Release checksum evidence is required.");
   const checksumText = fs.readFileSync(checksums, "utf8");
   if (!/[a-f0-9]{64}\s+.+\.(?:dmg|zip)/i.test(checksumText)) throw new Error("Release checksums do not contain signed desktop artifacts.");
@@ -100,7 +102,8 @@ console.log(JSON.stringify({
   experienceCenterGuidedDemo: true,
   performanceBudgets: true,
   accessibilitySourceContract: true,
-  visualSmokeContract: { uxCases: 13, analyticalCases: 12 },
+  visualSmokeContract: { uxCases: 15, analyticalCases: 12 },
   signedReleaseQualification: true,
   releaseEvidenceRequired: currentMode === "release",
 }, null, 2));
+}

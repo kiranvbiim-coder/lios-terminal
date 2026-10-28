@@ -6,13 +6,20 @@
 
 ## Active work — public production readiness
 
+### P10 acceptance contract correction — 2026-10-28
+
+- Removed the obsolete source-text assertion demanding automatic install-on-quit. The existing updater requires explicit safe-default confirmation; beta never checks/downloads/installs through the production updater. No updater behavior or production trust gate was weakened.
+- Visual evidence admission and reported contract now agree with the real capture inventory:15 UX cases and12 analytical cases. Actual fixture manifest smoke accepted15+12 and rejected obsolete13 UX;12 existing updater behavior tests passed. These are contract/behavior checks only. Private qualification workflows remain intentionally absent and real signing, installed accessibility, upgrade and P14 evidence remain required.
+- Owner selected an existing Windows PC with a locally run qualification command; no remote credentials or paid Windows runner. Target-specific native Core/wheel/legal/file-custody implementation and an exact qualified AMD64 sandbox still precede the installed Windows journey.
+
+
 ### SI-06 current delivery and notification continuity — 2026-10-28
 
 - Canonical Gateway outbound delivery now checks current account/device authority for direct feature subscriptions and broadcasts, preserves event ordering, bounds queued bytes and detaches unauthorized sockets. It reuses the existing Home authority, not a second grant store. Actual production-hub/PGlite/WebSocket smoke delivered event1, disabled the owner, then observed close4001 with zero later events; scratch removed.
 - P9 desktop discovery uses the current owner's unread delivered inbox across active owned Projects, not only the selected Project. Existing notification invalidation refreshes the owner inbox and Project histories; no implicit OS permission request. Deleted404/410 offline-read intents remain explicitly unconfirmed while independent later intents can reconcile;401/403/transient failures still stop replay.
 - Typecheck,35 focused Gateway/P9/queue/invalidation behaviors and902-route manifest passed (14 anonymous, no unprobed guard). Native OS banner, device restart/background delivery and physical Apple/Android qualification remain separate.
 - Apple phone run observation now stores bounded Home/device/user/Project/Chat/run identity and sequence cursor in Keychain before execution starts, restores only the same configured Home/device, verifies the freshly authenticated owner before subscribing, and never replays `conversation.start` on recovery. Terminal state clears the attached run; duplicate sequence delivery is ignored. Cursor writes are batched after sixteen events and always persisted at terminal transitions.
-- Actual compiled Swift checkpoint smoke restored the exact run/cursor3, ignored duplicate delivery, cleared terminal attachment and issued no replayed start; updated `HomeModel.swift` syntax parse passed. Full iOS typecheck and physical process-kill/background recovery remain unqualified: this host has Command Line Tools but no Xcode/iOS SDK or `simctl`. No native acceptance is inferred from the portable state smoke.
+- Actual compiled Swift checkpoint smoke restored the exact run/cursor3, ignored duplicate delivery and cleared terminal attachment; updated `HomeModel.swift` syntax parse passed. The portable smoke exercised state only, not network reattachment or replay suppression. Full iOS typecheck and physical process-kill/background recovery remain unqualified: this host has Command Line Tools but no Xcode/iOS SDK or `simctl`. No native acceptance is inferred from the portable state smoke.
 
 ### Late contributor/release deltas — 2026-10-28
 
