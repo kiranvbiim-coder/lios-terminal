@@ -4,6 +4,8 @@ import { readFileSync } from "node:fs";
 import * as React from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { ProjectBriefingStudio } from "./ProjectBriefingStudio";
+import { GalleryRecordedPreviewContent } from "./ProjectArtifactGalleryPreview";
+import type { ArtifactContent } from "@shared/artifactContracts";
 import type { BriefingSource } from "@/lib/projectBriefingStoryboard";
 
 const sources: BriefingSource[] = [
@@ -89,4 +91,40 @@ test("D04 quiet storyboard review stays opt-in, reversible and source-preserving
   assert.match(src, /selectedSources\.filter\(source => source\.projectId === projectId\)/);
   assert.match(src, /await onSave\(chosen, title, introduction, currentVisuals\)/);
   assert.doesNotMatch(src, /localStorage|sessionStorage|setTimeout|createP9Workflow/);
+});
+
+test("D05 shows only exact P4 native visuals with explicit bounded recorded preview", () => {
+  const chart = {
+    kind: "chart", chartType: "line", rendererPreference: "recharts",
+    series: [{ id: "actual", label: "Verified Q2 data", points: [{ x: "2025", y: 12 }, { x: "2026", y: 18 }] }],
+    options: {},
+  } as ArtifactContent;
+  const table = {
+    kind: "table", columns: [{ key: "period", label: "Period", type: "string" },
+      { key: "value", label: "Observed amount", type: "number" }],
+    rows: [{ period: "2025", value: 12 }, { period: "2026", value: 18 }],
+  } as ArtifactContent;
+  const chartHtml = renderToStaticMarkup(React.createElement(GalleryRecordedPreviewContent, { content: chart }));
+  const tableHtml = renderToStaticMarkup(React.createElement(GalleryRecordedPreviewContent, { content: table }));
+  assert.match(chartHtml, /First 2 saved chart positions/);
+  assert.match(chartHtml, /Verified Q2 data/);
+  assert.match(tableHtml, /Observed amount/);
+  assert.match(tableHtml, />2026</);
+  assert.doesNotMatch(chartHtml + tableHtml, /generated summary|stock image|estimated value/i);
+
+  const empty = renderToStaticMarkup(React.createElement(ProjectBriefingStudio, {
+    projectId: 11, artifacts: sources, onClose: () => {}, onOpenSource: () => {}, onSave: async () => {},
+  }));
+  assert.doesNotMatch(empty, /Preview recorded visual/); // No source pinned by default.
+  const src = readFileSync(new URL("./ProjectBriefingStudio.tsx", import.meta.url), "utf8");
+  assert.match(src, /GalleryRecordedPreviewContent content=\{visual\.content\}/);
+  assert.match(src, /source\.headVersion === visual\.version/);
+  assert.match(src, /source\.kind === visual\.content\.kind/);
+  assert.match(src, /isReviewedBriefingSourceCurrent\(source, byId\.get\(source\.id\), projectId\)/);
+  assert.match(src, /const \[expandedVisualId, setExpandedVisualId\] = useState<string \| null>\(null\)/);
+  assert.match(src, /aria-expanded=\{expandedVisualId === visual\.artifactId\}/);
+  assert.match(src, /setExpandedVisualId\(null\)/); // Project change resets preview state.
+  assert.match(src, /if \(expandedVisualId === id\) setExpandedVisualId\(null\)/);
+  assert.match(src, /Report save rechecks the current authorized version/);
+  assert.doesNotMatch(src, /fetch\("https?:|generateImage|new Image\(/);
 });
