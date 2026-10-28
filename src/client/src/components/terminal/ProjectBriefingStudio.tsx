@@ -27,7 +27,10 @@ export function ProjectBriefingStudio({
   const [selectedSources, setSelectedSources] = useState<BriefingSource[]>([]);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const inFlight = useRef(false);
+  // Each Project's save is isolated. An old Project's pending save must not
+  // leave the new Project's Save button silently disabled after switching.
+  const inFlight = useRef<{ projectId: number; token: number } | null>(null);
+  const nextSaveToken = useRef(0);
   // Switching Projects invalidates all pending visual inspections and saved
   // review state. A late P4 response must not paint into the new Project.
   const activeProjectRef = useRef(projectId);
@@ -114,7 +117,7 @@ export function ProjectBriefingStudio({
     }
   };
   const save = async () => {
-    if (busy || inFlight.current || pinningId) return;
+    if (busy || inFlight.current?.projectId === projectId || pinningId) return;
     const reviewedProject = projectId;
     setError(null);
     try {
@@ -122,7 +125,8 @@ export function ProjectBriefingStudio({
       if (staleSelection) throw new Error("A selected source is no longer in this Project. Remove it and review the outline.");
       // Validation is repeated against a fresh server read by onSave.
       buildProjectBriefingReport({ projectId, title, introduction, sources: chosen, visuals: currentVisuals });
-      inFlight.current = true;
+      const token = ++nextSaveToken.current;
+      inFlight.current = { projectId: reviewedProject, token };
       setBusy(true);
       await onSave(chosen, title, introduction, currentVisuals);
     } catch (cause) {
@@ -130,7 +134,8 @@ export function ProjectBriefingStudio({
         setError(cause instanceof Error ? cause.message : "Unable to save the briefing.");
       }
     } finally {
-      inFlight.current = false;
+      // A superseded Project write must not unlock a newer Project write.
+      if (inFlight.current?.projectId === reviewedProject) inFlight.current = null;
       if (activeProjectRef.current === reviewedProject) setBusy(false);
     }
   };
