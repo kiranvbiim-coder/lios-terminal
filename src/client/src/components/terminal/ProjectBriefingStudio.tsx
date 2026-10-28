@@ -1,7 +1,7 @@
 import * as React from "react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { ArrowDown, ArrowUp, BookOpenCheck, FileText, Layers3, Plus, Trash2, X } from "lucide-react";
-import { ProjectArtifactGalleryPreview } from "./ProjectArtifactGalleryPreview";
+import { GalleryRecordedPreviewContent, ProjectArtifactGalleryPreview } from "./ProjectArtifactGalleryPreview";
 import { captureBriefingVisual, type PinnedBriefingVisual } from "@/lib/phase4BriefingVisuals";
 import type { ArtifactDetail } from "@/lib/useArtifacts";
 import {
@@ -23,6 +23,7 @@ export function ProjectBriefingStudio({
   // D04: local, reversible visual focus. It does not change sources or report payloads.
   const [quietReview, setQuietReview] = useState(false);
   const [previewId, setPreviewId] = useState<string | null>(null);
+  const [expandedVisualId, setExpandedVisualId] = useState<string | null>(null);
   const [pinnedVisuals, setPinnedVisuals] = useState<PinnedBriefingVisual[]>([]);
   const [pinningId, setPinningId] = useState<string | null>(null);
   // Preserve the version/title captured at explicit selection, not just its ID.
@@ -44,6 +45,7 @@ export function ProjectBriefingStudio({
     setSelectedSources([]);
     setPinnedVisuals([]);
     setPreviewId(null);
+    setExpandedVisualId(null);
     setPinningId(null);
     setBusy(false);
     setError(null);
@@ -57,8 +59,11 @@ export function ProjectBriefingStudio({
   const byId = useMemo(() => new Map(available.map(item => [item.id, item])), [artifacts, projectId]);
   // Also filter synchronously in render, before the Project-switch effect.
   const chosen = selectedSources.filter(source => source.projectId === projectId);
+  // Hide an inspected chart/table when its saved source is changed or no longer authorized.
   const currentVisuals = pinnedVisuals.filter(visual => visual.projectId === projectId &&
-    chosen.some(source => source.id === visual.artifactId));
+    chosen.some(source => source.id === visual.artifactId &&
+      source.headVersion === visual.version && source.kind === visual.content.kind &&
+      isReviewedBriefingSourceCurrent(source, byId.get(source.id), projectId)));
   const staleSelection = chosen.some(source =>
     !isReviewedBriefingSourceCurrent(source, byId.get(source.id), projectId));
   const offered = available.filter(item =>
@@ -68,6 +73,7 @@ export function ProjectBriefingStudio({
   const toggle = (id: string) => {
     setError(null);
     if (chosen.some(item => item.id === id)) {
+      if (expandedVisualId === id) setExpandedVisualId(null);
       if (pinningId === id) { visualRequestRef.current?.abort(); setPinningId(null); }
       setPinnedVisuals(current => current.filter(visual => visual.artifactId !== id));
     }
@@ -87,7 +93,11 @@ export function ProjectBriefingStudio({
     if (busy || pinningId || !isReviewedBriefingSourceCurrent(source, byId.get(source.id), projectId)) return;
     if (source.kind !== "chart" && source.kind !== "table") return;
     const already = currentVisuals.some(visual => visual.artifactId === source.id);
-    if (already) { setPinnedVisuals(current => current.filter(visual => visual.artifactId !== source.id)); return; }
+    if (already) {
+      setPinnedVisuals(current => current.filter(visual => visual.artifactId !== source.id));
+      if (expandedVisualId === source.id) setExpandedVisualId(null);
+      return;
+    }
     if (currentVisuals.length >= 3) { setError("Choose at most three native chart/table visuals."); return; }
     setError(null);
     setPinningId(source.id);
@@ -267,10 +277,25 @@ export function ProjectBriefingStudio({
                 </div>
               </div>
               {currentVisuals.filter(visual => visual.artifactId === source.id).map(visual =>
-                <p role="status" key={visual.artifactId} className="mt-2 break-words text-xs text-amber-200">
-                  Native {visual.content.kind} verified from saved v{visual.version} · {visual.sourceRefs.length} recorded source IDs ·
-                  SHA-256 {visual.contentHash.slice(0, 16)}…
-                </p>)}
+                <div key={visual.artifactId} className="mt-3 space-y-2 rounded-lg border border-amber-300/20 bg-amber-300/[0.025] p-3">
+                  <p role="status" className="break-words font-ui text-xs leading-5 text-amber-200">
+                    Native {visual.content.kind} reviewed from saved v{visual.version} · {visual.sourceRefs.length} recorded source IDs ·
+                    SHA-256 {visual.contentHash.slice(0, 16)}…
+                  </p>
+                  <button type="button" aria-expanded={expandedVisualId === visual.artifactId}
+                    aria-label={`Inspect recorded ${visual.content.kind} visual for ${source.title}`}
+                    onClick={() => setExpandedVisualId(current => current === visual.artifactId ? null : visual.artifactId)}
+                    className="min-h-11 rounded-lg border border-amber-300/30 px-3 py-2 font-ui text-sm text-amber-100 focus-visible:outline focus-visible:outline-2 focus-visible:outline-amber-300">
+                    {expandedVisualId === visual.artifactId ? "Hide recorded visual" : "Preview recorded visual"}
+                  </button>
+                  {expandedVisualId === visual.artifactId && <div aria-label={`Recorded ${visual.content.kind} preview from saved version ${visual.version}`} className="space-y-2">
+                    <GalleryRecordedPreviewContent content={visual.content} />
+                    <p className="font-ui text-xs leading-5 text-muted-foreground">
+                      Preview only: open the full saved Artifact for exact chart axes, source rights and evidence.
+                      Report save rechecks the current authorized version.
+                    </p>
+                  </div>}
+                </div>)}
               {previewId === source.id && isReviewedBriefingSourceCurrent(source, byId.get(source.id), projectId)
                 && <ProjectArtifactGalleryPreview key={`${source.id}:${source.headVersion}`} artifact={source} onOpen={() => onOpenSource(source.id)} />}
             </li>)}
