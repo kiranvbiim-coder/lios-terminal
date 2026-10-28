@@ -39,6 +39,8 @@
         "server/supportingServiceTransport.ts",
         "server/supportingServiceSession.ts",
         "server/telegramNetworkBroker.ts",
+        "server/telegramConnectionService.ts",
+        "shared/telegramConnection.ts",
         "server/browserRuntimePack.ts"
       ],
       "regressionEvidence": [
@@ -70,6 +72,7 @@
         "server/supportingServiceTransport.test.ts",
         "server/supportingServiceSession.test.ts",
         "server/telegramNetworkBroker.test.ts",
+        "server/telegramConnectionService.test.ts",
         "server/browserRuntimePack.test.ts",
         "server/governedBrowserTool.test.ts"
       ],

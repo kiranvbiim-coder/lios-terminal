@@ -127,6 +127,17 @@ export async function getOrganizationCredential(organizationId: number, name: st
   return encrypted === null ? null : decryptOrganizationCredential(organizationId, name, encrypted);
 }
 
+/** One named Home credential snapshot, using the same canonical version binding as request-wide loads. */
+export async function loadOrganizationCredentialSnapshot(organizationId: number, name: string): Promise<Readonly<Record<string, string>> | null> {
+  const encrypted = await readEncryptedOrganizationCredential(organizationId, name);
+  if (!encrypted) return null;
+  const value = decryptOrganizationCredential(organizationId, name, encrypted);
+  if (value === null) return null;
+  const credentials = Object.freeze({ [name]: value });
+  snapshotVersions.set(credentials, { organizationId, versions: new Map([[name, encryptedVersion(encrypted)]]) });
+  return credentials;
+}
+
 /** Bind a request's credential snapshot to the current ciphertext version, including same-value re-saves. */
 export async function assertOrganizationCredentialSnapshotCurrent(
   organizationId: number, credentials: Readonly<Record<string, string>> | undefined, name: string,

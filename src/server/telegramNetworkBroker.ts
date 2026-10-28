@@ -33,7 +33,7 @@ export class TelegramPollRefusal extends Error {
 export async function requestTelegramGetUpdates(input: {
   poll: TelegramPollRequest;
   signal?: AbortSignal;
-  assertAuthorized(poll: AdmittedPoll, signal: AbortSignal): void | Promise<void>;
+  assertAuthorized(poll: AdmittedPoll, signal: AbortSignal): void | (() => void) | Promise<void | (() => void)>;
   resolveBotToken(signal: AbortSignal): string | Promise<string>;
   /** Trusted server test seams only; never populate from a model, worker, HTTP request or saved config. */
   dependencies?: {
@@ -63,10 +63,18 @@ export async function requestTelegramGetUpdates(input: {
     removeCancellation = () => signal.removeEventListener("abort", rejectAbort);
     if (signal.aborted) rejectAbort();
   });
+  let dispatchFence: (() => void) | undefined;
   const authorized = async () => {
     signal.throwIfAborted();
-    try { await assertAuthorized(poll, signal); } catch { throw new TelegramPollRefusal("unauthorized"); }
+    try {
+      const fence = await assertAuthorized(poll, signal);
+      dispatchFence = typeof fence === "function" ? fence : undefined;
+    } catch { throw new TelegramPollRefusal("unauthorized"); }
     signal.throwIfAborted();
+  };
+  const assertDispatchCurrent = () => {
+    signal.throwIfAborted();
+    try { dispatchFence?.(); } catch { throw new TelegramPollRefusal("unauthorized"); }
   };
   try {
     return await Promise.race([cancelled, (async () => {
@@ -80,6 +88,7 @@ export async function requestTelegramGetUpdates(input: {
         throw new TelegramPollRefusal("unauthorized");
       }
       await authorized();
+      assertDispatchCurrent();
       const response = await requester({
         url: new URL(`https://api.telegram.org/bot${token}/getUpdates`),
         address: pinned.address, family: pinned.family, method: "POST",
@@ -88,6 +97,7 @@ export async function requestTelegramGetUpdates(input: {
         timeoutMs: POLL_DEADLINE_MS, maxResponseBytes: MAX_POLL_BODY_BYTES, signal,
       });
       await authorized();
+      assertDispatchCurrent();
       // Defend the internal requester seam as well as the real bounded P13 transport.
       if (response.body.byteLength > MAX_POLL_BODY_BYTES) throw new TelegramPollRefusal("response_too_large");
       return { status: response.status, body: response.body };

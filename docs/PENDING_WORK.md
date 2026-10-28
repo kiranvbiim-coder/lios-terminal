@@ -79,6 +79,9 @@
 
 **Telegram transport prerequisite, not connected-channel acceptance:** internal Home-only `telegramNetworkBroker.ts` now performs fixed HTTPS `getUpdates` using existing P13 DNS pinning/HTTP custody, Home-only token resolution and current-authority fences. Its45s absolute deadline includes DNS/secret/body; the generic30s P13 limit is unchanged. Seven focused tests/typecheck and actual local HTTP update/stalled-body cancellation/revocation smoke passed. Raw4MiB bodies stay in Home; no worker receives a token or oversized base64 frame. Canonical account/secret bindings, durable adoption/cursor, full donor adapters, consent and entitled provider/native proof remain open; P3 checkboxes are unchanged.
 
+**Canonical polling binding progress:** source connection policy now resolves through current user/org, owned active Project/Chat, versioned canonical consent and exact owner/account vault namespace. Organization mode has no local fallback and uses the existing vault's versioned single-name snapshot; sync credential fences run at network dispatch/release. Sixteen focused broker/account checks/typecheck and an actual scratch PGlite/encrypted-vault/local-HTTP smoke passed; owner revocation withheld a received body and prevented subsequent networking. A null-org fallback defect has a failing-before/passing-after regression. This is an internal read path only: no connection/consent UI, public route, provider login, durable adoption/cursor, retention enforcement or enabled service/channel is claimed.
+
+
 
 ### Package 4 — One invisible LiOS user experience (SI-07; TC/P4/P9/GM owners)
 

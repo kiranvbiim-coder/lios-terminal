@@ -9,7 +9,7 @@
   "controlledForkCount": 10,
   "sourceSnapshot": {
     "baselineSha": "ad77f2d53189a7d98583e9d9996d532b79e4686d",
-    "componentsSha": "94edf75bd117133b20cafd46257ac7d68b3353ff",
+    "componentsSha": "825056ab16993b51ac15c940a320da5a379872a2",
     "upstreamPinsSha": "bfafe1ddf251fb05fd99b75864a3d4436a7550cb",
     "controlledForkSha": "142ff14c5e6b5d6804b20a346d5e31435db2f33b"
   },
@@ -2206,6 +2206,8 @@
         "server/supportingServiceTransport.ts",
         "server/supportingServiceSession.ts",
         "server/telegramNetworkBroker.ts",
+        "server/telegramConnectionService.ts",
+        "shared/telegramConnection.ts",
         "server/exec/bounded-buffer.test.ts",
         "server/exec/utf8-truncate.test.ts",
         "server/exec/pipe-output.test.ts",

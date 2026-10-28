@@ -91,3 +91,16 @@ test("the body bound cannot be bypassed by an internal requester replacement", a
     dependencies: { resolveAddress: publicAddress, requester: async () => ({ status: 200, headers: {}, body: Buffer.alloc(4 * 1024 * 1024 + 1) }) },
   }), refusal("response_too_large"));
 });
+
+test("the synchronous authority fence closes the final asynchronous-admission microtask window", async () => {
+  let current = true, admissions = 0, dispatched = 0;
+  await assert.rejects(requestTelegramGetUpdates({ poll, resolveBotToken: () => token,
+    assertAuthorized: async () => {
+      admissions++;
+      if (admissions === 3) queueMicrotask(() => { current = false; });
+      return () => { if (!current) throw new Error("authority revision changed after lookup"); };
+    },
+    dependencies: { resolveAddress: publicAddress, requester: async () => { dispatched++; return { status: 200, headers: {}, body: Buffer.from("{}") }; } },
+  }), refusal("unauthorized"));
+  assert.equal(dispatched, 0);
+});
