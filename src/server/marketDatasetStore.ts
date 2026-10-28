@@ -13,7 +13,7 @@ import {
   type PointInTimeMarketSnapshot,
 } from "@shared/pointInTimeData";
 import type { OHLCVBar } from "./marketData";
-import { getDb } from "./db";
+import { getDb, type DrizzleDb } from "./db";
 import { stableSnapshotHash } from "./pointInTimeDatasetStore";
 
 const ONE_DAY_MS = 86_400_000;
@@ -168,8 +168,8 @@ export async function captureMarketDatasetSnapshot(symbol: string, createdByUser
   return { snapshot: rowToMarketSnapshot(created), created: true };
 }
 
-export async function getMarketDatasetSnapshot(id: string): Promise<PointInTimeMarketSnapshot | null> {
-  const [row] = await getDb().select().from(datasetSnapshots).where(and(eq(datasetSnapshots.id, id), eq(datasetSnapshots.dataClass, "market_series"))).limit(1);
+export async function getMarketDatasetSnapshot(id: string, db: Pick<DrizzleDb, "select"> = getDb()): Promise<PointInTimeMarketSnapshot | null> {
+  const [row] = await db.select().from(datasetSnapshots).where(and(eq(datasetSnapshots.id, id), eq(datasetSnapshots.dataClass, "market_series"))).limit(1);
   return row ? rowToMarketSnapshot(row) : null;
 }
 

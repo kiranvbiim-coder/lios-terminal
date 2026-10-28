@@ -23,7 +23,7 @@ export function normalizePulseReviewPresentation(
       (input.newCount as number) > (input.sourceBackedCount as number) ||
       (input.sourceBackedCount as number) > 120 ||
       !Array.isArray(input.newCardIds) || input.newCardIds.length > 120 ||
-      !input.newCardIds.every(id => typeof id === "string" && id.length > 0 && id.length <= 200)) return null;
+      !input.newCardIds.every(id => typeof id === "string" && id.length > 0)) return null;
   if (input.status === "not_reviewed") {
     if (input.reviewedAt !== null || input.newCount !== 0 || input.newCardIds.length) return null;
   } else if (typeof input.reviewedAt !== "string" ||

@@ -54,9 +54,9 @@ import {
 } from "./alternativeDatasetStore";
 import { createModelInputLineage } from "./modelInputLineage";
 import { createValuationLineage } from "./valuationLineage";
-import { tenantContext } from "./tenantContext";
+import { tenantContext, type TenantContext } from "./tenantContext";
 import { IntegratedModelArtifactError, integratedModelArtifactRequestSchema, loadIntegratedModelDatasetSource, assertIntegratedModelDatasetSourceCurrent, retainIntegratedModelArtifact, readIntegratedModelRun } from "./integratedModelArtifact";
-import { getDb } from "./db";
+import { getDb, type DrizzleDb } from "./db";
 import { and, eq, isNull } from "drizzle-orm";
 import { datasetSnapshots, users } from "@shared/schema";
 import { marketCapturePairIssue, marketCaptureReference } from "@shared/marketEvidenceTimeMachine";
@@ -66,6 +66,34 @@ const READ_ROLES = ["internal_admin", "internal_analyst", "internal_compliance"]
 const AUTHOR_ROLES = ["internal_admin", "internal_analyst"] as const;
 const symbolSchema = z.string().trim().min(1).max(40).regex(/^[A-Za-z0-9.^_=-]+$/);
 const alternativeClassSchema = z.enum(["estimates", "options_chain", "commodity_curve", "portfolio_holdings", "private_series"]);
+
+/** Admit metadata for BOTH captures before reading either private payload. */
+async function readAuthorizedCapturePair<T>(
+  ctx: TenantContext, ids: readonly [string, string], dataClass: string,
+  read: (id: string, db: Pick<DrizzleDb, "select">) => Promise<T | null>,
+): Promise<[T | null, T | null]> {
+  return getDb().transaction(async tx => {
+    for (const id of ids) {
+      const [identity] = await tx.select({
+        organizationId: datasetSnapshots.organizationId, createdByUserId: datasetSnapshots.createdByUserId,
+        provider: datasetSnapshots.provider, dataClass: datasetSnapshots.dataClass,
+        entitlementPolicyId: datasetSnapshots.entitlementPolicyId,
+        availableAt: datasetSnapshots.availableAt, expiresAt: datasetSnapshots.expiresAt,
+      }).from(datasetSnapshots).where(eq(datasetSnapshots.id, id)).for("share").limit(1);
+      const now = new Date();
+      if (!identity || identity.dataClass !== dataClass || !canAccessDatasetSnapshot(identity, ctx) ||
+          identity.availableAt > now || identity.expiresAt && identity.expiresAt <= now) return [null, null];
+      const policy = identity.entitlementPolicyId
+        ? await getEntitlementPolicyById(identity.entitlementPolicyId, tx, true) : null;
+      if (!policy || policy.licenseType === "unknown" || policy.provider !== identity.provider ||
+          policy.dataClass !== identity.dataClass || policy.effectiveFrom > now ||
+          policy.effectiveTo && policy.effectiveTo <= now ||
+          !["display", "derived_output"].every(use => policy.permittedUses.includes(use)) ||
+          policy.accessScope === "internal_only" && !ctx.role.startsWith("internal_")) return [null, null];
+    }
+    return [await read(ids[0], tx), await read(ids[1], tx)];
+  });
+}
 
 export function registerDataFabricRoutes(app: Express): void {
   app.get("/api/alternative-data/:dataClass", requireRole(...READ_ROLES), async (req, res) => {
@@ -154,10 +182,8 @@ export function registerDataFabricRoutes(app: Express): void {
     if (!symbol.success || !baselineId.success || !currentId.success || baselineId.data === currentId.data)
       return res.status(400).json({ error: "Two distinct saved capture IDs and an exact symbol are required." });
     try {
-      const [baseline, current] = await Promise.all([
-        getMarketDatasetSnapshot(baselineId.data),
-        getMarketDatasetSnapshot(currentId.data),
-      ]);
+      const [baseline, current] = await readAuthorizedCapturePair(
+        tenantContext(req.user!), [baselineId.data, currentId.data], "market_series", getMarketDatasetSnapshot);
       if (!baseline || !current || baseline.entityKey !== symbol.data.toUpperCase() ||
         current.entityKey !== symbol.data.toUpperCase()) {
         return res.status(404).json({ error: "No authorized capture pair exists for this symbol." });
@@ -231,9 +257,8 @@ export function registerDataFabricRoutes(app: Express): void {
     if (!seriesId.success || !baselineId.success || !currentId.success || baselineId.data === currentId.data)
       return res.status(400).json({ error: "Exact economic series and two distinct saved snapshot IDs are required." });
     try {
-      const [baseline, current] = await Promise.all([
-        getEconomicDatasetSnapshot(baselineId.data), getEconomicDatasetSnapshot(currentId.data),
-      ]);
+      const [baseline, current] = await readAuthorizedCapturePair(
+        tenantContext(req.user!), [baselineId.data, currentId.data], "economic_series", getEconomicDatasetSnapshot);
       if (!baseline || !current || baseline.dataClass !== "economic_series" ||
           current.dataClass !== "economic_series" ||
           baseline.entityKey !== seriesId.data.toUpperCase() ||

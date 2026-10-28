@@ -109,6 +109,7 @@ export default function WaveCExperienceShell({ activeView, activeSymbol, onOpen,
   const [activeSavedSubject, setActiveSavedSubject] = useState<string | null>(null);
   const [savedViewPending, setSavedViewPending] = useState(false);
   const savedViewRequestPending = useRef(false);
+  const savedViewsEpoch = useRef(0);
   const [savedViewError, setSavedViewError] = useState<string | null>(null);
   const [preferencePending, setPreferencePending] = useState(false);
   const preferenceRequestPending = useRef(false);
@@ -136,6 +137,11 @@ export default function WaveCExperienceShell({ activeView, activeSymbol, onOpen,
   useEffect(() => {
     let cancelled = false;
     const controller = new AbortController();
+    const savedViewReadEpoch = savedViewsEpoch.current;
+    const publishSavedViewRead = (views: unknown) => {
+      if (savedViewReadEpoch === savedViewsEpoch.current && !savedViewRequestPending.current)
+        setPulseSavedViews(normalizePulseSavedViews(views));
+    };
     const loadOwnedSavedViews = async () => {
       try {
         const response = await fetch("/api/wave-d/pulse/views", {
@@ -146,9 +152,9 @@ export default function WaveCExperienceShell({ activeView, activeSymbol, onOpen,
         if (cancelled || controller.signal.aborted) return;
         if (!result || typeof result !== "object" || !("savedViews" in result) || !Array.isArray(result.savedViews))
           throw new Error("Saved discovery views response invalid.");
-        setPulseSavedViews(normalizePulseSavedViews(result.savedViews));
+        publishSavedViewRead(result.savedViews);
       } catch {
-        if (!cancelled && !controller.signal.aborted) setPulseSavedViews([]);
+        if (!cancelled && !controller.signal.aborted) publishSavedViewRead([]);
       }
     };
     setWaveDStatus("loading");
@@ -160,7 +166,7 @@ export default function WaveCExperienceShell({ activeView, activeSymbol, onOpen,
       isClient ? Promise.resolve<Response | null>(null) : fetch(`/api/wave-d/briefs/${pulseChannel === "for_you" ? "morning" : "evening"}`, { credentials: "same-origin", cache: "no-store", signal: controller.signal }),
     ]).then(async ([pulseResponse, inboxResponse, briefResponse]) => {
       if (cancelled) return;
-      if (!pulseResponse.ok) { setWaveDPulseCards([]); setPulseReview(null); setPulseSavedViews([]); setWaveDStatus("unavailable"); void loadOwnedSavedViews(); return; }
+      if (!pulseResponse.ok) { setWaveDPulseCards([]); setPulseReview(null); publishSavedViewRead([]); setWaveDStatus("unavailable"); void loadOwnedSavedViews(); return; }
       const pulse = await pulseResponse.json() as { cards?: IntelligenceCard[]; monitoring?: { activeRules?: number }; preferences?: PulseSubjectPreferences; discoveryChanges?: unknown; savedViews?: unknown };
       const inbox = inboxResponse.ok ? await inboxResponse.json() as { items?: ActionInboxItem[] } : { items: [] };
       const brief = briefResponse?.ok ? await briefResponse.json() as { headline?: string } : {};
@@ -169,7 +175,7 @@ export default function WaveCExperienceShell({ activeView, activeSymbol, onOpen,
       const authorizedCards = Array.isArray(pulse.cards) ? pulse.cards.slice(0, 24) : [];
       setWaveDPulseCards(authorizedCards);
       setPulseReview(normalizePulseReviewPresentation(pulse.discoveryChanges, authorizedCards));
-      setPulseSavedViews(normalizePulseSavedViews(pulse.savedViews));
+      publishSavedViewRead(pulse.savedViews);
       const ownedFollowing = normalizePulseSubjectPreferences(pulse.preferences);
       setPulsePreferences(ownedFollowing);
       // A second device may have unfollowed/muted this subject. Never render a
@@ -185,13 +191,13 @@ export default function WaveCExperienceShell({ activeView, activeSymbol, onOpen,
       setWaveDMonitoringCount(Number(pulse.monitoring?.activeRules ?? 0));
       setBriefHeadline(typeof brief.headline === "string" ? brief.headline : null);
       setWaveDStatus("ready");
-    }).catch(() => { if (!cancelled && !controller.signal.aborted) { setWaveDPulseCards([]); setPulseReview(null); setPulseSavedViews([]); setWaveDStatus("unavailable"); void loadOwnedSavedViews(); } });
+    }).catch(() => { if (!cancelled && !controller.signal.aborted) { setWaveDPulseCards([]); setPulseReview(null); publishSavedViewRead([]); setWaveDStatus("unavailable"); void loadOwnedSavedViews(); } });
     return () => { cancelled = true; controller.abort(); };
   }, [pulseChannel, activeSavedSubject, pulseRevision]);
 
   useEffect(() => {
     if (surface !== "pulse") return;
-    let lastRefresh = Date.now();
+    let lastRefresh = 0;
     const revalidatePulse = () => {
       if (document.visibilityState === "hidden") {
         setWaveDPulseCards([]);
@@ -234,6 +240,7 @@ export default function WaveCExperienceShell({ activeView, activeSymbol, onOpen,
   const changeSavedView = async (change: { action: "save"; name: string } | { action: "delete"; id: string }): Promise<boolean> => {
     if (savedViewRequestPending.current || (change.action === "save" && waveDStatus !== "ready")) return false;
     savedViewRequestPending.current = true;
+    savedViewsEpoch.current += 1;
     setSavedViewPending(true);
     setSavedViewError(null);
     try {
@@ -251,6 +258,7 @@ export default function WaveCExperienceShell({ activeView, activeSymbol, onOpen,
       // The authenticated write returned the entire current saved-view list;
       // do not call market/news providers again just to display this change.
       setPulseSavedViews(normalizePulseSavedViews(payload.savedViews));
+      savedViewsEpoch.current += 1;
       return true;
     } catch {
       setSavedViewError("Saved view could not be changed. Previous server-saved views are unchanged.");

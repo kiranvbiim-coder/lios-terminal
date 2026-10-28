@@ -14,7 +14,7 @@ import {
   type YieldCurvePayload,
 } from "@shared/pointInTimeData";
 import type { IndicatorObservation, YieldCurvePoint } from "./fredData";
-import { getDb } from "./db";
+import { getDb, type DrizzleDb } from "./db";
 import { stableSnapshotHash } from "./pointInTimeDatasetStore";
 
 const MATURITY_YEARS: Record<string, number> = { "1M": 1 / 12, "3M": 0.25, "6M": 0.5, "1Y": 1, "2Y": 2, "3Y": 3, "5Y": 5, "7Y": 7, "10Y": 10, "20Y": 20, "30Y": 30 };
@@ -125,8 +125,8 @@ export async function getEconomicDatasetAsOf(entityKey: string, dataClass: "econ
   return row ? (dataClass === "economic_series" ? rowToScalar(row) : rowToCurve(row)) : null;
 }
 
-export async function getEconomicDatasetSnapshot(id: string) {
-  const [row] = await getDb().select().from(datasetSnapshots).where(eq(datasetSnapshots.id, id)).limit(1);
+export async function getEconomicDatasetSnapshot(id: string, db: Pick<DrizzleDb, "select"> = getDb()) {
+  const [row] = await db.select().from(datasetSnapshots).where(eq(datasetSnapshots.id, id)).limit(1);
   if (!row || (row.dataClass !== "economic_series" && row.dataClass !== "yield_curve")) return null;
   return row.dataClass === "economic_series" ? rowToScalar(row) : rowToCurve(row);
 }

@@ -112,11 +112,12 @@ export function useAllArtifacts(status: "active" | "archived" | "trash" = "activ
     },
   });
 }
-export function useArtifact(artifactId: string | null, version?: number | null) {
+export function useArtifact(artifactId: string | null, version?: number | null, requireFreshRead = false) {
   return useQuery<ArtifactDetail>({
     queryKey: version ? ["/api/artifacts", artifactId, "version", version] : ["/api/artifacts", artifactId],
-    queryFn: async () => { const res = await fetch(`/api/artifacts/${encodeURIComponent(artifactId!)}${version ? `?version=${version}` : ""}`); if (!res.ok) throw new Error(`${res.status}: Artifact request failed.`); return res.json(); },
+    queryFn: async ({ signal }) => { const res = await fetch(`/api/artifacts/${encodeURIComponent(artifactId!)}${version ? `?version=${version}` : ""}`, { signal, credentials: "same-origin", cache: "no-store" }); if (!res.ok) throw new Error(`${res.status}: Artifact request failed.`); return res.json(); },
     enabled: Boolean(artifactId),
+    ...(requireFreshRead ? { refetchOnMount: "always" as const, staleTime: 0 } : {}),
     // No prior revision is safe to render as an exact requested P4 version.
     // Permission and version are rechecked by the authenticated GET.
   });

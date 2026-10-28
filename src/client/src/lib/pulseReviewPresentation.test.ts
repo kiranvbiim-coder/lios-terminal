@@ -27,3 +27,14 @@ test("A06 refuses stale, malformed or contradictory review assertions", () => {
     { ...stable, sourceBackedCount: 121 },
   ]) assert.equal(normalizePulseReviewPresentation(data, cards), null);
 });
+
+test("canonical authored and URL-derived card identities do not suppress source review", () => {
+  for (const id of ["a".repeat(240), `news:https://publisher.example/${"long-article-".repeat(40)}`]) {
+    const review = normalizePulseReviewPresentation({
+      status: "compared", reviewedAt: "2026-10-27T09:00:00.000Z",
+      newCardIds: [id], newCount: 1, sourceBackedCount: 1,
+    }, [{ id, kind: "news" } as IntelligenceCard]);
+    assert.deepEqual(review?.newCardIds, [id]);
+    assert.equal(review?.newCount, 1);
+  }
+});

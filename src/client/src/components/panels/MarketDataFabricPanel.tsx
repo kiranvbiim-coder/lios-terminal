@@ -39,7 +39,7 @@ export default function MarketDataFabricPanel({ symbol }: { symbol: string }) {
     day:asKnownDay,revision:current?.id,
   });
   const historical = lookup.snapshot;
-  const visibleComparison = comparison?.baseline.id === historical?.id &&
+  const visibleComparison = comparison && comparison.baseline.id === historical?.id &&
     comparison?.current.id === current?.id && comparison.baseline.entityKey === upper ? comparison : null;
 
   const load = useCallback(async () => {
