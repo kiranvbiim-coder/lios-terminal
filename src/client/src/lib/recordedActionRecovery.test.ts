@@ -50,7 +50,9 @@ test("C08 rejects foreign runs and nested foreign receipts, deduplicates exact r
   ], R);
   assert.equal(result.failedReceipts, 1);
   assert.equal(result.cancelledReceipts, 1);
-  assert.equal(result.ignoredForeignReceipts, 1);
+  // Both receipts carry this run's outer envelope but a foreign nested request ID.
+  // They are separately ignored; neither may contribute to a success or failure tally.
+  assert.equal(result.ignoredForeignReceipts, 2);
   assert.equal(result.deniedToolReports, 0);
   assert.equal(result.needsReconciliation, true);
   assert.equal(inspectRecordedActionRecovery([receipt(id, "failed")], null).needsReconciliation, false);
