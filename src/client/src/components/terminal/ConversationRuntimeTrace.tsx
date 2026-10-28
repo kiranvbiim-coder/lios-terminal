@@ -28,6 +28,7 @@ import { reviewEvidenceExceptions, sourceExceptionCaveats } from "@/lib/evidence
 import { followUpPrompts, formatDuration, summarizeRuntimeTrace } from "@/lib/runtimeTraceSummary";
 import { inspectAgentReceiptActivity } from "@/lib/agentReceiptActivity";
 import { projectRecordedAgentSteps, RECORDED_AGENT_STEP_LABELS } from "@/lib/recordedAgentStepTruth";
+import { inspectRecordedActionRecovery } from "@/lib/recordedActionRecovery";
 import { observedRunActivity } from "@/lib/sprintAObservedActivity";
 import AgentExecutionReceipts from "./AgentExecutionReceipts";
 import { governedReviewRisk, legacyReviewFacts } from "@/lib/approvalReviewTruth";
@@ -199,6 +200,7 @@ export default function ConversationRuntimeTrace({
   const observedReceipt = [...events].reverse().find(event => event.type === "receipt");
   const recordedSources = collectCitationSources(events);
   const activity = inspectAgentReceiptActivity(events, requestId);
+  const recovery = inspectRecordedActionRecovery(events, requestId);
   // Quiet by default: ordinary runs show only Working + Stop. Technical execution detail is progressive
   // disclosure; approvals, errors, data gaps, source caveats and review-required items are never hidden.
   const workVisible = showWork;
@@ -468,7 +470,34 @@ export default function ConversationRuntimeTrace({
       {activity.hasReceiptProblems && (
         <div role="alert" data-testid="trace-agent-receipt-warning" className="mb-2 rounded-lg border border-amber-300/30 px-3 py-2 font-ui text-[13px] text-amber-200">
           Recorded run receipts require review: {activity.failed} failed, {activity.cancelled} cancelled, {activity.mismatched} ignored because their run identity did not match. Do not assume these operations completed or that an external action succeeded. Open Show work to inspect matching receipts.
+          <p className="mt-1 text-xs leading-5 text-amber-100">Before retrying, reconcile the original operation with the external system. A failed receipt does not prove no side effect occurred.</p>
+          {!busy && onRetry && <button type="button" onClick={onRetry}
+            data-testid="c08-receipt-recovery-review"
+            className="mt-2 min-h-11 rounded-lg border border-amber-300/40 px-3 py-2 text-xs font-medium text-foreground focus-visible:ring-2 focus-visible:ring-amber-300/70">
+            Review original request
+          </button>}
         </div>
+      )}
+
+      {done?.type === "done" && done.status === "completed" && !activity.hasReceiptProblems &&
+        (recovery.failedToolReports > 0 || recovery.deniedToolReports > 0 || recovery.unfinishedToolStarts > 0) && (
+        <section role="alert" aria-label="Recorded action recovery" data-testid="c08-recorded-action-recovery"
+          className="mb-2 space-y-2 rounded-lg border border-amber-300/30 p-3 font-ui text-sm text-amber-100">
+          <p className="font-semibold text-foreground">Some actions have no confirmed successful outcome</p>
+          <p className="text-xs leading-5">
+            {recovery.failedToolReports} tool failure(s), {recovery.deniedToolReports} denied tool action(s),
+            {recovery.unfinishedToolStarts} started tool(s) without a final result.
+            The overall run completion does not override these individual reports.
+          </p>
+          <p className="text-xs leading-5">
+            Check Show work, exact receipts and any external system before a new attempt.
+            Neither this card nor the review control replays a tool or grants permission.
+          </p>
+          {!busy && onRetry && <button type="button" onClick={onRetry}
+            data-testid="c08-action-review-original" className="min-h-11 rounded-lg border border-amber-300/40 px-3 py-2 text-xs font-medium text-foreground focus-visible:ring-2 focus-visible:ring-amber-300/70">
+            Review original request
+          </button>}
+        </section>
       )}
 
       {caveats && (

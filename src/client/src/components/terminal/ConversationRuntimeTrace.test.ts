@@ -543,3 +543,22 @@ test("C07 completed Project workflows only offer a review dialog, never a direct
  const noProject=render([planEvent,doneOk],{onPrepareAutomation:undefined});
  assert.doesNotMatch(noProject,/c07-chat-automation-draft/);
 });
+
+test("C08 completed run cannot hide failed, denied or missing tool outcomes",()=>{
+ const broken=render([planEvent,
+   event({type:"tool_result",stepId:"step-1",label:"Fetch filings",summary:"",deterministic:true,outcome:"denied"}),
+   doneOk],{onRetry:noop});
+ assert.match(broken,/data-testid="c08-recorded-action-recovery"/);
+ assert.match(broken,/denied tool action/);
+ assert.match(broken,/overall run completion does not override/);
+ assert.match(broken,/data-testid="c08-action-review-original"/);
+ assert.match(broken,/Review original request/);
+ const abandoned=render([planEvent,event({type:"tool_start",stepId:"step-1",label:"Fetch filings",componentId:"research"}),doneOk],{onRetry:noop});
+ assert.match(abandoned,/started tool\(s\) without a final result/);
+ assert.match(abandoned,/c08-recorded-action-recovery/);
+ const complete=render([planEvent,
+   event({type:"tool_result",stepId:"step-1",label:"Fetch filings",summary:"",deterministic:true,outcome:"completed"}),doneOk],{onRetry:noop});
+ assert.doesNotMatch(complete,/c08-recorded-action-recovery/);
+ const failedRun=render([planEvent,event({type:"tool_result",stepId:"step-1",label:"x",summary:"",deterministic:true,outcome:"failed"}),event({type:"done",status:"failed"})],{onRetry:noop});
+ assert.doesNotMatch(failedRun,/c08-recorded-action-recovery/);
+});
