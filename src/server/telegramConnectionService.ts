@@ -285,3 +285,33 @@ export async function adoptTelegramPoll(input: {
     throw new TelegramConnectionRefusal();
   }
 }
+
+/** One poll+durable-adoption cycle driven by the canonical cursor; no worker input selects owner, offset or scope. */
+export async function runTelegramPollCycle(target: { context: TenantContext; connectionId: number }, signal?: AbortSignal): Promise<TelegramAdoptionResult> {
+  const polled = await pollTelegramSourceConnection({
+    context: target.context, connectionId: target.connectionId, signal,
+    offset: await nextTelegramPollOffset(target.context, target.connectionId),
+  });
+  return adoptTelegramPoll({ context: target.context, connectionId: target.connectionId, poll: polled });
+}
+
+/** Typed terminal causes: revoked/changed authority, invalid provider credential or conflicting replay are never retried automatically. */
+export function isTerminalTelegramFailure(error: unknown): boolean {
+  return error instanceof TelegramConnectionRefusal || error instanceof TelegramAdoptionConflict ||
+    (error instanceof TelegramPollRefusal && error.code === "unauthorized");
+}
+
+/** Explicitly enabled sources only. Ownership is rebuilt from current user rows, never from saved config. */
+export async function listEnabledTelegramPollingTargets(): Promise<Array<{ context: TenantContext; connectionId: number }>> {
+  const rows = await getDb().select({ source: sourceConnections, user: users }).from(sourceConnections)
+    .innerJoin(users, eq(users.id, sourceConnections.userId))
+    .where(and(eq(sourceConnections.connectorId, "telegram"), eq(sourceConnections.sourceType, "private_api")));
+  const targets: Array<{ context: TenantContext; connectionId: number }> = [];
+  for (const { source, user } of rows) {
+    try {
+      if (!parseTelegramSourceConfig(source.config).enabled) continue;
+      targets.push({ context: tenantContext(user), connectionId: source.id });
+    } catch { /* malformed or inconsistent metadata is not pollable and is never repaired here */ }
+  }
+  return targets;
+}

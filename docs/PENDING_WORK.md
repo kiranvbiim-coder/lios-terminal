@@ -83,6 +83,9 @@
 
 **Atomic adoption progress:** migration0086 plus `adoptTelegramPoll` durably commit Chat message, replay custody, minimal P3 disposition and cursor together under current authority; non-text/edit/other families are explicit ignored dispositions; adopted channel text is AI-excluded unless adoption-time policy allowed it. 39 focused behaviors/typecheck and actual PGlite+loopback HTTP cursor-continuation smoke passed. Public setup/consent UI, retention enforcement, edit/delete semantics, outbound sends, hosted-Postgres concurrency evidence, service registration, provider and native proof remain open.
 
+**Home polling lifecycle progress (P2.01/P2.05 partial):** attempt-fenced, joined-stop polling controller wired into existing Home start/shutdown, inert unless an enabled source exists; typed terminal authority/credential/conflict refusals, capped backoff, pacing floor and non-evadable crash-loop ceiling. Five behaviors/typecheck and an actual Home boot/SIGTERM smoke passed. Health/diagnostic UI, packaged-restart, crash-loop recovery policy beyond exhaustion, provider operation and native proof remain open; P2 checkboxes unchanged.
+
+
 
 
 

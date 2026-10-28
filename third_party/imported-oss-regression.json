@@ -42,6 +42,8 @@
         "server/telegramConnectionService.ts",
         "shared/telegramConnection.ts",
         "server/telegramPollNormalizer.ts",
+        "server/telegramPollingController.ts",
+        "server/telegramPollingRuntime.ts",
         "server/browserRuntimePack.ts"
       ],
       "regressionEvidence": [
@@ -76,6 +78,7 @@
         "server/telegramConnectionService.test.ts",
         "server/browserRuntimePack.test.ts",
         "server/telegramPollNormalizer.test.ts",
+        "server/telegramPollingController.test.ts",
         "server/telegramAdoption.test.ts",
         "shared/telegramConnection.test.ts",
         "server/governedBrowserTool.test.ts"

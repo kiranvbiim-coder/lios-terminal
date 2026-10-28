@@ -349,6 +349,13 @@ Edited, callback, reaction, member, media-only and every other non-text/unresolv
 
 Evidence: 39 directly relevant normalizer/account/adoption/ledger/migration-chain behaviors and typecheck passed (including identical replay after Chat clearing, rollback of an earlier update on a later conflict, and refusal after consent/policy/owner change leaving no rows/cursor). Actual isolated PGlite + real loopback HTTP smoke: poll offset0 → adopt update17 → cursor18 → next poll offset18, no duplicate Chat message. Local protocol/DB proof only: no provider acceptance of the offset, no installed-vault custody, no public route/consent UI/service controller, no retention enforcement, no hosted PostgreSQL concurrency run, and no Telegram entitlement.
 
+### Home polling lifecycle controller — bounded proof
+
+`server/telegramPollingController.ts` (LiOS-authored, adapting only the approved revision/attempt-fence, permanently closed start gate and retained joined cleanup invariants; no donor worker/relay/spawn-broker/FD machinery) owns one loop per explicitly enabled source: attempt-token fenced publication, idempotent start, synchronous `stop` admission closure with abort+join, redacted status projection (`polling|backoff|refused|provider_blocked|exhausted|stopped`), typed terminal causes (revoked/changed authority, credential-unauthorized, conflicting replay) that are never retried, rate-limit hints and capped exponential backoff, a successful-cycle pacing floor, and a crash-loop ceiling that resets only after a stable-success window so ready→fail cycles cannot evade it. `telegramPollingRuntime.ts` is wired into Home start/shutdown (`index.ts`): inert on a clean install, reconciles newly enabled sources every60s, and shutdown joins it before the process supervisor. Every cycle re-reads current canonical authority (`runTelegramPollCycle`); the controller holds no grant.
+
+Evidence: five controller behaviors (including a reproduced failing-before spin that exposed a missing pacing floor), 39 earlier relevant behaviors and typecheck passed; the actual Home server booted in a scratch data root with the runtime inert and exited on SIGTERM. A real enabled-source loop against Telegram was **not** run (no provider/account), and hosted-Postgres, installed-vault, UI/consent, outbound and native/entitled proof remain open.
+
+
 
 
 
