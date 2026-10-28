@@ -29,7 +29,7 @@ import { followUpPrompts, formatDuration, summarizeRuntimeTrace } from "@/lib/ru
 import { inspectAgentReceiptActivity } from "@/lib/agentReceiptActivity";
 import { projectRecordedAgentSteps, RECORDED_AGENT_STEP_LABELS } from "@/lib/recordedAgentStepTruth";
 import { reviewChatArtifactSave, chatArtifactSaveAcknowledgmentKey } from "@/lib/chatArtifactSaveReview";
-import { reconcileUnconfirmedRunPrompt } from "@/lib/runRecoveryReconciliation";
+import type { ChatArtifactSaveTarget, ChatArtifactSaveOutcome } from "@/lib/chatArtifactSaveReview";
 import { observedRunActivity } from "@/lib/sprintAObservedActivity";
 import AgentExecutionReceipts from "./AgentExecutionReceipts";
 import { governedReviewRisk, legacyReviewFacts } from "@/lib/approvalReviewTruth";
@@ -57,7 +57,9 @@ interface Props {
   allowProjectApproval: boolean;
   onMutationApply: (action: ConversationActionName) => void;
   onMutationCancel: (action: ConversationActionName) => void;
-  onKeepArtifact?: (artifact: ConversationArtifactDraft) => void;
+  onKeepArtifact?: (artifact: ConversationArtifactDraft, target: ChatArtifactSaveTarget) => Promise<ChatArtifactSaveOutcome>;
+  artifactSaveTarget?: ChatArtifactSaveTarget;
+  onInspectRun?: () => void;
   onRecoveryAction?: (action: string) => void;
   /** Prefills the composer with a suggested next request; never sends it. */
   onFollowUp?: (prompt: string, binding?: RecordedClaimReview) => void;
@@ -161,6 +163,8 @@ export default function ConversationRuntimeTrace({
   onMutationApply,
   onMutationCancel,
   onKeepArtifact,
+  artifactSaveTarget,
+  onInspectRun,
   onRecoveryAction,
   onFollowUp,
   onRetry,
@@ -176,6 +180,7 @@ export default function ConversationRuntimeTrace({
   const [showWork, setShowWork] = useState(defaultShowWork);
   const [reviewedSaveKey, setReviewedSaveKey] = useState<string | null>(null);
   const [requestedSaveKey, setRequestedSaveKey] = useState<string | null>(null);
+  const [saveOutcome, setSaveOutcome] = useState<ChatArtifactSaveOutcome | null>(null);
   const saveRequestInFlight = useRef<string | null>(null);
   const [appliedReviewKey, setAppliedReviewKey] = useState<string | null>(null);
   const [pendingReviewKey, setPendingReviewKey] = useState<string | null>(null);
@@ -245,10 +250,10 @@ export default function ConversationRuntimeTrace({
     onRecoveryAction?.(action);
   };
   const unsavedArtifact = artifact?.type === "artifact" && !artifact.persistedArtifact ? artifact : null;
-  const artifactSaveReview = unsavedArtifact ? reviewChatArtifactSave(unsavedArtifact.artifact, requestId) : null;
+  const artifactSaveReview = unsavedArtifact ? reviewChatArtifactSave(unsavedArtifact.artifact, requestId, artifactSaveTarget) : null;
   // A changed content/source/destination/run resets effective approval without
   // writing a second Artifact store or assuming a save response means success.
-  const artifactSaveKey = unsavedArtifact ? chatArtifactSaveAcknowledgmentKey(unsavedArtifact.artifact, requestId) : null;
+  const artifactSaveKey = unsavedArtifact ? chatArtifactSaveAcknowledgmentKey(unsavedArtifact.artifact, requestId, artifactSaveTarget) : null;
   const saveReviewed = artifactSaveKey !== null && reviewedSaveKey === artifactSaveKey;
   const saveRequested = artifactSaveKey !== null && requestedSaveKey === artifactSaveKey;
   const visualAnswerRequest = artifact?.type === "artifact" ? visualRequestFromRuntimeArtifact(artifact) : null;
@@ -259,7 +264,6 @@ export default function ConversationRuntimeTrace({
   const stepCount = summary.stepCount || summary.settledSteps;
   const duration = formatDuration(summary.durationMs);
   const observed = observedRunActivity(events, steps.length, working, waitingForApproval);
-  const recoveryPrompt = reconcileUnconfirmedRunPrompt(requestId);
   const recordedSteps = projectRecordedAgentSteps(events, requestId, { busy: working, stopRequested });
   const stepPresentation = new Map(recordedSteps.map(step => [step.id, step]));
   const quietControlClass = "inline-flex min-h-11 items-center gap-1 rounded-lg px-3 py-2 font-ui text-sm text-muted-foreground hover:bg-white/[0.04] hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-300/50";
@@ -555,12 +559,12 @@ export default function ConversationRuntimeTrace({
                 <button type="button" data-testid="trace-error-connect" onClick={() => onRecoveryAction("Open Connection Center")} className="rounded-full border border-border/55 px-2.5 py-1 font-ui text-[12px] text-foreground hover:border-red-300/30">Open Connect</button>
               )}
               {view.recoveries.includes("retry") && !busy && <>
-                {onFollowUp && recoveryPrompt
-                  ? <button type="button" data-testid="c08-reconcile-run" onClick={() => onFollowUp(recoveryPrompt)}
+                {onInspectRun
+                  ? <button type="button" data-testid="c08-reconcile-run" onClick={onInspectRun}
                       className="min-h-11 rounded-full border border-border/55 px-3 py-2 font-ui text-sm text-foreground focus-visible:ring-2 focus-visible:ring-amber-300/70">
-                      Prepare run-status check in Chat
+                      Inspect original run history
                     </button>
-                  : onRetry && canShowWork
+                  : canShowWork
                     ? <button type="button" data-testid="c08-inspect-run" onClick={() => setShowWork(true)}
                         className="min-h-11 rounded-full border border-border/55 px-3 py-2 font-ui text-sm text-foreground focus-visible:ring-2 focus-visible:ring-amber-300/70">
                         Inspect recorded work
@@ -579,13 +583,13 @@ export default function ConversationRuntimeTrace({
           <p className="font-semibold">This run has no confirmed final status.</p>
           <p className="mt-1 text-muted-foreground">Partial text is not a completed answer or execution receipt. Inspect the original run before considering a retry.</p>
           <div className="mt-2 flex flex-wrap items-center gap-2">
-            {onFollowUp && recoveryPrompt
+            {onInspectRun
               ? <button type="button" data-testid="c08-reconcile-interrupted"
-                  onClick={() => onFollowUp(recoveryPrompt)}
+                  onClick={onInspectRun}
                   className="min-h-11 rounded-lg border border-border/60 px-3 font-ui text-sm focus-visible:ring-2 focus-visible:ring-amber-300/70">
-                  Prepare run-status check in Chat
+                  Inspect original run history
                 </button>
-              : onRetry && canShowWork
+              : canShowWork
                 ? <button type="button" data-testid="c08-inspect-interrupted"
                     onClick={() => setShowWork(true)}
                     className="min-h-11 rounded-lg border border-border/60 px-3 font-ui text-sm focus-visible:ring-2 focus-visible:ring-amber-300/70">
@@ -651,20 +655,25 @@ export default function ConversationRuntimeTrace({
               I reviewed the saved destination, source limitations and receipt references. This is a request to save, not confirmation that a new version exists.
             </label>}
             {onKeepArtifact && !saveRequested && <button type="button"
-              disabled={!saveReviewed || saveRequestInFlight.current === artifactSaveKey}
-              onClick={() => {
-                if (!saveReviewed || !artifactSaveKey || saveRequestInFlight.current === artifactSaveKey) return;
-                saveRequestInFlight.current = artifactSaveKey;
-                setRequestedSaveKey(artifactSaveKey);
-                try { onKeepArtifact(unsavedArtifact.artifact); }
-                catch { setRequestedSaveKey(null); }
+              disabled={!saveReviewed || !artifactSaveTarget || saveRequestInFlight.current !== null}
+              onClick={async () => {
+                if (!saveReviewed || !artifactSaveKey || !artifactSaveTarget || saveRequestInFlight.current !== null) return;
+                const key = artifactSaveKey;
+                saveRequestInFlight.current = key;
+                setRequestedSaveKey(key);
+                setSaveOutcome(null);
+                try {
+                  const outcome = await onKeepArtifact(unsavedArtifact.artifact, artifactSaveTarget);
+                  setSaveOutcome(outcome);
+                  if (outcome === "rejected") { setRequestedSaveKey(null); setReviewedSaveKey(null); }
+                } catch { setSaveOutcome("unconfirmed"); }
                 finally { saveRequestInFlight.current = null; }
               }}
               className="min-h-11 rounded-lg border border-fuchsia-300/40 px-3 font-ui text-sm text-fuchsia-200 focus-visible:ring-2 focus-visible:ring-amber-300/70 disabled:opacity-40">
               Request save to {unsavedArtifact.artifact.persistence === "chat_candidate" ? "Chat" : "Project"}
             </button>}
             {saveRequested && <p role="status" className="font-ui text-xs text-amber-200">
-              Save was requested. Do not assume a version was retained; verify it in the canonical P4 Artifact history before retrying.
+              {saveOutcome === "saved" ? "P4 confirmed the saved version. Inspect its canonical Artifact history." : "Save requested; outcome is not confirmed here. Inspect canonical P4 history before retrying."}
             </p>}
 
           </>}

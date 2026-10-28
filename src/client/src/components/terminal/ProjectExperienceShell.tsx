@@ -140,6 +140,7 @@ import { ambiguousMentionTokens, eligibleProjectMentions, stageResourceMention }
 import { stageUniversalChatQuestion, type UniversalChatHandoff } from "@/lib/universalChatHandoff";
 import { hasObservedCompletion, stageSafeRunRetry } from "@/lib/observedRunPolicy";
 import type { RecordedClaimReview } from "@shared/conversationRuntime";
+import type { ChatArtifactSaveTarget, ChatArtifactSaveOutcome } from "@/lib/chatArtifactSaveReview";
 import { clearSubmittedComposerDraft, mayClearComposerDraft, restoreFailedComposerDraft } from "@/lib/composerDraftSafety";
 import ConversationRuntimeTrace from "./ConversationRuntimeTrace";
 import ChatMarkdown from "./ChatMarkdown";
@@ -442,6 +443,8 @@ export default function ProjectExperienceShell({
   const [declinedRunAction, setDeclinedRunAction] = useState<{ requestId: string; action: ConversationActionName } | null>(null);
   const [claimReviewDraft, setClaimReviewDraft] = useState<{ prompt: string; binding: RecordedClaimReview; chatId: number | null } | null>(null);
   const submittedClaimReview = useRef<typeof claimReviewDraft>(null);
+  const [runInspection, setRunInspection] = useState<{ id: string; projectId: number | null; chatId: number | null } | null>(null);
+  useEffect(() => setRunInspection(null), [selection.chatId, selection.projectId, chatMode]);
   useEffect(() => {
     if (submittedClaimReview.current?.chatId !== selection.chatId) submittedClaimReview.current = null;
     if (!input.trim() || claimReviewDraft?.chatId !== selection.chatId) setClaimReviewDraft(null);
@@ -1983,9 +1986,15 @@ export default function ProjectExperienceShell({
       },
     });
   };
-  const keepArtifact = (artifact: ConversationArtifactDraft) => {
-    if (chatMode === "temporary" || artifact.persistence === "ephemeral") return;
-    const existingArtifactRef = conversationArtifactRef;
+  const artifactSaveTarget: ChatArtifactSaveTarget | undefined = chatMode !== "temporary" && selection.chatId ? {
+    projectId: chatMode === "project" ? selection.projectId : null, chatId: selection.chatId,
+    artifactId: conversationArtifactRef,
+    version: conversationArtifactRef && terminalDetail.data?.artifact.id === conversationArtifactRef ? terminalDetail.data.version.version : null,
+  } : undefined;
+  const keepArtifact = async (artifact: ConversationArtifactDraft, target: ChatArtifactSaveTarget): Promise<ChatArtifactSaveOutcome> => {
+    if (chatMode === "temporary" || artifact.persistence === "ephemeral" || JSON.stringify(target) !== JSON.stringify(artifactSaveTarget) ||
+        (target.artifactId && !target.version)) return "rejected";
+    const existingArtifactRef = target.artifactId;
     const save = async (targetProject: Project | null) => {
       if (keepingArtifactRef.current) throw new Error("This work is already being saved. Wait for it to finish.");
       keepingArtifactRef.current = true;
@@ -2017,6 +2026,7 @@ export default function ProjectExperienceShell({
         const persist = existingArtifactRef
           ? keepConversationDraftVersion(existingArtifactRef, artifact, {
               requestId: runtimeRequestId,
+              baseVersion: target.version!,
               trustManifest,
               dependencyRefs,
               refreshSpec,
@@ -2035,12 +2045,15 @@ export default function ProjectExperienceShell({
             : `Kept "${created.artifact.title}" in ${targetProject ? `"${targetProject.name}"` : "this Chat"}.`);
       } finally { keepingArtifactRef.current = false; }
     };
-    if (chatMode === "project" && home) {
-      void save(home.project).catch((error) => setLifecycleNotice(error instanceof Error ? error.message : "Unable to keep this work. Try again."));
-    } else if (chatMode === "quick" && selection.chatId) {
-      void save(null).catch((error) => setLifecycleNotice(error instanceof Error ? error.message : "Unable to keep this work in Chat."));
-    } else {
-      setLifecycleNotice("Wait for this saved Chat to finish loading before keeping its work.");
+    try {
+      if (chatMode === "project" && home) await save(home.project);
+      else if (chatMode === "quick" && selection.chatId) await save(null);
+      else { setLifecycleNotice("Wait for this saved Chat to finish loading before keeping its work."); return "rejected"; }
+      return "saved";
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Save outcome is unconfirmed. Inspect Artifact history before retrying.";
+      setLifecycleNotice(message);
+      return /^(400|401|403|404|409|422):/.test(message) ? "rejected" : "unconfirmed";
     }
   };
 
@@ -2594,6 +2607,7 @@ export default function ProjectExperienceShell({
                   requestAnimationFrame(() => composerRef.current?.focus());
                 }}
                 onOpenTerminal={visibleExecutionSessionId ? () => setExecutionTerminalOpen(true) : undefined}
+                onInspectRun={runtimeRequestId ? () => setRunInspection({ id: runtimeRequestId, projectId: chatMode === "project" ? selection.projectId : null, chatId: selection.chatId }) : undefined}
                 {...interruptedRun.traceProps}
                 onResume={() => {
                   if (sendInFlightRef.current || cancelInFlightRef.current) return;
@@ -2610,6 +2624,7 @@ export default function ProjectExperienceShell({
                   requestAnimationFrame(() => composerRef.current?.focus());
                 }}
                 onKeepArtifact={chatMode === "temporary" ? undefined : keepArtifact}
+                artifactSaveTarget={artifactSaveTarget}
                 onSubmitAssumptions={(message) => void send({ message })}
               />
               {executionTerminalOpen && visibleExecutionSessionId && (
@@ -2621,6 +2636,9 @@ export default function ProjectExperienceShell({
                   onClose={() => setExecutionTerminalOpen(false)}
                 />
               )}
+              {runInspection && <ExecutionSessionPanel sessionId={runInspection.id}
+                projectId={runInspection.projectId} chatId={runInspection.chatId} interactiveInputs={[]}
+                onClose={() => setRunInspection(null)} />}
               <div
                 className="lios-conversation-composer relative mx-auto max-w-4xl rounded-xl border border-border/70 bg-[#090909] shadow-2xl"
                 onDragOver={(event) => { if (chatMode !== "temporary") event.preventDefault(); }}

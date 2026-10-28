@@ -5,16 +5,16 @@ import type { PulseStoryView } from "@/lib/pulseStoryPresentation";
 import { useProjects } from "@/lib/useProjects";
 import { createP9Workflow, useInvalidateP9Automation } from "@/lib/useP9Automation";
 import { pulseProjectMonitorDraft } from "@/lib/pulseProjectMonitorDraft";
+import { quickMonitorDraft } from "@/lib/workflowReviewTruth";
 
 /**
  * Explicit review over the existing P9 Project action. Loading this component
  * (and opening the parent card) never creates, schedules, runs or enables work.
  * Only the confirmed user click issues a create request for a PAUSED workflow.
  */
-export function PulseProjectMonitorReview({ card, onClose }: {
-  card: PulseStoryView;
+export function PulseProjectMonitorReview({ card, projectReview, onClose }: {
   onClose: () => void;
-}) {
+} & ({ card: PulseStoryView; projectReview?: never } | { card?: never; projectReview: { projectId: number; graphHash: string } })) {
   const projects = useProjects();
   const invalidate = useInvalidateP9Automation();
   const [projectId, setProjectId] = useState<number | null>(null);
@@ -24,12 +24,13 @@ export function PulseProjectMonitorReview({ card, onClose }: {
   const [error, setError] = useState<string | null>(null);
   const [savedProjectId, setSavedProjectId] = useState<number | null>(null);
   const eligible = (projects.data ?? []).filter(project =>
-    project.status === "active" && !project.trashedAt && Number.isSafeInteger(project.id) && project.id > 0,
+    project.status === "active" && !project.trashedAt && Number.isSafeInteger(project.id) && project.id > 0 &&
+    (!projectReview || project.id === projectReview.projectId),
   );
   const selected = eligible.find(project => project.id === projectId);
   const validMinutes = Number.isInteger(minutes) && minutes >= 5 && minutes <= 10080;
   const preview = selected && validMinutes
-    ? (() => { try { return pulseProjectMonitorDraft(card, minutes); } catch { return null; } })()
+    ? (() => { try { return projectReview ? quickMonitorDraft("changes", false, minutes) : pulseProjectMonitorDraft(card!, minutes); } catch { return null; } })()
     : null;
 
   const save = async () => {
@@ -61,9 +62,9 @@ export function PulseProjectMonitorReview({ card, onClose }: {
       className="space-y-3 rounded-lg border border-amber-300/30 bg-amber-300/[0.03] p-3 font-ui text-sm">
       <h4 className="font-ui text-base font-semibold text-foreground">Review a Project change monitor</h4>
       <p className="leading-6 text-muted-foreground">
-        Following a subject personalizes discovery only. This existing LIOS P9 monitor compares
-        <strong className="text-foreground"> the whole selected Project</strong>, not the subject or publisher in this Pulse card.
-        It does not create source-specific alerts, does not execute while the app is closed, and will save paused.
+        This existing LIOS P9 monitor compares <strong className="text-foreground">the whole selected Project</strong>,
+        not a particular insight, subject or publisher. Opening this review grants no source access.
+        It will save paused and requires a running Home plus explicit enablement to execute later.
       </p>
       {savedProjectId !== null ? (
         <div role="status" className="space-y-2 rounded-lg border border-emerald-300/35 p-3">

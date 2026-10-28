@@ -112,7 +112,7 @@ test("approvals stay visible by default, and only the approval decisions are off
 });
 
 test("errors and data gaps are always visible, with recovery actions, without opening Show work", () => {
-  const failed = render([event({ type: "error", code: "ai_provider_failed", message: "The provider rejected the API key." }), event({ type: "done", status: "failed" })], { onRetry: noop, onRecoveryAction: noop, onFollowUp: noop });
+  const failed = render([event({ type: "error", code: "ai_provider_failed", message: "The provider rejected the API key." }), event({ type: "done", status: "failed" })], { onRetry: noop, onRecoveryAction: noop, onInspectRun: noop });
   assert.match(failed, /data-testid="trace-error"/);
   assert.match(failed, /role="alert"/);
   assert.match(failed, /The provider rejected the API key\./);
@@ -233,12 +233,12 @@ test("a proposal with no field-level difference says so instead of offering Appl
 
 test("C06 unsaved valid draft requires review before Project save; a saved one adds no duplicate save chrome", () => {
   const draft = { schemaVersion: "1", artifactId:"66666666-6666-4666-8666-666666666666", artifactType: "research_brief", title: "Q3 brief", projectId: 7, persistence: "project_candidate", sourceRefs: [], executionReceiptIds:[], data:{} };
-  const unsaved = render([event({ type: "artifact", artifact: draft }), doneOk], { onKeepArtifact: noop });
+  const unsaved = render([event({ type: "artifact", artifact: draft }), doneOk], { onKeepArtifact: async () => "saved" });
   assert.match(unsaved, /data-testid="c06-artifact-save-review"/);
   assert.match(unsaved, /Request save to Project/);
   assert.match(unsaved, /disabled=""/);
   assert.doesNotMatch(unsaved, /research_brief|research brief/i, "internal artifact type is not shown");
-  const saved = render([event({ type: "artifact", artifact: draft, persistedArtifact: { id: "artifact:66666666-6666-4666-8666-666666666666", version: 2 } }), doneOk], { onKeepArtifact: noop });
+  const saved = render([event({ type: "artifact", artifact: draft, persistedArtifact: { id: "artifact:66666666-6666-4666-8666-666666666666", version: 2 } }), doneOk], { onKeepArtifact: async () => "saved" });
   assert.doesNotMatch(saved, /Request save to Project|Q3 brief/);
 });
 
@@ -253,10 +253,10 @@ test("an unsaved draft never silently disappears when saving is unavailable", ()
 
 test("C06 Quick Chat save is reviewed; temporary results cannot be saved", () => {
   const draft = { schemaVersion:"1", artifactId:"66666666-6666-4666-8666-666666666666",artifactType: "research_brief", title: "Retained Quick analysis", projectId:null,persistence: "chat_candidate",sourceRefs: [],executionReceiptIds:[],data:{} };
-  const unsaved = render([event({ type: "artifact", artifact: draft }), doneOk], { onKeepArtifact: noop });
+  const unsaved = render([event({ type: "artifact", artifact: draft }), doneOk], { onKeepArtifact: async () => "saved" });
   assert.match(unsaved, /Request save to Chat/);
   assert.doesNotMatch(unsaved, /Request save to Project/);
-  const saved = render([event({ type: "artifact", artifact: draft, persistedArtifact: { id: "artifact:66666666-6666-4666-8666-666666666666", version: 4 } }), doneOk], { onKeepArtifact: noop });
+  const saved = render([event({ type: "artifact", artifact: draft, persistedArtifact: { id: "artifact:66666666-6666-4666-8666-666666666666", version: 4 } }), doneOk], { onKeepArtifact: async () => "saved" });
   assert.doesNotMatch(saved, /Request save to Chat|Request save to Project|Not saved yet/);
   const temporary = render([event({ type: "artifact", artifact: { ...draft, persistence: "ephemeral" } }), doneOk], { onKeepArtifact: undefined });
   assert.doesNotMatch(temporary, /Request save to Chat|Request save to Project/);
@@ -520,7 +520,7 @@ test("C06 save flow requires explicit acknowledgement, no P4 writes or silent su
   const draft={schemaVersion:"1",artifactId:"66666666-6666-4666-8666-666666666666",
     artifactType:"research_brief",title:"Recorded analysis",projectId:3,persistence:"project_candidate",
     sourceRefs:["private:source"],executionReceiptIds:[],data:{confidence:"not verified"}};
-  const html=render([event({type:"artifact",artifact:draft}),doneOk],{onKeepArtifact:noop});
+  const html=render([event({type:"artifact",artifact:draft}),doneOk],{onKeepArtifact:async()=>"saved"});
   assert.match(html,/data-testid="c06-artifact-save-review"/);
   assert.match(html,/I reviewed the saved destination/);
   assert.match(html,/disabled=""/);
@@ -530,11 +530,11 @@ test("C06 save flow requires explicit acknowledgement, no P4 writes or silent su
 
 test("C08 errors and interrupted runs only offer read-only reconciliation, never blind resend",()=>{
   const failed=render([planEvent,event({type:"error",code:"TIMEOUT",message:"The outcome is unconfirmed."}),
-    event({type:"done",status:"failed"})],{onRetry:noop,onFollowUp:noop});
+    event({type:"done",status:"failed"})],{onRetry:noop,onInspectRun:noop});
   assert.match(failed,/data-testid="c08-reconcile-run"/);
   assert.match(failed,/No automatic retry/);
   assert.doesNotMatch(failed,/data-testid="trace-error-retry"/);
-  const interrupted=render([planEvent,sourceResult],{onRetry:noop,onFollowUp:noop});
+  const interrupted=render([planEvent,sourceResult],{onRetry:noop,onInspectRun:noop});
   assert.match(interrupted,/data-testid="c08-reconcile-interrupted"/);
   assert.match(interrupted,/Home may have received the original run/);
   const inspectOnly=render([planEvent,sourceResult],{onRetry:noop,onFollowUp:undefined});

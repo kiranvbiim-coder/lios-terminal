@@ -1,5 +1,8 @@
 import { conversationArtifactDraftSchema, type ConversationArtifactDraft } from "@shared/conversationRuntime";
 
+export type ChatArtifactSaveTarget = { projectId: number | null; chatId: number; artifactId: string | null; version: number | null };
+export type ChatArtifactSaveOutcome = "saved" | "rejected" | "unconfirmed";
+
 /**
  * C06 display-side pre-save review. The server-owned P4 keeper alone can
  * authorize or persist this draft. This helper does not grant source rights,
@@ -12,7 +15,7 @@ export type ChatArtifactSaveReview =
     disclosure:string};
 
 export function reviewChatArtifactSave(
-  artifact: ConversationArtifactDraft, requestId: string | null,
+  artifact: ConversationArtifactDraft, requestId: string | null, target?: ChatArtifactSaveTarget,
 ): ChatArtifactSaveReview {
   if(!requestId || !/^[0-9a-f-]{36}$/i.test(requestId))
     return {status:"blocked",reason:"A recorded Chat run is required before requesting Artifact persistence."};
@@ -27,7 +30,7 @@ export function reviewChatArtifactSave(
   const receiptCount=new Set(item.executionReceiptIds).size;
   return {
     status:"review",artifactId:item.artifactId,title:item.title,kind:item.artifactType,
-    destination:item.persistence==="chat_candidate"?"The current saved Chat":`Project ${item.projectId}`,
+    destination:target ? (target.artifactId ? `Append version to ${target.artifactId} (reviewed v${target.version})` : target.projectId ? `New Artifact in Project ${target.projectId}, Chat ${target.chatId}` : `New Artifact in Chat ${target.chatId}`) : item.persistence==="chat_candidate"?"The current saved Chat":`Project ${item.projectId}`,
     sourceCount,receiptCount,hasSources:sourceCount>0,hasReceipts:receiptCount>0,
     disclosure: sourceCount===0
       ? "No supporting source references were recorded. Saving does not establish source validity."
@@ -38,6 +41,6 @@ export function reviewChatArtifactSave(
 /** Snapshot key is for UI acknowledgement reset only; no cryptographic or
  * authorization semantics. A draft content change requires fresh review.
  */
-export function chatArtifactSaveAcknowledgmentKey(artifact:ConversationArtifactDraft,requestId:string|null):string {
-  return JSON.stringify([requestId,artifact]);
+export function chatArtifactSaveAcknowledgmentKey(artifact:ConversationArtifactDraft,requestId:string|null,target?:ChatArtifactSaveTarget):string {
+  return JSON.stringify([requestId,artifact,target]);
 }
