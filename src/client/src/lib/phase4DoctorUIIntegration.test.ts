@@ -12,6 +12,8 @@ test("D03 System Doctor searches actual authenticated registry reports with no r
   assert.match(component, /Find a registered component/);
   assert.match(component, /Needs attention only/);
   assert.match(component, /Search changes only this list, not actual health/);
+  // Regression for consolidated #365: an empty search result conditional must close before the status list.
+  assert.match(component, /No observed runtime records match these filters\.[^]*?<\/p>\}/);
   assert.match(component, /Native installation: <strong className="text-foreground">Not verified here/);
   assert.doesNotMatch(component, /repairRuntime|startProvider|installProvider|enableP9Workflow|openExternalUrl/);
 });
