@@ -157,7 +157,7 @@ export default function ScenarioWorkbench({ activeView, activeSymbol, onClose }:
           </details>}
           <button type="button" onClick={() => setReviewedApplicationKey(null)}
             className="min-h-11 rounded-lg border border-border/60 px-3 py-2 text-foreground focus-visible:outline-2 focus-visible:outline-amber-300">Cancel review</button>
-        </section>
+        </section>}
 
         <div className="grid min-h-0 flex-1 grid-rows-[minmax(110px,180px)_minmax(0,1fr)] md:grid-cols-[238px_minmax(0,1fr)] md:grid-rows-1">
           <aside className="overflow-y-auto border-b border-border/60 bg-black/20 p-3 scrollbar-thin md:border-b-0 md:border-r">
