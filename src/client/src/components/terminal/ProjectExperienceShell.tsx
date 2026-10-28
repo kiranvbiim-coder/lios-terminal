@@ -13,6 +13,7 @@ import ChatSourcesControl from "./ChatSourcesControl";
 import ChatExtensionsDialog from "./ChatExtensionsDialog";
 import ConversationArtifactSidecar from "./ConversationArtifactSidecar";
 import { isCurrentArtifactLoad } from "@/lib/artifactSidecarSizing";
+import { exactRuntimeSavedArtifact, isCurrentSavedArtifactHandoff } from "@/lib/exactRuntimeSavedArtifact";
 import type { z } from "zod";
 import { ProjectDestinationDialog } from "./ProjectDestinationDialog";
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
@@ -439,6 +440,8 @@ export default function ProjectExperienceShell({
   busyRef.current = busy;
   const [runtimeEvents, setRuntimeEvents] = useState<ConversationRuntimeEvent[]>([]);
   const [runtimeRequestId, setRuntimeRequestId] = useState<string | null>(null);
+  const runtimeHandoffRequestIdRef = useRef<string | null>(null);
+  runtimeHandoffRequestIdRef.current = runtimeRequestId ?? runtimeEvents.at(-1)?.requestId ?? null;
   const [declinedRunAction, setDeclinedRunAction] = useState<{ requestId: string; action: ConversationActionName } | null>(null);
   const [claimReviewDraft, setClaimReviewDraft] = useState<{ prompt: string; binding: RecordedClaimReview; chatId: number | null } | null>(null);
   const submittedClaimReview = useRef<typeof claimReviewDraft>(null);
@@ -485,6 +488,7 @@ export default function ProjectExperienceShell({
   const terminalSelectionRef = useRef({ chatId: selection.chatId, setArtifact: setConversationArtifactRef, setVersion: setArtifactViewVersion });
   terminalSelectionRef.current = { chatId: selection.chatId, setArtifact: setConversationArtifactRef, setVersion: setArtifactViewVersion };
   const artifactDraftDirtyRef = useRef(false);
+  const savedArtifactReopenInFlightRef = useRef(false);
   const reopenArtifactFocusRef = useRef<HTMLButtonElement>(null);
   const displayedArtifactRef = useRef<{ artifactId: string; requestedVersion: number | null; version: number } | null>(null);
   const handledWorkbenchReturn = useRef<number | null>(null);
@@ -2608,6 +2612,51 @@ export default function ProjectExperienceShell({
                     setInput(prompt);
                   } else { setClaimReviewDraft(null); setInput(current => stageSafeRunRetry(current, prompt)); }
                   requestAnimationFrame(() => composerRef.current?.focus());
+                }}
+                onOpenSavedArtifact={chatMode === "temporary" ? undefined : async (artifactId, version, projectId, requestId) => {
+                  // Read-only navigation through canonical P4, not a new rights
+                  // grant or a new Artifact persistence path.
+                  if (savedArtifactReopenInFlightRef.current) return;
+                  const original = { projectId: selection.projectId, chatId: selection.chatId };
+                  const candidate = [...runtimeEvents].reverse().find(event =>
+                    event.type === "artifact" && event.requestId === requestId &&
+                    event.persistedArtifact?.id === artifactId && event.persistedArtifact.version === version);
+                  const saved = exactRuntimeSavedArtifact(candidate, {
+                    requestId: runtimeHandoffRequestIdRef.current,
+                    projectId: original.projectId, chatId: original.chatId,
+                  });
+                  if (!saved || saved.artifactId !== artifactId || saved.version !== version ||
+                      saved.projectId !== projectId || chatMode === "temporary" || busy || busyRef.current ||
+                      keepingArtifactRef.current || sendInFlightRef.current ||
+                      !original.chatId) {
+                    setLifecycleNotice("That exact saved Artifact is no longer available in this Chat. Inspect saved Artifact history.");
+                    return;
+                  }
+                  savedArtifactReopenInFlightRef.current = true;
+                  try {
+                    if (artifactDraftDirtyRef.current && !(await requestLifecycle({
+                      title: "Leave unsaved Artifact edits?",
+                      detail: "Opening this recorded version discards only local edits. Existing saved P4 versions are unchanged.",
+                      confirmLabel: "Discard local edits",
+                    }))) return;
+                    // The selected Project or Chat, run, and in-flight work can
+                    // change while the lifecycle dialog is open. Recheck after
+                    // confirmation before touching the P4 sidecar selection.
+                    if (!isCurrentSavedArtifactHandoff(saved, original,
+                          sandboxSelectionRef.current, runtimeHandoffRequestIdRef.current) ||
+                        busyRef.current || keepingArtifactRef.current || sendInFlightRef.current) {
+                      setLifecycleNotice("The original Chat or run changed. Nothing was opened; choose the saved version again from its owning Chat.");
+                      return;
+                    }
+                    artifactDraftDirtyRef.current = false;
+                    setArtifactFocusMode(false);
+                    setConversationArtifactRef(saved.artifactId);
+                    setArtifactViewVersion(saved.version);
+                    // ConversationArtifactSidecar -> ArtifactPane -> useArtifact
+                    // re-fetches exact vN with server-side access validation.
+                  } finally {
+                    savedArtifactReopenInFlightRef.current = false;
+                  }
                 }}
                 onKeepArtifact={chatMode === "temporary" ? undefined : keepArtifact}
                 onSubmitAssumptions={(message) => void send({ message })}
