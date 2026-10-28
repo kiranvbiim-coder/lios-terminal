@@ -96,6 +96,10 @@ test("beta acceptance CLI never defaults missing evidence or accepts duplicate f
   const names=["manifest","asset-dir","trusted-key","commit","mac-self-test","win-self-test","mac-ux","win-ux"];
   const input=names.flatMap(name=>["--"+name,"local-"+name]);
   assert.equal(parseFlags(input)["mac-self-test"],"local-mac-self-test");
+  assert.equal(parseFlags([...input,"--multipart-dir","/owner/release-parts"])["multipart-dir"],
+    "/owner/release-parts");
+  assert.throws(() => parseFlags([...input,"--multipart-dir"]), /BLOCKED/);
+  assert.throws(() => parseFlags([...input,"--multipart-dir","/owner/parts","--extra","no"]), /BLOCKED/);
   assert.throws(() => parseFlags([...input.slice(0,-2),"--mac-self-test","other"]), /BLOCKED/);
   assert.throws(() => parseFlags([...input.slice(0,-2),"--secret-key","key"]), /BLOCKED/);
 });
