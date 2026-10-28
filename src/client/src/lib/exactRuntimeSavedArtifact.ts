@@ -38,7 +38,7 @@ export function exactRuntimeSavedArtifact(
  */
 export function isCurrentSavedArtifactHandoff(
   handoff: SavedRuntimeArtifactHandoff,
-  original: { projectId: number | null; chatId: number },
+  original: { projectId: number | null; chatId: number | null },
   current: { projectId: number | null; chatId: number | null },
   currentRequestId: string | null,
 ): boolean {
