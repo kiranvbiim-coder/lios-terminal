@@ -231,33 +231,35 @@ test("a proposal with no field-level difference says so instead of offering Appl
   assert.match(markup, />Apply</);
 });
 
-test("an unsaved draft offers Keep in Project; a saved one adds no chrome", () => {
-  const draft = { artifactType: "research_brief", title: "Q3 brief", persistence: "draft", sourceRefs: [] };
+test("C06 unsaved valid draft requires review before Project save; a saved one adds no duplicate save chrome", () => {
+  const draft = { schemaVersion: "1", artifactId:"66666666-6666-4666-8666-666666666666", artifactType: "research_brief", title: "Q3 brief", projectId: 7, persistence: "project_candidate", sourceRefs: [], executionReceiptIds:[], data:{} };
   const unsaved = render([event({ type: "artifact", artifact: draft }), doneOk], { onKeepArtifact: noop });
-  assert.match(unsaved, /Keep in Project/);
+  assert.match(unsaved, /data-testid="c06-artifact-save-review"/);
+  assert.match(unsaved, /Request save to Project/);
+  assert.match(unsaved, /disabled=""/);
   assert.doesNotMatch(unsaved, /research_brief|research brief/i, "internal artifact type is not shown");
   const saved = render([event({ type: "artifact", artifact: draft, persistedArtifact: { id: "artifact:66666666-6666-4666-8666-666666666666", version: 2 } }), doneOk], { onKeepArtifact: noop });
-  assert.doesNotMatch(saved, /Keep in Project|Q3 brief/);
+  assert.doesNotMatch(saved, /Request save to Project|Q3 brief/);
 });
 
 test("an unsaved draft never silently disappears when saving is unavailable", () => {
-  const draft = { artifactType: "research_brief", title: "Q3 brief", persistence: "draft", sourceRefs: [] };
+  const draft = { schemaVersion: "1", artifactId:"66666666-6666-4666-8666-666666666666", artifactType: "research_brief", title: "Q3 brief", projectId: 7, persistence: "project_candidate", sourceRefs: [], executionReceiptIds:[], data:{} };
   const markup = render([event({ type: "artifact", artifact: draft }), doneOk], { onKeepArtifact: undefined });
   assert.match(markup, /data-testid="trace-keep-artifact"/);
   assert.match(markup, /Q3 brief/);
   assert.match(markup, /Not saved — saving isn’t available in this chat/);
-  assert.doesNotMatch(markup, /Keep in Project/);
+  assert.doesNotMatch(markup, /Request save to Project/);
 });
 
-test("Quick Chat candidate offers retention in the same Chat and Temporary results offer none", () => {
-  const draft = { artifactType: "research_brief", title: "Retained Quick analysis", persistence: "chat_candidate", sourceRefs: [] };
+test("C06 Quick Chat save is reviewed; temporary results cannot be saved", () => {
+  const draft = { schemaVersion:"1", artifactId:"66666666-6666-4666-8666-666666666666",artifactType: "research_brief", title: "Retained Quick analysis", projectId:null,persistence: "chat_candidate",sourceRefs: [],executionReceiptIds:[],data:{} };
   const unsaved = render([event({ type: "artifact", artifact: draft }), doneOk], { onKeepArtifact: noop });
-  assert.match(unsaved, /Keep in Chat/);
-  assert.doesNotMatch(unsaved, /Keep in Project/);
+  assert.match(unsaved, /Request save to Chat/);
+  assert.doesNotMatch(unsaved, /Request save to Project/);
   const saved = render([event({ type: "artifact", artifact: draft, persistedArtifact: { id: "artifact:66666666-6666-4666-8666-666666666666", version: 4 } }), doneOk], { onKeepArtifact: noop });
-  assert.doesNotMatch(saved, /Keep in Chat|Keep in Project|Not saved yet/);
+  assert.doesNotMatch(saved, /Request save to Chat|Request save to Project|Not saved yet/);
   const temporary = render([event({ type: "artifact", artifact: { ...draft, persistence: "ephemeral" } }), doneOk], { onKeepArtifact: undefined });
-  assert.doesNotMatch(temporary, /Keep in Chat|Keep in Project/);
+  assert.doesNotMatch(temporary, /Request save to Chat|Request save to Project/);
   assert.match(temporary, /Not saved/);
 });
 
@@ -512,4 +514,16 @@ test("C04 Stop request never renders as confirmed cancellation before server rep
   assert.match(pending, /Stop requested — not confirmed/);
   const stopped = render([planEvent, event({type:"done", status:"cancelled"})], { defaultShowWork: true });
   assert.match(stopped, /data-step-state="cancelled"/);
+});
+
+test("C06 save flow requires explicit acknowledgement, no P4 writes or silent success",()=>{
+  const draft={schemaVersion:"1",artifactId:"66666666-6666-4666-8666-666666666666",
+    artifactType:"research_brief",title:"Recorded analysis",projectId:3,persistence:"project_candidate",
+    sourceRefs:["private:source"],executionReceiptIds:[],data:{confidence:"not verified"}};
+  const html=render([event({type:"artifact",artifact:draft}),doneOk],{onKeepArtifact:noop});
+  assert.match(html,/data-testid="c06-artifact-save-review"/);
+  assert.match(html,/I reviewed the saved destination/);
+  assert.match(html,/disabled=""/);
+  assert.match(html,/Recorded source references are not proof of current entitlement/);
+  assert.doesNotMatch(html,/confidence:"not verified"|private:source/);
 });

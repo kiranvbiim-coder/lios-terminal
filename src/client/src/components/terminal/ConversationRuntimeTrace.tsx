@@ -28,6 +28,7 @@ import { reviewEvidenceExceptions, sourceExceptionCaveats } from "@/lib/evidence
 import { followUpPrompts, formatDuration, summarizeRuntimeTrace } from "@/lib/runtimeTraceSummary";
 import { inspectAgentReceiptActivity } from "@/lib/agentReceiptActivity";
 import { projectRecordedAgentSteps, RECORDED_AGENT_STEP_LABELS } from "@/lib/recordedAgentStepTruth";
+import { reviewChatArtifactSave, chatArtifactSaveAcknowledgmentKey } from "@/lib/chatArtifactSaveReview";
 import { observedRunActivity } from "@/lib/sprintAObservedActivity";
 import AgentExecutionReceipts from "./AgentExecutionReceipts";
 import { governedReviewRisk, legacyReviewFacts } from "@/lib/approvalReviewTruth";
@@ -171,6 +172,9 @@ export default function ConversationRuntimeTrace({
   onSubmitAssumptions,
 }: Props) {
   const [showWork, setShowWork] = useState(defaultShowWork);
+  const [reviewedSaveKey, setReviewedSaveKey] = useState<string | null>(null);
+  const [requestedSaveKey, setRequestedSaveKey] = useState<string | null>(null);
+  const saveRequestInFlight = useRef<string | null>(null);
   const [appliedReviewKey, setAppliedReviewKey] = useState<string | null>(null);
   const [pendingReviewKey, setPendingReviewKey] = useState<string | null>(null);
   const [acknowledgedRiskKey, setAcknowledgedRiskKey] = useState<string | null>(null);
@@ -239,6 +243,12 @@ export default function ConversationRuntimeTrace({
     onRecoveryAction?.(action);
   };
   const unsavedArtifact = artifact?.type === "artifact" && !artifact.persistedArtifact ? artifact : null;
+  const artifactSaveReview = unsavedArtifact ? reviewChatArtifactSave(unsavedArtifact.artifact, requestId) : null;
+  // A changed content/source/destination/run resets effective approval without
+  // writing a second Artifact store or assuming a save response means success.
+  const artifactSaveKey = unsavedArtifact ? chatArtifactSaveAcknowledgmentKey(unsavedArtifact.artifact, requestId) : null;
+  const saveReviewed = artifactSaveKey !== null && reviewedSaveKey === artifactSaveKey;
+  const saveRequested = artifactSaveKey !== null && requestedSaveKey === artifactSaveKey;
   const visualAnswerRequest = artifact?.type === "artifact" ? visualRequestFromRuntimeArtifact(artifact) : null;
   const working = busy && !terminal;
   const waitingForApproval = Boolean(legacyApproval || governedApproval);
@@ -574,16 +584,62 @@ export default function ConversationRuntimeTrace({
         request={visualAnswerRequest} />}
 
       {unsavedArtifact && (
-        <div className="mb-2 flex items-center gap-2 rounded-lg border border-fuchsia-300/15 bg-fuchsia-300/[0.025] px-3 py-2" data-testid="trace-keep-artifact">
-          <FileBarChart className="h-3.5 w-3.5 text-fuchsia-300" aria-hidden="true" />
-          <div className="min-w-0 flex-1">
-            <div className="truncate font-ui text-[13px] text-foreground">{unsavedArtifact.artifact.title}</div>
-            <div className="mt-0.5 font-ui text-[12px] text-muted-foreground">{onKeepArtifact ? "Not saved yet" : "Not saved — saving isn’t available in this chat"}</div>
+        <section className="mb-2 space-y-3 rounded-lg border border-fuchsia-300/15 bg-fuchsia-300/[0.025] px-3 py-3"
+          aria-label="Review Chat-generated Artifact before saving" data-testid="trace-keep-artifact">
+          <div className="flex items-start gap-2">
+            <FileBarChart className="mt-0.5 h-4 w-4 shrink-0 text-fuchsia-300" aria-hidden="true" />
+            <div className="min-w-0 flex-1">
+              <h3 className="break-words font-ui text-sm font-semibold text-foreground">{unsavedArtifact.artifact.title}</h3>
+              <p className="mt-1 font-ui text-xs text-muted-foreground">
+                Not saved yet. Review the destination and recorded evidence before requesting a P4 save.
+              </p>
+              {!onKeepArtifact && <p role="status" className="mt-1 font-ui text-xs text-muted-foreground">
+                Not saved — saving isn’t available in this chat.
+              </p>}
+            </div>
           </div>
-          {onKeepArtifact && (
-            <button type="button" onClick={() => onKeepArtifact(unsavedArtifact.artifact)} className="rounded border border-fuchsia-300/20 px-2 py-1 font-ui text-[12px] text-fuchsia-200 hover:bg-fuchsia-300/[0.05]">{unsavedArtifact.artifact.persistence === "chat_candidate" ? "Keep in Chat" : "Keep in Project"}</button>
-          )}
-        </div>
+          {artifactSaveReview?.status === "blocked" && <p role="alert" className="font-ui text-xs text-amber-200">
+            {artifactSaveReview.reason}
+          </p>}
+          {artifactSaveReview?.status === "review" && <>
+            <dl className="grid gap-2 rounded-lg border border-border/50 p-3 font-ui text-xs text-muted-foreground sm:grid-cols-2"
+              data-testid="c06-artifact-save-review">
+              <div className="min-w-0"><dt className="font-semibold text-foreground">Save destination</dt>
+                <dd className="break-words">{artifactSaveReview.destination}</dd></div>
+              <div className="min-w-0"><dt className="font-semibold text-foreground">Recorded source references</dt>
+                <dd>{artifactSaveReview.sourceCount}</dd></div>
+              <div className="min-w-0"><dt className="font-semibold text-foreground">Execution receipt references</dt>
+                <dd>{artifactSaveReview.receiptCount} · references are not execution verification</dd></div>
+              <div className="min-w-0 break-all sm:col-span-2"><dt className="font-semibold text-foreground">Draft ID</dt>
+                <dd><code>{artifactSaveReview.artifactId}</code></dd></div>
+            </dl>
+            <p className="font-ui text-xs leading-5 text-muted-foreground">{artifactSaveReview.disclosure}
+              {" "}The P4 server must independently validate the saved record and its current rights.</p>
+            {onKeepArtifact && !saveRequested && <label className="flex items-start gap-2 font-ui text-xs leading-5">
+              <input type="checkbox" className="mt-1 h-4 w-4 shrink-0 accent-amber-300"
+                aria-label="I reviewed this Artifact draft destination and recorded evidence"
+                checked={saveReviewed} onChange={event => setReviewedSaveKey(event.target.checked ? artifactSaveKey : null)}/>
+              I reviewed the saved destination, source limitations and receipt references. This is a request to save, not confirmation that a new version exists.
+            </label>}
+            {onKeepArtifact && !saveRequested && <button type="button"
+              disabled={!saveReviewed || saveRequestInFlight.current === artifactSaveKey}
+              onClick={() => {
+                if (!saveReviewed || !artifactSaveKey || saveRequestInFlight.current === artifactSaveKey) return;
+                saveRequestInFlight.current = artifactSaveKey;
+                setRequestedSaveKey(artifactSaveKey);
+                try { onKeepArtifact(unsavedArtifact.artifact); }
+                catch { setRequestedSaveKey(null); }
+                finally { saveRequestInFlight.current = null; }
+              }}
+              className="min-h-11 rounded-lg border border-fuchsia-300/40 px-3 font-ui text-sm text-fuchsia-200 focus-visible:ring-2 focus-visible:ring-amber-300/70 disabled:opacity-40">
+              Request save to {unsavedArtifact.artifact.persistence === "chat_candidate" ? "Chat" : "Project"}
+            </button>}
+            {saveRequested && <p role="status" className="font-ui text-xs text-amber-200">
+              Save was requested. Do not assume a version was retained; verify it in the canonical P4 Artifact history before retrying.
+            </p>}
+
+          </>}
+        </section>
       )}
 
       {mutation?.type === "mutation_review" && (() => {
