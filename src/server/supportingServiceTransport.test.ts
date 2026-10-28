@@ -168,3 +168,41 @@ test("an abort listener reentering close shares the original supervisor cleanup"
   await Promise.all([closing, pendingRefused]);
   assert.equal(stops, 1);
 });
+
+test("tiny incomplete input chunks cannot retain unbounded Buffer metadata below the byte budget", async () => {
+  const f = fixture();
+  await f.open();
+  let accepted = 0;
+  let refused = false;
+  for (let i = 0; i < 4096; i++) {
+    try { await f.transport.receive(Buffer.from("x")); accepted++; }
+    catch { refused = true; break; }
+  }
+  await f.transport.close();
+  assert.equal(refused, true);
+  assert.ok(accepted < 4096, "A few KiB of wire bytes must not admit arbitrarily many retained fragments");
+  assert.equal(f.stopped(), 1);
+  assert.deepEqual(f.frames, []);
+});
+
+test("tiny queued writes have a count bound even when below the aggregate wire-byte budget", async () => {
+  const entered = deferred(), release = deferred();
+  let physicalInvocations = 0;
+  const f = fixture({ write: async bytes => {
+    if (JSON.parse(bytes.toString()).kind === "invoke") {
+      physicalInvocations++;
+      entered.resolve();
+      await release.promise;
+    }
+  } });
+  await f.open();
+  const first = f.transport.send(f.invoke()).then(() => false, () => true);
+  await entered.promise;
+  const queued = Array.from({ length: 4096 }, () => f.transport.send(f.invoke()).then(() => false, () => true));
+  release.resolve();
+  const refused = await Promise.all([first, ...queued]);
+  await f.transport.close();
+  assert.ok(refused.some(Boolean), "Saturation must refuse admission rather than accumulate every pending write");
+  assert.equal(physicalInvocations, 1);
+  assert.equal(f.stopped(), 1);
+});

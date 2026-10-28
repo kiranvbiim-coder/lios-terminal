@@ -5,6 +5,9 @@ import {
 } from "@shared/supportingServiceContracts";
 import { createBoundedLineFramer } from "./exec/bounded-line-framer";
 
+// Byte budgets alone do not bound Buffer/Promise metadata for tiny or highly fragmented writes.
+const MAX_RETAINED_CHUNKS = 1024;
+
 export interface SupportingServiceTransportOptions {
   binding: SupportingServiceBinding;
   buildSha256: string;
@@ -40,6 +43,9 @@ export class SupportingServiceTransport {
   private outbound = Promise.resolve();
   private queuedInputBytes = 0;
   private queuedOutputBytes = 0;
+  private queuedInputChunks = 0;
+  private retainedFrameChunks = 0;
+  private queuedOutputChunks = 0;
   private lastSequence = -1;
   private stopping: Promise<void> | null = null;
   private readyResolve!: () => void;
@@ -120,33 +126,41 @@ export class SupportingServiceTransport {
       this.requireLive();
       body = Buffer.from(JSON.stringify(frame));
       admitted = decodeSupportingServiceFrame(body, "home", this.binding, this.maxFrameBytes);
-      if (this.queuedOutputBytes + body.length + 1 > this.maxQueuedBytes) throw new Error("queue full");
+      if (this.queuedOutputBytes + body.length + 1 > this.maxQueuedBytes || this.queuedOutputChunks >= MAX_RETAINED_CHUNKS) throw new Error("queue full");
     } catch {
       this.failure();
       return Promise.reject(new Error("Supporting-service outgoing frame refused."));
     }
     const wire = Buffer.concat([body, Buffer.from("\n")]);
     this.queuedOutputBytes += wire.length;
+    this.queuedOutputChunks++;
     const pending = this.outbound.then(async () => {
       await this.current();
       if (admitted.kind === "invoke" && admitted.deadlineAt <= Date.now()) throw new Error("Supporting-service invocation expired.");
       await this.bounded(() => this.options.write(wire, this.abort.signal));
       await this.current();
-    }).finally(() => { this.queuedOutputBytes -= wire.length; });
+    }).finally(() => { this.queuedOutputBytes -= wire.length; this.queuedOutputChunks--; });
     this.outbound = pending.catch(() => { this.failure(); });
     return pending.catch(() => { throw new Error("Supporting-service pipe write failed."); });
   }
 
   receive(chunk: Buffer): Promise<void> {
     if (this.state !== "starting" && this.state !== "ready") return Promise.reject(new Error("Supporting-service transport is not receiving."));
+    if (chunk.length === 0) return Promise.resolve();
+    if (this.queuedInputChunks + this.retainedFrameChunks >= MAX_RETAINED_CHUNKS) {
+      this.failure();
+      return Promise.reject(new Error("Supporting-service input fragmentation exceeded its limit."));
+    }
     if (chunk.length + this.queuedInputBytes > this.maxQueuedBytes) {
       this.failure();
       return Promise.reject(new Error("Supporting-service incoming queue exceeded its byte limit."));
     }
     const owned = Buffer.from(chunk);
     this.queuedInputBytes += owned.length;
+    this.queuedInputChunks++;
     const pending = this.inbound.then(async () => {
       this.requireLive();
+      this.retainedFrameChunks++;
       for (const line of this.framer.push(owned)) {
         try {
           await this.current();
@@ -169,8 +183,12 @@ export class SupportingServiceTransport {
         } finally {
           // Retain fragments and active frames until their consumer settles. Close retires all bytes.
           if (this.state !== "closed") this.queuedInputBytes -= line.length + 1;
+          if (this.state !== "closed") this.retainedFrameChunks = 1;
         }
       }
+      if (this.framer.pendingByteLength === 0) this.retainedFrameChunks = 0;
+    }).finally(() => {
+      if (this.state !== "closed") this.queuedInputChunks--;
     });
     this.inbound = pending.catch(() => { this.failure(); });
     return pending.catch(() => { throw new Error("Supporting-service incoming frame refused."); });
@@ -194,6 +212,8 @@ export class SupportingServiceTransport {
     this.readyReject(new Error("Supporting-service transport closed before readiness."));
     this.framer.clear();
     this.queuedInputBytes = 0;
+    this.queuedInputChunks = 0;
+    this.retainedFrameChunks = 0;
     return this.stopping;
   }
 }

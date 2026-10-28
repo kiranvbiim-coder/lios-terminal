@@ -237,6 +237,8 @@ Evidence: six focused boundary tests and typecheck passed; an actual Node proces
 
 Review found and corrected two real boundary defects: fragmented active frames must retain their full byte reservation until handler settlement, and the single cleanup promise must be published before synchronous abort listeners can reenter `close`. Regression tests cover both. Ten focused framer/transport tests and typecheck passed. An actual synthetic Node child-pipe smoke negotiated readiness, delivered health, refused a revoked outgoing request before a third physical write and joined child close. This proves transport behavior only—not strict service placement, provider delivery or installed acceptance.
 
+Resource-bound follow-through: inbound retained fragments/queued chunks and outgoing queued writes also have finite count bounds (1024), preventing Buffer/Promise metadata growth from many tiny chunks beneath the wire-byte limit. Empty input chunks retain no queued state. Ten focused transport tests—including tiny-fragment and tiny-write saturation—plus typecheck and the actual synthetic child-pipe smoke passed after this addition; unchanged donor-framer evidence is reused.
+
 Remaining runtime obligations are unchanged: current Home/P13 account and exact-operation authorization, operation-specific payload schemas, canonical request/receipt correlation and durable adoption, strict Home-scoped launch and actual native extinction through the established supervisor. Callbacks must honor cancellation and revalidate at their real dispatch boundary. No service or Telegram/WhatsApp path is registered or enabled; Package 2 checkboxes remain open.
 
 
