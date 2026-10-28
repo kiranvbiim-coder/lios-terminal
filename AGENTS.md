@@ -167,7 +167,7 @@ Before substantial work, read in this order:
 13. current implementation and relevant subsystem docs;
 14. master issue **#91** and the active canonical task issue/PR.
 
-`docs/LIOS_SUPER_INTELLIGENCE_EXECUTION_PLAN.md` + the Shipping Point contract + progressive validation contract + current `main` + issue #192 are the top-level execution authority when older Product Slice-first, CP-first or full-gate-per-PR wording conflicts.
+`docs/LIOS_SUPER_INTELLIGENCE_EXECUTION_PLAN.md` + the Shipping Point contract + progressive validation contract + current `main` + issue #91 are the top-level execution authority when older Product Slice-first, CP-first or full-gate-per-PR wording conflicts.
 
 Architectural contracts and verified implementation evidence in older canonical docs remain valid unless explicitly superseded.
 
@@ -255,7 +255,7 @@ GitHub is the coordination layer. Local chat memory is not product truth.
 1. fetch/pull current `main`;
 2. verify the working tree is clean;
 3. read the canonical sources above;
-4. read issue #192 and active PRs;
+4. read issue #91 and active PRs;
 5. identify the assigned **SI phase/workstream**;
 6. identify the existing canonical `GM/TC/CA/P` owner ID(s);
 7. identify shared-core/high-conflict files/contracts;
@@ -660,12 +660,12 @@ Each SP requires a real integrated MSJ, applicable packaged/target execution, no
 - `docs/technical/SUPER_INTELLIGENCE_SHIPPING_POINT_CONTRACT.md` is the progressive shipping authority.
 - `docs/technical/LIOS_PROGRESSIVE_VALIDATION_CI_STRATEGY.md` is the single validation/CI cadence and runner-budget authority.
 - Do not create another competing phase/master/execution/CI roadmap.
-- Use issue #192 for live multi-agent coordination and SI claims.
+- Use issue #91 for live multi-agent coordination and SI claims.
 - Use canonical technical docs for durable subsystem decisions.
 - Use Git history for superseded context.
 - Close superseded planning PRs/issues when appropriate rather than leaving them mergeable by mistake.
 
-Issue **#192** is the active Super Intelligence coordination authority.
+Issue **#91** is the active Super Intelligence coordination authority.
 
 ---
 
