@@ -2659,7 +2659,7 @@ export default function ProjectExperienceShell({
                     projectId: original.projectId, chatId: original.chatId,
                   });
                   if (!saved || saved.artifactId !== artifactId || saved.version !== version ||
-                      saved.projectId !== projectId || chatMode === "temporary" || busy || busyRef.current ||
+                      saved.projectId !== projectId || busy || busyRef.current ||
                       keepingArtifactRef.current || sendInFlightRef.current || !original.chatId) {
                     setLifecycleNotice("That exact saved Artifact is no longer available in this Chat. Inspect its saved Artifact history.");
                     return;
