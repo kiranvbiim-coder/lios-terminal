@@ -5,7 +5,7 @@ import { GalleryRecordedPreviewContent, ProjectArtifactGalleryPreview } from "./
 import { captureBriefingVisual, type PinnedBriefingVisual } from "@/lib/phase4BriefingVisuals";
 import type { ArtifactDetail } from "@/lib/useArtifacts";
 import {
-  buildProjectBriefingReport, isReviewedBriefingSourceCurrent, MAX_BRIEFING_SOURCES, type BriefingSource,
+  buildProjectBriefingReport, currentProjectBriefingVisuals, isReviewedBriefingSourceCurrent, MAX_BRIEFING_SOURCES, type BriefingSource,
 } from "@/lib/projectBriefingStoryboard";
 
 export function ProjectBriefingStudio({
@@ -59,11 +59,8 @@ export function ProjectBriefingStudio({
   const byId = useMemo(() => new Map(available.map(item => [item.id, item])), [artifacts, projectId]);
   // Also filter synchronously in render, before the Project-switch effect.
   const chosen = selectedSources.filter(source => source.projectId === projectId);
-  // Hide an inspected chart/table when its saved source is changed or no longer authorized.
-  const currentVisuals = pinnedVisuals.filter(visual => visual.projectId === projectId &&
-    chosen.some(source => source.id === visual.artifactId &&
-      source.headVersion === visual.version && source.kind === visual.content.kind &&
-      isReviewedBriefingSourceCurrent(source, byId.get(source.id), projectId)));
+  // D06 visibility is tested against live authorized Project/Artifact identity.
+  const currentVisuals = currentProjectBriefingVisuals(pinnedVisuals, chosen, byId, projectId);
   const staleSelection = chosen.some(source =>
     !isReviewedBriefingSourceCurrent(source, byId.get(source.id), projectId));
   const offered = available.filter(item =>
