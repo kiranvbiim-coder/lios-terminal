@@ -78,6 +78,16 @@ async function runPackagedDesktopSelfTest(options) {
   const selfTestStartedAtNs = process.hrtime.bigint();
 
   if (!app?.isPackaged) throw new Error("Desktop self-test must run from a packaged application.");
+  // The beta acceptance gate must not reuse a self-test from an earlier
+  // installer. Electron's packaged getVersion() reads the actual app metadata.
+  const packageVersion = app.getVersion?.();
+  if (typeof packageVersion !== "string" || !/^\\d+\\.\\d+\\.\\d+-beta\\.[1-9]\\d*$/.test(packageVersion)) {
+    // Production packages can run their own self-test too; they retain their
+    // existing version reporting without claiming a beta channel.
+    if (typeof packageVersion !== "string" || !/^\\d+\\.\\d+\\.\\d+(?:[-+][a-zA-Z0-9.-]+)?$/.test(packageVersion)) {
+      throw new Error("Packaged application version is missing or malformed.");
+    }
+  }
 
   const root = fs.mkdtempSync(path.join(os.tmpdir(), "lios-p2-self-test-"));
   try {
@@ -106,6 +116,7 @@ async function runPackagedDesktopSelfTest(options) {
 
     return {
       version: 1,
+      packageVersion,
       generatedAt: new Date().toISOString(),
       platform: process.platform,
       arch: process.arch,
