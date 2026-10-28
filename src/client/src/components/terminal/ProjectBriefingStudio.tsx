@@ -119,14 +119,15 @@ export function ProjectBriefingStudio({
   const save = async () => {
     if (busy || inFlight.current?.projectId === projectId || pinningId) return;
     const reviewedProject = projectId;
+    let saveToken: number | null = null;
     setError(null);
     try {
       if (activeProjectRef.current !== reviewedProject) return;
       if (staleSelection) throw new Error("A selected source is no longer in this Project. Remove it and review the outline.");
       // Validation is repeated against a fresh server read by onSave.
       buildProjectBriefingReport({ projectId, title, introduction, sources: chosen, visuals: currentVisuals });
-      const token = ++nextSaveToken.current;
-      inFlight.current = { projectId: reviewedProject, token };
+      saveToken = ++nextSaveToken.current;
+      inFlight.current = { projectId: reviewedProject, token: saveToken };
       setBusy(true);
       await onSave(chosen, title, introduction, currentVisuals);
     } catch (cause) {
@@ -135,7 +136,7 @@ export function ProjectBriefingStudio({
       }
     } finally {
       // A superseded Project write must not unlock a newer Project write.
-      if (inFlight.current?.projectId === reviewedProject) inFlight.current = null;
+      if (saveToken !== null && inFlight.current?.token === saveToken) inFlight.current = null;
       if (activeProjectRef.current === reviewedProject) setBusy(false);
     }
   };
