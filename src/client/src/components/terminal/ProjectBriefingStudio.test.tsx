@@ -49,6 +49,11 @@ test("D01 Project switching cannot display or save stale source selections or la
   assert.match(src, /visualRequestRef\.current\?\.abort\(\)/);
   assert.match(src, /signal: controller\.signal/);
   assert.match(src, /controller\.signal\.aborted \|\| activeProjectRef\.current !== inspectedProject/);
+  // An aborted earlier P4 read may settle after the next request starts.
+  // Its finally block must never clear the newer inspection's lock.
+  assert.match(src, /if \(visualRequestRef\.current === controller\) \{\s*visualRequestRef\.current = null;\s*if \(activeProjectRef\.current === inspectedProject\) setPinningId\(null\);\s*\}/);
+  assert.doesNotMatch(src, /if \(visualRequestRef\.current === controller\) visualRequestRef\.current = null;\s*if \(activeProjectRef\.current === inspectedProject\) setPinningId\(null\)/);
+
   assert.match(src, /selectedSources\.filter\(source => source\.projectId === projectId\)/);
   assert.match(src, /currentProjectBriefingVisuals\(pinnedVisuals, chosen, byId, projectId\)/);
   assert.match(src, /if \(activeProjectRef\.current !== reviewedProject\) return/);
