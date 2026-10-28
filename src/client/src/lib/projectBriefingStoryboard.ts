@@ -25,6 +25,30 @@ export function isReviewedBriefingSourceCurrent(source: BriefingSource, live: Br
 }
 
 /**
+ * D06: Show only pinned visuals whose exact source is still selected and still
+ * matches the current Project library. This is a read-only visibility gate;
+ * every actual Save is rechecked by the authenticated P4 handler.
+ */
+export function currentProjectBriefingVisuals(
+  pinned: readonly PinnedBriefingVisual[],
+  selected: readonly BriefingSource[],
+  liveById: ReadonlyMap<string, BriefingSource>,
+  projectId: number,
+): PinnedBriefingVisual[] {
+  if (!Number.isSafeInteger(projectId) || projectId < 1) return [];
+  const selectedHere = new Map(selected.filter(source => source.projectId === projectId)
+    .map(source => [source.id, source]));
+  return pinned.filter(visual => {
+    const source = selectedHere.get(visual.artifactId);
+    return visual.projectId === projectId && Boolean(source &&
+      visual.version === source.headVersion &&
+      visual.title === source.title &&
+      visual.content.kind === source.kind &&
+      isReviewedBriefingSourceCurrent(source, liveById.get(source.id), projectId));
+  });
+}
+
+/**
  * A user-reviewed, immutable outline referencing exact versions of authorized
  * existing Project Artifacts. This function does not access source contents,
  * generate claims, fetch media, create slides, or call an AI service.

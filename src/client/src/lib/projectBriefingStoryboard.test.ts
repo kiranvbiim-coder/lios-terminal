@@ -1,7 +1,8 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import type { PinnedBriefingVisual } from "./phase4BriefingVisuals";
 import {
-  buildProjectBriefingReport, isReviewedBriefingSourceCurrent, MAX_BRIEFING_SOURCES, type BriefingSource,
+  buildProjectBriefingReport, currentProjectBriefingVisuals, isReviewedBriefingSourceCurrent, MAX_BRIEFING_SOURCES, type BriefingSource,
 } from "./projectBriefingStoryboard";
 
 const artifact = (id: string, version: number, projectId = 11): BriefingSource => ({
@@ -72,4 +73,51 @@ test("bounded title and authored introduction; defaults never claim source conte
   });
   assert.match(result.content.blocks[1].text, /References are not citations/);
   assert.match(result.content.blocks.find(block => block.id === "briefing-frame-1-review")?.text ?? "", /No content has been copied/);
+});
+
+
+const recordedVisual = (id: string, projectId = 11, version = 3): PinnedBriefingVisual => ({
+  artifactId: id, projectId, version, title: "Saved " + id,
+  contentHash: "a".repeat(64), sourceRefs: ["source:recorded"],
+  content: { kind: "chart", chartType: "line", rendererPreference: "recharts",
+    series: [{ id: "s1", label: "Observed", points: [{ x: "2026", y: 42 }] }], options: {} },
+});
+
+test("D06 a verified pinned chart remains visible only while its exact selected source is live", () => {
+  const selected = artifact("figure", 3);
+  const pinned = recordedVisual("figure");
+  const live = new Map([[selected.id, selected]]);
+  assert.deepEqual(currentProjectBriefingVisuals([pinned], [selected], live, 11), [pinned]);
+  assert.deepEqual(currentProjectBriefingVisuals([pinned], [], live, 11), [],
+    "visual must disappear immediately when removed from selection");
+  assert.deepEqual(currentProjectBriefingVisuals([pinned], [selected], live, 22), [],
+    "visual must never cross Projects");
+  assert.deepEqual(currentProjectBriefingVisuals([pinned], [selected], live, 0), [],
+    "invalid Project identity fails closed");
+  assert.deepEqual(currentProjectBriefingVisuals([{ ...pinned, projectId: 22 }], [selected], live, 11), [],
+    "wrong-Project P4 pin cannot be displayed");
+  assert.deepEqual(currentProjectBriefingVisuals([{ ...pinned, version: 5 }], [selected], live, 11), [],
+    "wrong-version P4 pin cannot be displayed");
+  assert.deepEqual(currentProjectBriefingVisuals([{ ...pinned, title: "Mismatched source title" }], [selected], live, 11), [],
+    "a P4 visual from an unreviewed title must not be displayed");
+  assert.deepEqual(currentProjectBriefingVisuals([{ ...pinned,
+    content: { kind: "table", columns: [{ key: "x", label: "X", type: "number" }], rows: [{ x: 42 }] } }],
+    [selected], live, 11), [], "a forged kind swap cannot be displayed");
+});
+
+test("D06 revoked, renamed, archived and superseded saved visuals fail closed before report review", () => {
+  const selected = artifact("figure", 3);
+  const pinned = recordedVisual("figure");
+  const view = (changed: BriefingSource | undefined) =>
+    currentProjectBriefingVisuals([pinned], [selected],
+      changed ? new Map([[selected.id, changed]]) : new Map<string, BriefingSource>(), 11);
+  assert.deepEqual(view(undefined), [], "revocation drops the visual");
+  assert.deepEqual(view({ ...selected, headVersion: 4 }), [], "new head requires renewed review");
+  assert.deepEqual(view({ ...selected, title: "Other source" }), [], "renamed saved source requires review");
+  assert.deepEqual(view({ ...selected, status: "archived" }), [], "archived source cannot be previewed");
+  assert.deepEqual(view({ ...selected, projectId: 22 }), [], "revoked Project membership denies preview");
+  assert.deepEqual(view({ ...selected, kind: "table" }), [], "kind changes deny chart preview");
+  assert.deepEqual(view(selected), [pinned], "unchanged authorized source remains usable");
+  assert.equal(selected.headVersion, 3, "read-only filter never mutates reviewed version");
+  assert.equal(pinned.version, 3, "read-only filter never mutates P4 payload");
 });
