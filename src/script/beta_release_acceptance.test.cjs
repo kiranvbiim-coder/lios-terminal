@@ -4,7 +4,10 @@ const assert = require("node:assert/strict");
 const fs = require("node:fs");
 const os = require("node:os");
 const path = require("node:path");
-const { checkNativeSelfTest, checkNativeUX, inspectNativeEvidence, parseFlags } = require("./beta_release_acceptance.cjs");
+const crypto = require("node:crypto");
+const { TARGETS, targetName, signBetaManifest, verifyBetaManifest } = require("../betaReleaseManifest.cjs");
+const { splitInstaller } = require("../betaReleaseParts.cjs");
+const { checkNativeSelfTest, checkNativeUX, inspectNativeEvidence, parseFlags, verifyBetaMultipartTransport } = require("./beta_release_acceptance.cjs");
 
 const checksum = "a".repeat(64);
 const BETA_VERSION = "1.0.0-beta.1";
@@ -241,4 +244,80 @@ test("D10 installed receipt must match reviewed source commit as well as package
   assert.throws(() => checkNativeSelfTest(mac, "darwin", "arm64", BETA_VERSION),
     /BLOCKED.*source commit/);
   assert.equal(checkNativeSelfTest(packaged("win32", "x64"), "win32", "x64", BETA_VERSION, BETA_COMMIT).nativeSelfTest, true);
+});
+
+test("D10 signed root to multipart acceptance checks real two-Mac installer bytes, not only separate helpers", async t => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), "lios-beta-full-part-gate-"));
+  t.after(() => fs.rmSync(root, { recursive: true, force: true }));
+  const assets = path.join(root, "local-assembled");
+  const parts = path.join(root, "owner-parts");
+  fs.mkdirSync(assets);
+  fs.mkdirSync(parts);
+  const version = "1.0.0-beta.2";
+  const commit = "f".repeat(40);
+  const keys = crypto.generateKeyPairSync("ed25519");
+  const privateKey = keys.privateKey.export({ type: "pkcs8", format: "pem" });
+  const trustedPublicKeyPem = keys.publicKey.export({ type: "spki", format: "pem" });
+  const expectedSizes = [513, 425, 150];
+  for (const [i, target] of TARGETS.entries()) {
+    fs.writeFileSync(path.join(assets, targetName(version, target)),
+      crypto.randomBytes(expectedSizes[i]));
+  }
+  const manifest = await signBetaManifest({
+    version, commit, assetDir: assets, privateKeyPem: privateKey,
+  });
+  const verified = await verifyBetaManifest({
+    manifest, assetDir: assets, trustedPublicKeyPem, expectedCommit: commit,
+  });
+  assert.deepEqual(verified.assetHashes.map(item => item.bytes), expectedSizes);
+  for (const target of ["mac-arm64-dmg", "mac-arm64-zip"]) {
+    const name = targetName(version, target);
+    const index = await splitInstaller({
+      file: path.join(assets, name), outputDir: parts, privateKey, partBytes: 200,
+    });
+    fs.writeFileSync(path.join(parts, name + ".parts.json"),
+      JSON.stringify(index), { flag: "wx" });
+  }
+  const args = { verified, multipartDir: parts, trustedPublicKey: trustedPublicKeyPem,
+    maxDirectBytes: 300 };
+  const accepted = await verifyBetaMultipartTransport(args);
+  assert.deepEqual(accepted.map(item => item.target), ["mac-arm64-dmg", "mac-arm64-zip"]);
+  assert.deepEqual(accepted.map(item => item.partCount), [3, 3]);
+  assert.ok(accepted.every(item => item.verified === true && item.sha256.length === 64));
+  assert.equal(fs.readdirSync(parts).length, 8);
+  await assert.rejects(verifyBetaMultipartTransport({ ...args, multipartDir: null }),
+    /BLOCKED.*multipart directory/);
+  await assert.rejects(verifyBetaMultipartTransport({
+    ...args, trustedPublicKey: crypto.generateKeyPairSync("ed25519").publicKey
+      .export({ type: "spki", format: "pem" }),
+  }), /Untrusted multipart manifest/);
+  // Signed transport is also bound to the signed ROOT's installer identity.
+  const dmg = targetName(version, "mac-arm64-dmg");
+  const indexFile = path.join(parts, dmg + ".parts.json");
+  const originalIndex = fs.readFileSync(indexFile);
+  const other = path.join(assets, "different-mac-installer.dmg");
+  fs.writeFileSync(other, crypto.randomBytes(513));
+  const foreign = await splitInstaller({
+    file: other, outputDir: parts, privateKey, partBytes: 200,
+  });
+  fs.writeFileSync(indexFile, JSON.stringify(foreign));
+  await assert.rejects(verifyBetaMultipartTransport(args),
+    /BLOCKED.*does not match the exact reviewed installer/);
+  fs.writeFileSync(indexFile, originalIndex);
+  const part = path.join(parts, dmg + ".part001");
+  const original = fs.readFileSync(part);
+  fs.writeFileSync(part, Buffer.alloc(original.length, 0xaa));
+  await assert.rejects(verifyBetaMultipartTransport(args), /integrity mismatch/);
+  fs.writeFileSync(part, original);
+  assert.equal((await verifyBetaMultipartTransport(args)).length, 2);
+  await assert.rejects(verifyBetaMultipartTransport({ ...args, maxDirectBytes: 0 }),
+    /BLOCKED.*authenticated beta root/);
+  await assert.rejects(verifyBetaMultipartTransport({ ...args, maxDirectBytes: 2_000_000_001 }),
+    /BLOCKED.*authenticated beta root/);
+  assert.deepEqual(await verifyBetaMultipartTransport({
+    ...args, maxDirectBytes: 600, multipartDir: null,
+  }), []);
+  await assert.rejects(verifyBetaMultipartTransport({
+    ...args, maxDirectBytes: 600,
+  }), /BLOCKED.*multipart directory/);
 });
