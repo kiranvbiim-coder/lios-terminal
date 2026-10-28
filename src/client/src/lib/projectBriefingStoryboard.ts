@@ -25,6 +25,19 @@ export function isReviewedBriefingSourceCurrent(source: BriefingSource, live: Br
 }
 
 /**
+ * P4 intentionally records at most the first 160 title characters in a visual
+ * pin. Compare that recorded value, then separately require the *full* selected
+ * source title to equal the live Project library title. A long legitimate
+ * title must not make an otherwise current visual disappear.
+ */
+export function isRecordedBriefingVisualTitleCurrent(
+  visual: Pick<PinnedBriefingVisual, "title">,
+  source: BriefingSource,
+): boolean {
+  return visual.title === source.title.slice(0, 160);
+}
+
+/**
  * D06: Show only pinned visuals whose exact source is still selected and still
  * matches the current Project library. This is a read-only visibility gate;
  * every actual Save is rechecked by the authenticated P4 handler.
@@ -42,7 +55,7 @@ export function currentProjectBriefingVisuals(
     const source = selectedHere.get(visual.artifactId);
     return visual.projectId === projectId && Boolean(source &&
       visual.version === source.headVersion &&
-      visual.title === source.title &&
+      isRecordedBriefingVisualTitleCurrent(visual, source) &&
       visual.content.kind === source.kind &&
       isReviewedBriefingSourceCurrent(source, liveById.get(source.id), projectId));
   });
