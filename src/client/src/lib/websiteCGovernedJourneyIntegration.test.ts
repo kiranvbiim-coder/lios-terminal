@@ -6,14 +6,17 @@ const read = (relative: string) => readFileSync(new URL(relative, import.meta.ur
 test("C01 Chat visual asks the authenticated P4 version owner and rechecks all source identities", () => {
   const request = read("../../../shared/governedVisualAnswer.ts");
   const view = read("../components/terminal/GovernedVisualAnswer.tsx");
+  const hook = read("./useArtifacts.ts");
   assert.ok(request.includes("requestedRefs.size !== canonicalRefs.size"));
   assert.ok(request.includes("observations.some(({ access }) =>"));
   assert.ok(view.includes("Recheck current source permissions"));
-  assert.ok(view.includes("setReadRevision(value => value + 1)"));
-  assert.ok(view.includes('cache: "no-store"'));
-  assert.ok(view.includes('credentials: "same-origin"'));
+  assert.ok(view.includes("void artifact.refetch()"));
+  assert.ok(view.includes("useArtifact(request.artifactId, request.version, true)"));
+  assert.ok(hook.includes('cache: "no-store"'));
+  assert.ok(hook.includes('credentials: "same-origin"'));
   assert.ok(view.includes("resolveGovernedVisualAnswer(request, remote)"));
-  assert.ok(view.includes("controller.abort()"));
+  assert.ok(hook.includes("queryFn: async ({ signal })"));
+  assert.ok(hook.includes("refetchOnMount: \"always\""));
   assert.ok(!view.includes("createP9Workflow("));
 });
 
