@@ -2,7 +2,7 @@
 // Development source qualification only. Never registers a service or publishes runtime bytes.
 import { createHash, createPublicKey, randomUUID, verify } from "node:crypto";
 import { createReadStream } from "node:fs";
-import { mkdir, mkdtemp, open, readdir, readFile, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, open, readdir, readFile, readlink, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { spawnSync } from "node:child_process";
@@ -61,9 +61,10 @@ async function inventory(directory, relative = "", result = []) {
   const entries = await readdir(path.join(directory, relative), { withFileTypes: true });
   for (const entry of entries.sort((a, b) => a.name.localeCompare(b.name))) {
     const child = path.posix.join(relative, entry.name);
-    if (entry.isSymbolicLink()) throw new Error(`Compiled output symlink requires explicit review: ${child}`);
-    if (entry.isDirectory()) await inventory(directory, child, result);
-    else if (entry.isFile()) result.push({ path: child, sha256: await digestFile(path.join(directory, child)) });
+    // Audit link facts without following them or treating the development output as distributable.
+    if (entry.isSymbolicLink()) result.push({ path: child, kind: "symlink", target: await readlink(path.join(directory, child)) });
+    else if (entry.isDirectory()) await inventory(directory, child, result);
+    else if (entry.isFile()) result.push({ path: child, kind: "file", sha256: await digestFile(path.join(directory, child)) });
   }
   return result;
 }
