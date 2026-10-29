@@ -13,6 +13,7 @@ interface TelegramConnectionSummary {
   allowedConversationIds: string[];
   retentionDays: number;
   allowAiTransmission: boolean;
+  allowOutbound: boolean;
   consentActive: boolean;
   credentialPresent: boolean;
   nextOffset: number;
@@ -22,7 +23,7 @@ interface TelegramConnectionSummary {
 const QUERY_KEY = ["/api/setup/telegram-connections"];
 const EMPTY: TelegramConnectForm = {
   name: "", botToken: "", projectId: null, chatId: null, conversationIds: "", retentionDays: "30",
-  allowAiTransmission: false, consent: false,
+  allowAiTransmission: false, consent: false, allowOutbound: false, outboundConsent: false,
 };
 const field = "mt-1 block min-h-11 w-full rounded-md border border-border bg-background px-3 py-2 font-ui text-sm text-foreground focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary";
 
@@ -67,7 +68,7 @@ export default function TelegramConnectionPanel() {
     try {
       await apiRequest("POST", "/api/setup/telegram-connections", built.request);
       setForm(EMPTY);
-      setNotice({ ok: true, text: "Saved. Home starts importing allowed messages shortly; nothing is sent back to Telegram." });
+      setNotice({ ok: true, text: "Saved. Home imports allowed messages shortly. Sending is available only if explicitly enabled and separately approved for the exact message in Chat." });
       await qc.invalidateQueries({ queryKey: QUERY_KEY });
     } catch (error) {
       // The server returns a sanitized sentence only; the token is never echoed.
@@ -124,7 +125,7 @@ export default function TelegramConnectionPanel() {
                 <div><dt className="inline">Allowed chat IDs: </dt><dd className="inline text-foreground">{connection.allowedConversationIds.join(", ")}</dd></div>
                 <div><dt className="inline">Retention: </dt><dd className="inline text-foreground">imported messages older than {connection.retentionDays} days are removed hourly</dd></div>
                 <div><dt className="inline">AI can read imported text: </dt><dd className="inline text-foreground">{connection.allowAiTransmission ? "Yes" : "No"}</dd></div>
-                <div><dt className="inline">Replies to Telegram: </dt><dd className="inline text-foreground">Off</dd></div>
+                <div><dt className="inline">Replies to Telegram: </dt><dd className="inline text-foreground">{connection.allowOutbound ? "Exact message approval required in this Project Chat" : "Off"}</dd></div>
               </dl>
               {connection.enabled && (!connection.consentActive || !connection.credentialPresent) && (
                 <p role="alert" className="mt-2 text-sm text-amber-200">This connection is not importing: {connection.consentActive ? "its bot token is missing" : "its data-use consent was revoked"}. Disconnect and reconnect to repair it.</p>
@@ -155,9 +156,15 @@ export default function TelegramConnectionPanel() {
         <label className="flex min-h-11 items-start gap-2 font-ui text-sm text-muted-foreground">
           <input type="checkbox" className="mt-1" checked={form.allowAiTransmission} onChange={event => update({ allowAiTransmission: event.target.checked })} />
           <span>Let LiOS include imported messages in AI model context (off by default; sends text to your AI provider).</span></label>
+        <label className="flex min-h-11 items-start gap-2 font-ui text-sm text-muted-foreground">
+          <input type="checkbox" className="mt-1" checked={form.allowOutbound} onChange={event => update({ allowOutbound: event.target.checked, outboundConsent: false })} />
+          <span>Allow reviewed text messages to these Telegram chat IDs from this Project Chat. Each exact recipient, text and reply/topic still requires approval; no automatic responses.</span></label>
+        {form.allowOutbound && <label className="flex min-h-11 items-start gap-2 font-ui text-sm text-foreground">
+          <input type="checkbox" className="mt-1" checked={form.outboundConsent} onChange={event => update({ outboundConsent: event.target.checked })} />
+          <span>I have permission to contact these recipients and share the reviewed text. I consent to explicit approved sending under Telegram’s terms, and to sharing these connection names/target IDs with my permitted AI provider when planning channel actions. Disconnecting revokes this permission; it cannot recall a message already accepted by Telegram.</span></label>}
         <label className="flex min-h-11 items-start gap-2 font-ui text-sm text-foreground">
           <input type="checkbox" className="mt-1" checked={form.consent} onChange={event => update({ consent: event.target.checked })} />
-          <span>I consent to LiOS importing messages from the chat IDs above into this Project Chat. Telegram’s bot terms apply to my bot and its data. LiOS will not reply or post to Telegram.</span></label>
+          <span>I consent to LiOS importing messages from the chat IDs above into this Project Chat. Telegram’s bot terms apply to my bot and its data. Import permission alone never authorizes sending.</span></label>
         {notice && <p role={notice.ok ? "status" : "alert"} className={`rounded border px-3 py-2 font-ui text-sm ${notice.ok ? "border-emerald-500/40 text-emerald-400" : "border-rose-500/40 text-rose-300"}`}>{notice.text}</p>}
         <button type="submit" disabled={busy} className="min-h-11 rounded-md border border-primary/60 bg-primary/10 px-4 font-ui text-sm font-medium text-foreground focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary disabled:opacity-40">{busy ? "Saving…" : "Connect Telegram"}</button>
       </form>

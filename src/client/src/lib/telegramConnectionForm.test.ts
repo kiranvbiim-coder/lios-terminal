@@ -5,6 +5,7 @@ import { buildTelegramConnectRequest, type TelegramConnectForm } from "./telegra
 const valid: TelegramConnectForm = {
   name: " Team bot ", botToken: " 123456:synthetic_token ", projectId: 4, chatId: 9, conversationIds: "123, -456\n123",
   retentionDays: "30", allowAiTransmission: false, consent: true,
+  allowOutbound: false, outboundConsent: false,
 };
 
 test("a connect request requires explicit consent, an owned Project Chat target and valid allow-list", () => {

@@ -431,6 +431,30 @@ test("WS-51: expired or missing exact bindings fail closed, but denial remains p
   assert.match(expired, /\bDeny<\/button>/);
 });
 
+test("Telegram approval displays the entire exact recipient/message/reply and treats authored HTML as text", () => {
+  const text = 'Reviewed $1,250.00. <img src=x onerror=\"alert(1)\">' + " complete text".repeat(180);
+  const base = {
+    type: "governed_tool_approval_required", reviewId: "99999999-9999-4999-8999-999999999999",
+    label: "Send reviewed Telegram text", permissionClass: "user_confirm", sideEffect: "external", replaySafe: false,
+    choices: ["allow_once", "allow_project", "deny"], expiresAt: "2099-01-01T00:00:00.000Z", message: "Review exact channel text.",
+    reviewBinding: { toolId: "lios.channel.telegram.send_text", stepId: "send", toolCallId: "send-call", inputSha256: "a".repeat(64), planSha256: "b".repeat(64), chatId: 7, projectId: 3 },
+    channelTextReview: { connectionId: 41, recipientId: "-123", text, topic: { kind: "forum", id: 7 }, replyToMessageId: 17, silent: false },
+  };
+  const markup = render([event(base)], { onGovernedToolReview: async () => true });
+  assert.match(markup, /aria-label="Exact Telegram message review"/);
+  assert.match(markup, /Recipient:<\/strong> -123/);
+  assert.match(markup, /forum 7/);
+  assert.match(markup, /Reply to message:<\/strong> 17/);
+  assert.match(markup, /&lt;img src=x onerror=&quot;alert\(1\)&quot;&gt;/);
+  assert.doesNotMatch(markup, /<img src=x/);
+  assert.equal((markup.match(/ complete text/g) ?? []).length, 180);
+  assert.doesNotMatch(markup, /Allow for Project/);
+  assert.match(markup, /data-testid="governed-tool-allow-once"[^>]*disabled/);
+  const missing = render([event({ ...base, channelTextReview: undefined })], { onGovernedToolReview: async () => true });
+  assert.doesNotMatch(missing, /data-testid="governed-review-risk-ack"/);
+  assert.match(missing, /data-testid="governed-tool-allow-once"[^>]*disabled/);
+});
+
 test("WS-51: legacy action review shows exact target, offered scope and hides approvals after terminal result", () => {
   const action = event({
     type: "approval_required", action: "RunBacktest",

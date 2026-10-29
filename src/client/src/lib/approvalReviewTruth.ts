@@ -20,13 +20,14 @@ export function governedReviewRisk(review: GovernedReview, nowMs: number) {
   const highRisk = review.permissionClass === "admin_confirm" || effect === "external";
   return {
     effect, risk, highRisk, expired, exactBinding,
-    blockAllow: expired || (needsExactBinding && !exactBinding),
-    projectScope: review.choices.includes("allow_project") && binding?.projectId != null,
+    blockAllow: expired || (needsExactBinding && !exactBinding) || (binding?.toolId === "lios.channel.telegram.send_text" && !review.channelTextReview),
+    projectScope: review.choices.includes("allow_project") && binding?.projectId != null && binding.toolId !== "lios.channel.telegram.send_text",
     scopeLabel: binding ? binding.projectId === null
       ? `Chat ${binding.chatId ?? "unavailable"} · one-time only`
       : `Project ${binding.projectId} · Chat ${binding.chatId ?? "unavailable"}`
       : "Exact run/target binding is not included in this recorded review",
-    inputDisclosure: binding ? "Input SHA-256 is shown below. Raw input and external target are NOT exposed; verify out of band before permitting effects." : "Exact input hash and tool-call binding unavailable. Do not approve an unverified action.",
+    inputDisclosure: review.channelTextReview ? "The exact server-bound Telegram recipient, text and reply/topic are shown below. Allow once permits only this message; provider acceptance is not recipient delivery or read."
+      : binding ? "Input SHA-256 is shown below. Raw input and external target are NOT exposed; verify out of band before permitting effects." : "Exact input hash and tool-call binding unavailable. Do not approve an unverified action.",
   };
 }
 

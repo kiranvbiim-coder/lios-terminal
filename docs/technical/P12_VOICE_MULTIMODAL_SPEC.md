@@ -52,6 +52,17 @@ Automated service/runtime/provider-shape coverage now includes an actual local d
 16. Explicit user-selected runtime files take precedence over managed-pack discovery; environment overrides remain supported for development/managed deployments.
 17. `/api/voice/providers` returns only booleans, source categories and guidance for runtime readiness; absolute local paths are never exposed to the renderer.
 
+## Screen-faithful optional reply speech
+
+“Speak replies” remains off by default in the existing Chat Tools → Advanced menu. Completed Quick/Project and Temporary replies now project through the same `parseChatMarkdown` tree used on screen before the existing authenticated `/api/voice/speak` request. Headings/emphasis become text, links speak their visible label without appended destinations, tables retain each column-header/value association, financial values and citation markers stay literal, and machine directives remain excluded by the canonical parser. No answer, transcript, Artifact or source citation is rewritten.
+
+Selected approved OpenClaw `src/tts/speech-text.ts` / `src/shared/text/strip-markdown.ts` rules are adapted rather than importing a second Markdown stack: decorative-only lines are silent; at least half fenced-code body announces “I've put the detailed response on screen.” Inline code does not trigger that announcement. Projected text over the unchanged4,000-character endpoint limit is visibly refused, never silently truncated, summarized by a model or sent in extra requests.
+
+Existing speech failure now yields a fixed safe notice while preserving the complete answer. “Stop speaking”, opt-out, conversation switch and unmount abort client synthesis admission/playback and release the audio object URL; the existing server/native process timeouts still own any already-entered synthesis. This does not claim native synthesis-process extinction on browser cancellation. No provider or permission fallback, additional model call, model/binary download or audio persistence is added.
+
+Source-Home evidence on macOS arm64: actual client reproduction sent raw Markdown, table pipes and a labelled-link URL before the fix. Final normal P12 request used semantic projection; actual `/usr/bin/say` → `/usr/bin/afconvert` returned200,830bytes of WAV, and Chromium playback completed. A code-heavy answer played only the explicit screen-detail sentence; over-limit text made no HTTP request. Actual deterministic runtime-health replies in a newly saved Project Chat and Temporary Chat entered automatic speech; Stop and conversation navigation aborted pending client requests, opt-out made no subsequent synthesis request, and an injected422 provider refusal produced only the safe notice without losing the answer.28 focused display/speech/P12 behaviors passed. This is actual source/native-provider transport/playback evidence, not a listening-quality judgment, packaged clean-machine acceptance, microphone/STT, Windows voice, broader media-family or P14 qualification.
+
+
 ## Local-runtime setup integration status
 
 The native bridge, server readiness routes, local-path validation and active Connection Center UI are integrated. **Connections → Local Voice Runtime** reports three independent prerequisites:

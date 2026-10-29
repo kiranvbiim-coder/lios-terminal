@@ -1,5 +1,5 @@
 import crypto from "node:crypto";
-import { and, eq, isNull } from "drizzle-orm";
+import { and, eq, inArray, isNull } from "drizzle-orm";
 import { telegramConnectInputSchema } from "@shared/telegramConnection";
 import { telegramPollingStatus } from "./telegramPollingRuntime";
 import {
@@ -7,8 +7,8 @@ import {
   type SourceConnection, type User,
 } from "@shared/schema";
 import {
-  TELEGRAM_CONNECTION_CONSENT_VERSION, parseTelegramSourceConfig, telegramConnectionPolicySchema,
-  telegramConsentScope, telegramCredentialName, telegramSourceConfig,
+  TELEGRAM_CONNECTION_CONSENT_VERSION, TELEGRAM_OUTBOUND_CONSENT_VERSION, parseTelegramSourceConfig, telegramConnectionPolicySchema,
+  telegramConsentScope, telegramOutboundConsentScope, telegramCredentialName, telegramSourceConfig,
   type TelegramConnectionPolicy,
 } from "@shared/telegramConnection";
 import { getDb } from "./db";
@@ -39,7 +39,7 @@ export interface TelegramConnectionSummary {
   allowedUpdateTypes: string[];
   retentionDays: number;
   allowAiTransmission: boolean;
-  allowOutbound: false;
+  allowOutbound: boolean;
   consentActive: boolean;
   credentialPresent: boolean;
   nextOffset: number;
@@ -100,7 +100,7 @@ export async function connectTelegram(user: SetupUser, rawInput: unknown): Promi
   const policy: TelegramConnectionPolicy = telegramConnectionPolicySchema.parse({
     version: "lios-telegram-connection/1", accountBindingId, enabled: true, projectId: project.id, chatId: chat.id,
     allowedConversationIds: input.allowedConversationIds, allowedUpdateTypes: input.allowedUpdateTypes,
-    retentionDays: input.retentionDays, allowAiTransmission: input.allowAiTransmission, allowOutbound: false,
+    retentionDays: input.retentionDays, allowAiTransmission: input.allowAiTransmission, allowOutbound: input.allowOutbound,
   });
   await storeToken(user, credentialName, input.botToken);
   try {
@@ -111,6 +111,9 @@ export async function connectTelegram(user: SetupUser, rawInput: unknown): Promi
       }).returning();
       await tx.insert(userDataConsents).values({
         userId: user.id, scope: telegramConsentScope(accountBindingId), consentVersion: TELEGRAM_CONNECTION_CONSENT_VERSION,
+      });
+      if (policy.allowOutbound) await tx.insert(userDataConsents).values({
+        userId: user.id, scope: telegramOutboundConsentScope(accountBindingId), consentVersion: TELEGRAM_OUTBOUND_CONSENT_VERSION,
       });
       return row as SourceConnection;
     });
@@ -130,10 +133,14 @@ async function summarize(user: Pick<User, "organizationId">, source: SourceConne
   const policy = parseTelegramSourceConfig(source.config);
   const [cursor] = await getDb().select().from(channelIngressCursors).where(eq(channelIngressCursors.sourceConnectionId, source.id)).limit(1);
   const live = policy.enabled ? telegramPollingStatus(source.id) : null;
+  const [outboundConsent] = policy.allowOutbound ? await getDb().select({ id: userDataConsents.id }).from(userDataConsents).where(and(
+    eq(userDataConsents.userId, source.userId), eq(userDataConsents.scope, telegramOutboundConsentScope(policy.accountBindingId)),
+    eq(userDataConsents.consentVersion, TELEGRAM_OUTBOUND_CONSENT_VERSION), isNull(userDataConsents.revokedAt),
+  )).limit(1) : [];
   return {
     connectionId: source.id, name: source.name, enabled: policy.enabled, projectId: policy.projectId, chatId: policy.chatId,
     allowedConversationIds: policy.allowedConversationIds, allowedUpdateTypes: policy.allowedUpdateTypes,
-    retentionDays: policy.retentionDays, allowAiTransmission: policy.allowAiTransmission, allowOutbound: false,
+    retentionDays: policy.retentionDays, allowAiTransmission: policy.allowAiTransmission, allowOutbound: policy.enabled && consentActive && policy.allowOutbound && Boolean(outboundConsent),
     consentActive, credentialPresent: await credentialPresent(user, telegramCredentialName(source.userId, policy.accountBindingId)),
     nextOffset: cursor?.nextOffset ?? 0, updatedAt: source.updatedAt.toISOString(),
     polling: policy.enabled
@@ -175,7 +182,7 @@ export async function disconnectTelegram(user: SetupUser, connectionId: number):
       config: telegramSourceConfig({ ...policy, enabled: false }), status: "configured", updatedAt: now,
     }).where(eq(sourceConnections.id, source.id)).returning();
     await tx.update(userDataConsents).set({ revokedAt: now }).where(and(
-      eq(userDataConsents.userId, user.id), eq(userDataConsents.scope, telegramConsentScope(policy.accountBindingId)), isNull(userDataConsents.revokedAt),
+      eq(userDataConsents.userId, user.id), inArray(userDataConsents.scope, [telegramConsentScope(policy.accountBindingId), telegramOutboundConsentScope(policy.accountBindingId)]), isNull(userDataConsents.revokedAt),
     ));
     return { source: updated as SourceConnection, policy };
   });
