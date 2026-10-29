@@ -12,7 +12,7 @@ delete process.env.DATABASE_URL;
 const { initDb, closeDb, getDb } = await import("./db");
 const { users, projectAutomationRuns, projectAutomationWorkflows } = await import("@shared/schema");
 const { createProject } = await import("./projectStore");
-const { beginP9Run, claimDueP9Workflows, completeP9Run, createP9Workflow, getP9Workflow, setP9WorkflowEnabled } = await import("./p9AutomationStore");
+const { beginP9Run, claimDueP9Workflows, completeP9Run, createP9Notification, createP9Workflow, getP9Workflow, setP9WorkflowEnabled } = await import("./p9AutomationStore");
 const { recoverInterruptedP9Runs, renewP9RunLease } = await import("./p9RunContinuity");
 
 test("automation interruption ends stale running status without replaying an unknown action", { timeout: 120_000 }, async t => {
@@ -111,6 +111,13 @@ test("automation interruption ends stale running status without replaying an unk
       await completeP9Run(ctx, failing, attempt.id, { error: "controlled unavailable input" });
       failing = await getP9Workflow(ctx, failing.id);
       assert.equal(failing.enabled, n < 10);
+      if (n === 10) {
+        const notice = await createP9Notification(ctx, failing, attempt.id, { result: null, error: "controlled unavailable input" });
+        assert.equal(notice?.status, "suppressed", "failure containment must not bypass the owner's notification mute");
+        assert.match(notice!.body, /paused after 10 consecutive failures/);
+        assert.match(notice!.body, /explicitly enable/);
+        assert.equal((await createP9Notification(ctx, failing, attempt.id, { result: null, error: "controlled unavailable input" }))?.id, notice!.id);
+      }
     }
     await closeDb();
     await initDb();

@@ -122,6 +122,7 @@
 
 
 **Recurring-failure containment follow-through (local, not pushed into frozen CI):** the approved donor's ten-failure recurring-run boundary now pauses existing scheduled P9 workflows and clears future due time. Existing exact-owner enable/edit or a known successful manual diagnostic resets the streak; no interrupted/failed action is replayed. The current workflow projection exposes paused state/failure count and the existing minimal Ledger receipt records the containment classification. Seven focused recovery/owner-mutation behaviors and typecheck passed; actual PGlite completion/cold-reopen smoke retained ten failures and disabled scheduling, then explicit owner recovery reset the streak. Failure-alert delivery and broader schedule/catch-up depth remain open.
+**Pause recovery explanation:** current P9 notification creation now explains the ten-failure pause, explicit owner enable and no-replay rule using the existing notification record/inbox. Current mute, cooldown, owner scope and per-run deduplication remain authoritative. Eleven focused continuity/notification-admission behaviors passed; actual PGlite cold-reopen → delivered owner inbox → same-run notification deduplication → explicit enable/reset smoke passed. This proves server/inbox delivery, not native notification presentation or broader scheduled/catch-up acceptance.
 
 
 

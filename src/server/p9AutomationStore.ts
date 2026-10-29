@@ -575,6 +575,12 @@ export async function createP9Notification(
         )).limit(1);
       if (alreadyDelivered) decision.status = "suppressed";
     }
+    const failurePause = input.error && !current.enabled &&
+      current.consecutiveFailures >= P9_RECURRING_FAILURE_PAUSE_LIMIT &&
+      p9WorkflowTriggerSchema.parse(current.trigger).type === "schedule";
+    const body = failurePause
+      ? `Workflow paused after ${current.consecutiveFailures} consecutive failures. Review the failure, then explicitly enable the workflow to resume future runs; failed actions are not replayed.\n${input.error}`
+      : input.error || input.result?.summary || decision.explanation;
     const [row] = await tx.insert(projectAutomationNotifications).values({
       id: "workflow-notification:" + crypto.randomUUID(),
       workflowId: current.id,
@@ -586,7 +592,7 @@ export async function createP9Notification(
       status: decision.status,
       reason: decision.reason,
       title: p9NotificationTitle(current.name, decision.reason).slice(0, 500),
-      body: (input.error || input.result?.summary || decision.explanation).slice(0, 20_000),
+      body: body.slice(0, 20_000),
       relevanceScore: input.result?.relevanceScore ?? 1,
       createdAt: now,
     }).returning();
