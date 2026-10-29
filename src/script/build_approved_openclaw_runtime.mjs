@@ -97,7 +97,7 @@ async function build() {
     if (packageJson.packageManager !== `pnpm@12.5.1+sha512.${pnpmRootSha512}`) throw new Error("Source package-manager contract changed");
     command("docker", ["pull", "--platform", "linux/amd64", image]);
     const uid = `${process.getuid()}:${process.getgid()}`;
-    const sharedArgs = ["--rm", "--read-only", "--user", uid, "--cap-drop", "ALL", "--security-opt", "no-new-privileges", "--pids-limit", "256", "--cpus", "2", "--tmpfs", "/tmp:rw,nosuid,nodev,noexec,size=128m", "--mount", `type=bind,source=${source},target=/work`, "--mount", `type=bind,source=${tools},target=/tools,readonly`, "--workdir", "/work", "--env", "HOME=/work/.build-home", "--env", "XDG_CACHE_HOME=/work/.cache", "--env", "CI=true", "--env", "PATH=/tools:/usr/local/bin:/usr/local/sbin:/usr/sbin:/usr/bin:/sbin:/bin", "--env", `GIT_COMMIT=${sourceCommit}`];
+    const sharedArgs = ["--rm", "--init", "--read-only", "--user", uid, "--cap-drop", "ALL", "--security-opt", "no-new-privileges", "--pids-limit", "256", "--cpus", "2", "--tmpfs", "/tmp:rw,nosuid,nodev,noexec,size=128m", "--mount", `type=bind,source=${source},target=/work`, "--mount", `type=bind,source=${tools},target=/tools,readonly`, "--workdir", "/work", "--env", "HOME=/work/.build-home", "--env", "XDG_CACHE_HOME=/work/.cache", "--env", "CI=true", "--env", "PATH=/tools:/usr/local/bin:/usr/local/sbin:/usr/sbin:/usr/bin:/sbin:/bin", "--env", `GIT_COMMIT=${sourceCommit}`];
     const dockerPhase = (label, network, memory, entrypoint, args, capture = false) => {
       phase = label;
       const name = `lios-openclaw-${label}-${randomUUID().slice(0, 8)}`;
