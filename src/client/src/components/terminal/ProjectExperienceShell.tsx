@@ -53,7 +53,7 @@ import { useInvalidateP9Automation } from "@/lib/useP9Automation";
 import { ObjectActionMenu } from "./ObjectActionMenu";
 import { keepConversationDraft, keepConversationDraftVersion, useInvalidateArtifacts } from "@/lib/useArtifacts";
 import { lazy, Suspense, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react";
-import { speakText, useVoiceProviders, useVoiceRecorder } from "@/lib/useVoiceInput";
+import { useReplySpeech, useVoiceProviders, useVoiceRecorder } from "@/lib/useVoiceInput";
 import {
   dispatchVisualContext,
   inferVisualSemanticContext,
@@ -474,6 +474,7 @@ export default function ProjectExperienceShell({
   const composerToolsTrigger = useRef<HTMLButtonElement>(null);
   const pendingComposerDialog = useRef<"workflow" | "resource" | "plugins" | null>(null);
   const [lifecycleNotice, setLifecycleNotice] = useState<string | null>(null);
+  const replySpeech = useReplySpeech(speakRepliesEnabled && voiceOutputAvailable, financeOwner, setLifecycleNotice);
   const [executionMode, setExecutionMode] = useState<ConversationExecutionMode>("ai_assisted");
   const agentComposer = useBoundedAgentComposer(chatMode, executionMode);
   const [sourceScope, setSourceScope] = useState<ConversationSourceScope>(() => loadComposerSourceScope(selection.projectId));
@@ -1669,7 +1670,7 @@ export default function ProjectExperienceShell({
           }
           const visible = parsed.visibleText || final;
           setTemporaryMessages((current) => [...current, { id: `a-${Date.now()}`, role: "assistant", content: visible }]);
-          if (speakRepliesEnabled && voiceOutputAvailable) void speakText(visible).catch(() => {});
+          replySpeech.speak(visible, financeOwner);
         }
       } else {
         let chatId = selection.chatId;
@@ -1734,7 +1735,7 @@ export default function ProjectExperienceShell({
             recordP1ShellEvent("living_workspace_action");
             await applyWorkspaceAction(action, "assistant");
           }
-          if (speakRepliesEnabled && voiceOutputAvailable) void speakText(parsed.visibleText || result.text).catch(() => {});
+          replySpeech.speak(parsed.visibleText || result.text, `${chatMode}:${selection.projectId ?? "none"}:${chatId ?? "none"}`);
         }
         invalidate(selection.projectId, chatId);
       }
@@ -2994,6 +2995,7 @@ export default function ProjectExperienceShell({
                               onCheckedChange={(checked) => {
                                 const next = checked === true;
                                 setSpeakRepliesEnabled(next);
+                                if (!next) replySpeech.stop();
                                 try { window.localStorage.setItem("lios.voice.speakReplies", next ? "1" : "0"); } catch {}
                               }}
                             >
@@ -3009,6 +3011,7 @@ export default function ProjectExperienceShell({
                     </DropdownMenuContent>
                   </DropdownMenu>
 
+                  {replySpeech.isSpeaking && <button type="button" onClick={replySpeech.stop} className="min-h-9 rounded-md border border-border px-2 font-ui text-xs">Stop speaking</button>}
                   <div className="flex-1" />
 
                   <button

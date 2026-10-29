@@ -6,7 +6,7 @@
 // same permission/approval gates) as a typed message.
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { apiRequest } from "./queryClient";
+import { playReplySpeech, ReplySpeechError } from "./replySpeech";
 import { voiceTranscriptSchema, type VoiceTranscript } from "@shared/multimodalContracts";
 import { voiceFailureCopy } from "./composerAvailability";
 
@@ -169,12 +169,29 @@ export function useVoiceRecorder(onTranscript: (result: VoiceTranscriptResult) =
   return { isRecording, isTranscribing, error, start, stop, toggle, cancel, isPending: () => pending.current };
 }
 
-export async function speakText(text: string, preference?: { providerId?: string | null; voiceId?: string | null; rate?: number }): Promise<void> {
-  const res = await apiRequest("POST", "/api/voice/speak", { text, preference });
-  const blob = await res.blob();
-  const url = URL.createObjectURL(blob);
-  const audio = new Audio(url);
-  audio.onended = () => URL.revokeObjectURL(url);
-  audio.onerror = () => URL.revokeObjectURL(url);
-  await audio.play();
+/** One ephemeral playback owner per visible conversation; no audio or speech projection is persisted. */
+export function useReplySpeech(enabled: boolean, ownerKey: string, onNotice: (message: string) => void) {
+  const current = useRef({ enabled, ownerKey, onNotice });
+  current.current = { enabled, ownerKey, onNotice };
+  const active = useRef<AbortController | null>(null);
+  const [isSpeaking, setIsSpeaking] = useState(false);
+  const stop = useCallback(() => { active.current?.abort(); active.current = null; setIsSpeaking(false); }, []);
+  useEffect(() => () => { active.current?.abort(); active.current = null; }, [enabled, ownerKey]);
+  useEffect(() => { setIsSpeaking(false); }, [enabled, ownerKey]);
+  const speak = useCallback((text: string, expectedOwnerKey: string) => {
+    if (!current.current.enabled || current.current.ownerKey !== expectedOwnerKey) return;
+    active.current?.abort();
+    const controller = new AbortController();
+    active.current = controller;
+    setIsSpeaking(true);
+    void playReplySpeech(text, controller.signal).catch(error => {
+      if (controller.signal.aborted || current.current.ownerKey !== expectedOwnerKey || !current.current.enabled) return;
+      current.current.onNotice(error instanceof ReplySpeechError ? error.message : new ReplySpeechError("unavailable").message);
+    }).finally(() => {
+      if (active.current !== controller) return;
+      active.current = null;
+      setIsSpeaking(false);
+    });
+  }, []);
+  return { speak, stop, isSpeaking };
 }
