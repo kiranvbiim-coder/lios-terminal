@@ -24,6 +24,26 @@
   },
   "components": [
     {
+      "id": "web-push-covered-source",
+      "name": "web-push exact MPL covered-source custody",
+      "repository": "web-push-libs/web-push",
+      "commitSha": "8d9ba1b33bfe0d73ccf3606c59ead4287f50e3b8",
+      "releaseTag": "v3.6.7",
+      "license": "MPL-2.0",
+      "posture": "reference_only",
+      "classification": "adapt",
+      "bundled": false,
+      "noticeRequiredOnImport": true,
+      "noticeHeading": "web-push",
+      "externalRights": "separate_review_required",
+      "roles": ["covered-source-and-notice-custody-before-supporting-service-distribution"],
+      "importedPaths": ["LICENSE", "package.json", "README.md", "src/"],
+      "destinationPaths": ["third_party/sources/web-push-3.6.7/", "third_party/licenses/MPL-2.0.txt"],
+      "pathMappingNote": "Repository-relative destinations are exact source/notice custody, outside src and not imported into LiOS runtime. bundled:false describes runtime integration, not absence of the retained covered source.",
+      "modifications": ["No upstream source modifications. Exact npm archive SHA512 and per-file SHA256 are recorded in source-integrity.json; source and copyright remain MPL-covered. No package scripts execute."],
+      "notes": "Owner explicitly selected keeping web-push with exact covered source/notices and applicable MPL obligations. A future executable distribution must carry the matching source and disclose how recipients obtain it, preserve MPL rights/notices, and review combined generated-file obligations before release. This record is not a shipped service, platform entitlement or complete legal clearance."
+    },
+    {
       "id": "js-yaml",
       "name": "Bounded YAML parser for owner-reviewed skill frontmatter",
       "repository": "nodeca/js-yaml",

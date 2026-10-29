@@ -4,6 +4,12 @@
   "pinPolicy": "Exact recorded pins remain unchanged. A lock is provenance metadata, not proof of import, packaging or release acceptance. p11-candidates.json observedCommit fields are research observations, not replacement pins; reconcile selected package/release source and exact paths before importing. Software licenses do not grant API/data/model/asset/trademark rights.",
   "locks": [
     {
+      "id": "web-push-covered-source",
+      "repository": "web-push-libs/web-push",
+      "commitSha": "8d9ba1b33bfe0d73ccf3606c59ead4287f50e3b8",
+      "license": "MPL-2.0"
+    },
+    {
       "id": "js-yaml",
       "repository": "nodeca/js-yaml",
       "commitSha": "79ca68d90f333fbe6d9e42827527e62636200191",
