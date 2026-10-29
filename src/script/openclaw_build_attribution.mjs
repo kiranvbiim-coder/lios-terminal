@@ -57,15 +57,19 @@ export function inspectRootPackClosure(pack, graphs) {
   }
   if (!attributedChunks.size || !modules.size) throw new Error("Emitted root-pack module attribution is unavailable");
   const knownRestrictedCandidates = [...modules].filter(id => /(?:^|\/)(?:libsignal|baileys|crabline|decode-aac|decode-ac3|decode-dts|decode-eac3|decode-wma|codec-parser|claude-agent-sdk|claude-agent-acp)(?:@|\/|$)/i.test(id)).sort();
+  const rootPackPaths = [...files].sort();
+  const moduleIdentifiers = [...modules].sort();
   return {
     rootPackFileCount: files.size,
-    rootPackFileInventorySha256: createHash("sha256").update(JSON.stringify([...files].sort())).digest("hex"),
+    rootPackFileInventorySha256: createHash("sha256").update(JSON.stringify(rootPackPaths)).digest("hex"),
     attributedRootChunks: attributedChunks.size,
     attributedRootModules: modules.size,
-    attributedModuleInventorySha256: createHash("sha256").update(JSON.stringify([...modules].sort())).digest("hex"),
+    attributedModuleInventorySha256: createHash("sha256").update(JSON.stringify(moduleIdentifiers)).digest("hex"),
     knownRestrictedModuleCandidates: knownRestrictedCandidates,
     excludedOptionalPluginFilesPresent: false,
     scope: "Root-config emitted modules only; dynamic runtime loads, nested bundlers, native assets, dependencies and license texts need separate review",
     distributionCleared: false,
+    rootPackPaths,
+    moduleIdentifiers,
   };
 }
