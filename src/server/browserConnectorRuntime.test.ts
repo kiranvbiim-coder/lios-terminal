@@ -126,6 +126,25 @@ test("SI-03.07 browser connector preserves and re-authorizes resolved redirect i
   assert.equal(extracted, 1, "resolved URL is re-authorized before extraction");
 });
 
+test("reviewed click rechecks post-action identity before extraction and cannot expand to multiple pages", async () => {
+  let navigations = 0, extracted = 0, closed = 0;
+  const adapter: BrowserAutomationAdapter = {
+    id: "bounded-click",
+    async navigate(url) { navigations++; return url; },
+    async interact() { return "https://example.com/escaped-after-click"; },
+    async extract() { extracted++; return { text: "must not escape Project" }; },
+    async close() { closed++; },
+  };
+  const request = { urls: ["https://www.sec.gov/report"], extraction: { kind: "snapshot" as const }, interaction: { kind: "click" as const, selector: "#expand" } };
+  await assert.rejects(executeBrowserConnector(policy, request, adapter), /outside Project policy/);
+  assert.equal(navigations, 1);
+  assert.equal(extracted, 0);
+  assert.equal(closed, 1);
+  await assert.rejects(executeBrowserConnector({ ...policy, maxPages: 2 }, { ...request, urls: [request.urls[0], "https://www.sec.gov/other"] }, adapter), /exact selector/);
+  assert.equal(navigations, 1);
+  assert.equal(closed, 2);
+});
+
 test("browser-use download adaptation sends only safe basename and accepts exact Project root file",async()=>{
  const root=fs.mkdtempSync(path.join(os.tmpdir(),"lios-browser-sink-"));
  let received:string|null=null,closed=0;

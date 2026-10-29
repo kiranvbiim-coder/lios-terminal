@@ -9,7 +9,7 @@
   "controlledForkCount": 10,
   "sourceSnapshot": {
     "baselineSha": "ad77f2d53189a7d98583e9d9996d532b79e4686d",
-    "componentsSha": "d57c4655025ea48506d6714a45f36d4945db16cb",
+    "componentsSha": "04c3ce2e7e6dccdbbdf11313b6f7fb66c9a6cd0c",
     "upstreamPinsSha": "27db481b1d9c5f00940d8f6de2a89e997fb387e2",
     "controlledForkSha": "142ff14c5e6b5d6804b20a346d5e31435db2f33b"
   },
@@ -2159,6 +2159,8 @@
         "packages/retry/src/index.test.ts",
         "packages/markdown-core/src/frontmatter.ts",
         "src/skills/loading/frontmatter.ts",
+        "extensions/browser/src/browser/act-policy.ts",
+        "extensions/browser/src/browser/pw-tools-core.interactions.actions.ts",
         "extensions/browser/src/browser/pw-role-snapshot.ts",
         "extensions/browser/src/browser/bounded-utf8-tail.ts",
         "extensions/browser/src/browser/bounded-utf8-tail.test.ts"

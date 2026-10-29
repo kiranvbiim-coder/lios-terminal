@@ -310,6 +310,13 @@ class BrowserRuntimePackAdapter implements BrowserAutomationAdapter {
     return this.command("extract", { input });
   }
 
+  async interact(input: NonNullable<BrowserConnectorRequest["interaction"]>): Promise<string> {
+    const result = z.object({ url: z.string().url().max(4_000) }).strict().parse(
+      await this.command("click", { selector: input.selector }),
+    );
+    return result.url;
+  }
+
   async close(): Promise<void> {
     if (this.closing) return this.closing;
     this.closing = (async () => {

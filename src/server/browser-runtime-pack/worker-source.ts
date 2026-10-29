@@ -110,6 +110,15 @@ async function command(frame) {
     await page.goto(frame.url, { waitUntil: "domcontentloaded", timeout: frame.timeoutMs });
     return { url: page.url() };
   }
+  if (frame.method === "click") {
+    if (typeof frame.selector !== "string" || !frame.selector.trim() || frame.selector.length > 1000) throw new Error("invalid_click_selector");
+    const locator = page.locator(frame.selector);
+    if (await locator.count() !== 1) throw new Error("ambiguous_click_target");
+    // Approved donor bounded interaction/navigation-grace mechanism; no evaluate, typing, files or host tab.
+    await locator.click({ timeout: 8000 });
+    await page.waitForTimeout(250);
+    return { url: page.url() };
+  }
   if (frame.method === "extract") return extract(frame.input || {});
   if (frame.method === "shutdown") {
     await browser.close();

@@ -7,6 +7,7 @@ import { hashLedgerValue, sanitizeLedgerPayload } from "./ledgerStore";
 export interface BrowserConnectorRequest {
   urls: string[];
   extraction: { kind: "text" | "links" | "json" | "snapshot"; selector?: string | null };
+  interaction?: { kind: "click"; selector: string };
   download?: { url: string; filename: string } | null;
 }
 
@@ -16,6 +17,7 @@ export interface BrowserAutomationAdapter {
   readonly networkProjectId?: BrowserConnectorPolicy["projectId"];
   navigate(url: string, timeoutMs: number): Promise<string | void>;
   extract(input: BrowserConnectorRequest["extraction"]): Promise<unknown>;
+  interact?(input: NonNullable<BrowserConnectorRequest["interaction"]>): Promise<string>;
   download?(url: string, filename: string, maxBytes: number, allowedRoots: string[]): Promise<{ path: string; bytes: number }>;
   close(): Promise<void>;
 }
@@ -76,13 +78,23 @@ export async function executeBrowserConnector(
     if (adapter.networkProjectId !== undefined && adapter.networkProjectId !== policy.projectId) {
       throw new Error("Browser adapter network authority does not match active Project policy.");
     }
+    if (request.interaction && (request.urls.length !== 1 || request.interaction.kind !== "click" ||
+        typeof request.interaction.selector !== "string" || !request.interaction.selector.trim() ||
+        request.interaction.selector.length > 1_000 || !adapter.interact)) {
+      throw new Error("A reviewed browser click requires one URL, one bounded exact selector and an isolated interaction adapter.");
+    }
     const pages: Array<{ requestedUrl: string; resolvedUrl: string; output: unknown }> = [];
     for (const url of request.urls) {
       const navigatedUrl = await adapter.navigate(url, policy.navigationTimeoutMs);
-      const resolvedUrl = typeof navigatedUrl === "string" && navigatedUrl.trim() ? navigatedUrl : url;
+      let resolvedUrl = typeof navigatedUrl === "string" && navigatedUrl.trim() ? navigatedUrl : url;
       // Navigation transports can observe redirects. Re-check the final page
       // identity through the same Project authority before accepting extraction.
       assertBrowserUrlAllowed(resolvedUrl, policy);
+      if (request.interaction) {
+        resolvedUrl = await adapter.interact!(request.interaction);
+        // Actions can change navigation after initial admission; validate before accepting any page evidence.
+        assertBrowserUrlAllowed(resolvedUrl, policy);
+      }
       const output = sanitizeLedgerPayload(await adapter.extract(request.extraction));
       outputs.push(output);
       pages.push({ requestedUrl: url, resolvedUrl, output });
@@ -109,7 +121,7 @@ export async function executeBrowserConnector(
       download,
       startedAt,
       completedAt: new Date().toISOString(),
-      inputHash: hashLedgerValue({ urls: request.urls, extraction: request.extraction, downloadRequested: Boolean(request.download) }),
+      inputHash: hashLedgerValue({ urls: request.urls, extraction: request.extraction, ...(request.interaction ? { interaction: request.interaction } : {}), downloadRequested: Boolean(request.download) }),
       outputHash: hashLedgerValue({ pages, download: download ? { bytes: download.bytes, filename: request.download?.filename } : null }),
     };
   } finally {

@@ -41,6 +41,7 @@ async function bindAdapterToNetworkProject(
     extract: (input) => adapter.extract(input),
     close: () => adapter.close(),
   };
+  if (adapter.interact) bound.interact = input => adapter.interact!(input);
   if (adapter.download) {
     bound.download = (url, filename, maxBytes, allowedRoots) =>
       adapter.download!(url, filename, maxBytes, allowedRoots);

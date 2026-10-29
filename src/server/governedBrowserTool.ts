@@ -55,7 +55,8 @@ const browserToolInputSchema = z.object({
     kind: z.enum(["text", "links", "json", "snapshot"]),
     selector: z.string().trim().max(1_000).nullable().optional(),
   }).strict(),
-}).strict();
+  interaction: z.object({ kind: z.literal("click"), selector: z.string().trim().min(1).max(1_000) }).strict().optional(),
+}).strict().refine(value => !value.interaction || value.urls.length === 1, "A reviewed click targets exactly one URL.");
 
 export interface GovernedBrowserToolDependencies {
   env?: NodeJS.ProcessEnv;
@@ -68,6 +69,7 @@ export function browserConversationToolDescriptor(
   return {
     id: "agent.browser.navigate",
     label: "Governed isolated browser navigation",
+    planningHint: "Use extraction snapshot for bounded accessible page structure. Optional interaction is one exact-selector click at one reviewed URL before extraction; all network requests remain Project-scoped GET/HEAD only. Never use it for forms, credentials, uploads or arbitrary script execution.",
     kind: "retrieve",
     permissionClass: "user_confirm",
     access: "write",
