@@ -6,7 +6,7 @@ import { hashLedgerValue, sanitizeLedgerPayload } from "./ledgerStore";
 
 export interface BrowserConnectorRequest {
   urls: string[];
-  extraction: { kind: "text" | "links" | "json"; selector?: string | null };
+  extraction: { kind: "text" | "links" | "json" | "snapshot"; selector?: string | null };
   download?: { url: string; filename: string } | null;
 }
 

@@ -75,6 +75,21 @@ async function routeRequest(route) {
 async function extract(input) {
   const selector = typeof input.selector === "string" && input.selector ? input.selector : "body";
   const locator = page.locator(selector).first();
+  if (input.kind === "snapshot") {
+    // Adapted from pinned OpenClaw pw-role-snapshot: budget complete lines, never claim full coverage.
+    // 8 KiB also bounds worst-case JSON escaping below the existing 64 KiB wire frame.
+    const lines = (await locator.ariaSnapshot({ timeout: 5000 })).split("\n");
+    const kept = [];
+    let bytes = 0;
+    for (const line of lines) {
+      const lineBytes = Buffer.byteLength(line) + (kept.length ? 1 : 0);
+      if (bytes + lineBytes > 8 * 1024) break;
+      kept.push(line);
+      bytes += lineBytes;
+    }
+    const truncated = kept.length !== lines.length;
+    return { snapshot: kept.join("\n") + (truncated ? "\n[...TRUNCATED - page too large]" : ""), format: "aria", truncated };
+  }
   if (input.kind === "links") {
     return locator.locator("a[href]").evaluateAll((elements, maximum) => elements.slice(0, maximum).map((element) => ({
       text: (element.textContent || "").trim().slice(0, 500),

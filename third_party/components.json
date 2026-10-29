@@ -335,6 +335,7 @@
         "src/process/terminal-pty.test.ts",
         "packages/retry/src/index.ts",
         "packages/retry/src/index.test.ts",
+        "extensions/browser/src/browser/pw-role-snapshot.ts",
         "extensions/browser/src/browser/bounded-utf8-tail.ts",
         "extensions/browser/src/browser/bounded-utf8-tail.test.ts"
       ],
@@ -422,6 +423,10 @@
         "server/exec/retry-timing.test.ts",
         "server/browser-runtime-pack/bounded-utf8-tail.ts",
         "server/browser-runtime-pack/bounded-utf8-tail.test.ts",
+        "server/browser-runtime-pack/worker-source.ts",
+        "server/browserConnectorRuntime.ts",
+        "server/governedBrowserTool.ts",
+        "server/playwrightBrowserAdapter.ts",
         "server/browserRuntimePack.ts",
         "sandbox-image/browser-artifact-inventory.json",
         "sandbox-image/browser-dependency-inventory.json",
@@ -429,6 +434,7 @@
       ],
       "pathMappingNote": "All destinationPaths are relative to the LiOS src/ directory; importedPaths retain upstream repository-relative paths. GM-10 flattens donor namespaces into server/exec under that destination base. Multiple supervisor lifecycle test files are consolidated into supervisor.scope.test.ts and supervisor.output.test.ts; ring cases from the session-manager suite exercise output-ring directly. New LiOS command-entry/runtime integration files are not donor copies. The browser destination server/browserRuntimePack.ts is a LiOS-owned consumer/pattern adaptation, not imported donor source; server/browser-runtime-pack/bounded-utf8-tail.ts is the actual pinned browser source import and its test is ported. Per-file source headers and the modification list retain exact source lineage.",
       "modifications": [
+        "Hybrid browser accessible evidence: complete-line output budgeting and explicit truncation from extensions/browser/src/browser/pw-role-snapshot.ts are adapted into existing fixed worker-source.ts extraction kind snapshot. Actual Playwright ariaSnapshot stays in the deny-network sandbox, 8KiB UTF-8 content bounds worst-case JSON below the existing64KiB frame, and canonical browser evidence keeps untrusted source provenance. No actor refs, delta/session store, arbitrary evaluate, host browser, extra egress or action authority is imported.",
         "Hybrid P9 repeated-failure containment: src/cron/service/auto-disable.ts recurring-run threshold10 is adapted into existing completeP9Run and shared/p9AutomationContracts. Ten failed recurring completions pause the current workflow and clear future scheduling; known success or explicit owner enable/edit resets the failure streak. The minimal existing Ledger receipt records the pause classification. No donor owner-notification/config/store, system-job exemption or action replay is imported.",
         "Hybrid provider/search execution adaptation: cancellation-precedence checks from src/web-search/runtime-execution.ts are combined into existing server/providerSdk.executeCanonicalDataRequest across entitlement/fetch/normalize/quota completion and fallback. Current GM conversation cancellation yields a secret-safe AbortError, never a late observation or another provider call. Existing registry, point-in-time, entitlement and gap contracts stay authoritative; donor web-search registry/auth/config, caches and vendor adapters are not imported.",
         "Hybrid MCP adaptation: src/agents/mcp-startup-backoff.ts is adapted into server/mcpStartupBackoff.ts as bounded Home startup-only admission. LiOS starts at15s then doubles to10min without the donor signal-owner exception; serializes initialization but never shares healthy client/transport ownership; retains no upstream exception text; caps1024 states without evicting active admissions/live cooldowns. Existing official SDK transport composes the helper using known request owner/org, endpoint/policy and local/organization credential revisions. Callers without a canonical owner key do not share cooldown state. No tool invocation is automatically retried and no donor MCP/vault/runtime store is imported.",

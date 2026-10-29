@@ -9,7 +9,7 @@
   "controlledForkCount": 10,
   "sourceSnapshot": {
     "baselineSha": "ad77f2d53189a7d98583e9d9996d532b79e4686d",
-    "componentsSha": "468562c241f44eaecd4ac31ee23aed1ee0916949",
+    "componentsSha": "4ce781a1f2966f7d8ab50d4471607c5d8a94b5fd",
     "upstreamPinsSha": "bfafe1ddf251fb05fd99b75864a3d4436a7550cb",
     "controlledForkSha": "142ff14c5e6b5d6804b20a346d5e31435db2f33b"
   },
@@ -2157,6 +2157,7 @@
         "src/process/terminal-pty.test.ts",
         "packages/retry/src/index.ts",
         "packages/retry/src/index.test.ts",
+        "extensions/browser/src/browser/pw-role-snapshot.ts",
         "extensions/browser/src/browser/bounded-utf8-tail.ts",
         "extensions/browser/src/browser/bounded-utf8-tail.test.ts"
       ],
@@ -2243,6 +2244,10 @@
         "server/exec/retry-timing.test.ts",
         "server/browser-runtime-pack/bounded-utf8-tail.ts",
         "server/browser-runtime-pack/bounded-utf8-tail.test.ts",
+        "server/browser-runtime-pack/worker-source.ts",
+        "server/browserConnectorRuntime.ts",
+        "server/governedBrowserTool.ts",
+        "server/playwrightBrowserAdapter.ts",
         "server/browserRuntimePack.ts",
         "sandbox-image/browser-artifact-inventory.json",
         "sandbox-image/browser-dependency-inventory.json",

@@ -53,6 +53,10 @@
         "shared/p9AutomationContracts.ts",
         "server/mcpStartupBackoff.ts",
         "server/providerSdk.ts",
+        "server/browser-runtime-pack/worker-source.ts",
+        "server/browserConnectorRuntime.ts",
+        "server/governedBrowserTool.ts",
+        "server/playwrightBrowserAdapter.ts",
         "server/browserRuntimePack.ts"
       ],
       "regressionEvidence": [
