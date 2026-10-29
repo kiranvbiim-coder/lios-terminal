@@ -8,6 +8,15 @@ on:
   push:
     branches: [main]
   workflow_dispatch:
+    inputs:
+      task:
+        description: Run normal source validation or the separate approved donor source build
+        required: true
+        default: source
+        type: choice
+        options:
+          - source
+          - approved-openclaw-build
 
 permissions:
   contents: read
@@ -18,7 +27,7 @@ concurrency:
 
 jobs:
   source:
-    if: github.event.repository.private == false
+    if: github.event.repository.private == false && (github.event_name != 'workflow_dispatch' || inputs.task != 'approved-openclaw-build')
     name: Source / ${{ matrix.platform }}
     strategy:
       fail-fast: false
@@ -199,3 +208,22 @@ jobs:
       # No uploads, release assets, signing, deployment or credentialed live tests.
       # A failed install/typecheck/test/build remains a failed platform job.
       # Later steps use !cancelled() so one run reports every failing step; the job still fails if any step fails.
+
+  approved-openclaw-build:
+    if: github.event.repository.private == false && github.event_name == 'workflow_dispatch' && inputs.task == 'approved-openclaw-build'
+    name: Approved OpenClaw / isolated source build
+    runs-on: ubuntu-24.04
+    timeout-minutes: 55
+    steps:
+      - name: Checkout unprivileged build command
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - name: Setup build-command Node 22.12.0
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: 22.12.0
+      - name: Build exact approved source with isolated Node 24.16.0
+        run: node src/script/build_approved_openclaw_runtime.mjs --build
+      # Standard public runner only. No secrets, inference, binary uploads or release publication.
+      # Source / Linux, macOS and Windows are untouched on push/PR and do not run for this explicit manual mode.
