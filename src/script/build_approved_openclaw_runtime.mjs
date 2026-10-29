@@ -6,6 +6,7 @@ import { mkdir, mkdtemp, open, readdir, readFile, readlink, writeFile } from "no
 import os from "node:os";
 import path from "node:path";
 import { spawnSync } from "node:child_process";
+import { inspectRootPackClosure } from "./openclaw_build_attribution.mjs";
 
 const sourceCommit = "c074824a27c96d3983043f9eeb33823cd1772d8c";
 const sourceArchiveSha256 = "b46d105119db2d5cf96601af4f287d562997fd672e2f94f9f4bb68b4ecdf468c";
@@ -17,15 +18,15 @@ const nativeSignature = "MEUCIQCTS9y2/ZT/OB604KbwSJwSPxTIlwW3VijIIkuXjASGIwIgcnN
 const plan = {
   kind: "approved-source-build-only", sourceCommit, sourceArchiveSha256, image,
   packageManager: "pnpm@12.5.1", platform: "linux/x64", compilerMemoryBytes: 12 * 1024 ** 3,
-  phases: ["verified-downloads", "frozen-install-without-hooks", "offline-runtime-build", "offline-compiled-cli-version"],
+  phases: ["verified-downloads", "frozen-install-without-hooks", "instrumented-offline-runtime-build", "offline-compiled-cli-version", "root-package-closure-inspection"],
   donorProfile: "qaRuntime", installScripts: false, pnpmfileHooks: false,
   hostSecretsPassed: false, runtimeArtifactsPublished: false, releaseQualification: false,
 };
 
-function command(binary, args, { capture = false, timeout = 120_000 } = {}) {
+function command(binary, args, { capture = false, timeout = 120_000, maxBuffer = 2 * 1024 * 1024 } = {}) {
   const result = spawnSync(binary, args, {
     encoding: "utf8", stdio: capture ? ["ignore", "pipe", "pipe"] : "inherit",
-    timeout, killSignal: "SIGKILL", maxBuffer: 2 * 1024 * 1024,
+    timeout, killSignal: "SIGKILL", maxBuffer,
   });
   if (result.error || result.status !== 0) {
     throw new Error(`${binary} failed (${result.status ?? result.error?.code}): ${result.stderr?.slice(-2000) ?? "see phase output"}`);
@@ -95,6 +96,21 @@ async function build() {
     command("tar", ["-xzf", sourceArchive, "--strip-components", "1", "--no-same-owner", "-C", source]);
     command("tar", ["-xzf", nativePnpm, "--strip-components", "1", "--no-same-owner", "-C", tools]);
     const packageJson = JSON.parse(await readFile(path.join(source, "package.json"), "utf8"));
+    const configPath = path.join(source, "tsdown.config.ts");
+    const configSource = await readFile(configPath, "utf8");
+    const configTail = "export default configs;\n";
+    if (!configSource.endsWith(configTail)) throw new Error("Approved compiler config audit seam changed");
+    const attributionSource = await readFile(new URL("./openclaw_build_attribution.mjs", import.meta.url), "utf8");
+    const instrumentedConfig = configSource.slice(0, -configTail.length) +
+      'import { withModuleAttribution } from "./lios-module-audit.mjs";\nexport default configs.map(withModuleAttribution);\n';
+    await writeFile(path.join(source, "lios-module-audit.mjs"), attributionSource, { flag: "wx" });
+    await writeFile(configPath, instrumentedConfig);
+    const buildInstrumentation = {
+      purpose: "Build-only emitted-module attribution; donor source modules and bundler policy unchanged",
+      originalConfigSha256: createHash("sha256").update(configSource).digest("hex"),
+      instrumentedConfigSha256: createHash("sha256").update(instrumentedConfig).digest("hex"),
+      attributionHelperSha256: createHash("sha256").update(attributionSource).digest("hex"),
+    };
     if (packageJson.packageManager !== `pnpm@12.5.1+sha512.${pnpmRootSha512}`) throw new Error("Source package-manager contract changed");
     command("docker", ["pull", "--platform", "linux/amd64", image]);
     const uid = `${process.getuid()}:${process.getgid()}`;
@@ -103,17 +119,24 @@ async function build() {
       phase = label;
       const name = `lios-openclaw-${label}-${randomUUID().slice(0, 8)}`;
       names.push(name);
-      return command("docker", ["run", ...sharedArgs, "--name", name, "--network", network, "--memory", memory, "--entrypoint", entrypoint, image, ...args], { capture, timeout: label === "compile" ? 30 * 60_000 : 15 * 60_000 });
+      return command("docker", ["run", ...sharedArgs, "--name", name, "--network", network, "--memory", memory, "--entrypoint", entrypoint, image, ...args], { capture, timeout: label === "compile" ? 30 * 60_000 : 15 * 60_000, maxBuffer: label === "root-pack" ? 16 * 1024 * 1024 : 2 * 1024 * 1024 });
     };
     dockerPhase("install", "bridge", "2g", "/tools/pnpm", ["install", "--frozen-lockfile", "--ignore-scripts", "--ignore-pnpmfile", "--network-concurrency", "8", "--reporter", "append-only", "--filter", "openclaw...", "--filter", "./packages/**", "--filter", "./extensions/**"]);
     dockerPhase("compile", "none", "12g", "/bin/sh", ["-c", 'node --import ./scripts/tsx.mjs scripts/build-all.mts qaRuntime; status=$?; printf "\\nCompiler cgroup memory events / peak bytes:\\n"; cat /sys/fs/cgroup/memory.events /sys/fs/cgroup/memory.peak; exit "$status"']);
     const compiledCliVersion = dockerPhase("version", "none", "512m", "/usr/local/bin/node", ["dist/entry.js", "--version"], true);
     if (!compiledCliVersion.includes(packageJson.version)) throw new Error("Compiled CLI did not report the pinned source version");
+    const packed = JSON.parse(dockerPhase("root-pack", "none", "1g", "/usr/local/bin/node", ["node_modules/npm/bin/npm-cli.js", "pack", "--dry-run", "--ignore-scripts", "--json"], true));
+    if (!Array.isArray(packed) || packed.length !== 1) throw new Error("Unexpected root package inventory");
+    const attributionDirectory = path.join(source, ".artifacts", "lios-module-attribution");
+    const graphFiles = (await readdir(attributionDirectory, { withFileTypes: true })).filter(entry => entry.isFile() && entry.name.endsWith(".json"));
+    const graphs = await Promise.all(graphFiles.map(async entry => JSON.parse(await readFile(path.join(attributionDirectory, entry.name), "utf8"))));
+    const rootPackClosure = inspectRootPackClosure(packed[0], graphs);
+    await writeFile(path.join(root, "root-package-files.json"), JSON.stringify(packed[0].files), { flag: "wx" });
     phase = "output-inventory";
     const files = await inventory(path.join(source, "dist"));
     const manifest = JSON.stringify(files);
     await writeFile(path.join(root, "compiled-files.json"), manifest, { flag: "wx" });
-    const report = { ...plan, status: "compiled-and-version-exercised", compiledCliVersion, compiledFiles: files.length, compiledInventorySha256: createHash("sha256").update(manifest).digest("hex"), dependencyScriptsExecuted: false, compilerNetwork: "none", runtimeArtifactsPublished: false, localWorkspace: root };
+    const report = { ...plan, status: "compiled-and-version-exercised", compiledCliVersion, compiledFiles: files.length, compiledInventorySha256: createHash("sha256").update(manifest).digest("hex"), buildInstrumentation, rootPackClosure, dependencyScriptsExecuted: false, compilerNetwork: "none", runtimeArtifactsPublished: false, localWorkspace: root };
     console.log(JSON.stringify(report, null, 2));
     if (process.env.GITHUB_STEP_SUMMARY) await writeFile(process.env.GITHUB_STEP_SUMMARY, `## Approved OpenClaw source build\n\n\`\`\`json\n${JSON.stringify(report, null, 2)}\n\`\`\`\n\nBuild/CLI proof only. No runtime bytes, services, providers, native acceptance or release are published.\n`, { flag: "a" });
   } catch (error) {
