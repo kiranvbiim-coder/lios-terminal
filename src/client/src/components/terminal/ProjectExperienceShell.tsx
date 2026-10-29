@@ -11,6 +11,7 @@ import { parseChatTerminalRequest, chatTerminalCapabilities, type ChatTerminalCo
 import { useConversationArtifactView, rememberConversationArtifactView } from "@/lib/conversationArtifactView";
 import ChatSourcesControl from "./ChatSourcesControl";
 import ChatExtensionsDialog from "./ChatExtensionsDialog";
+import ProjectMemoryRecallControl from "./ProjectMemoryRecallControl";
 import ConversationArtifactSidecar from "./ConversationArtifactSidecar";
 import { isCurrentArtifactLoad } from "@/lib/artifactSidecarSizing";
 import { exactRuntimeSavedArtifact, isCurrentSavedArtifactHandoff } from "@/lib/exactRuntimeSavedArtifact";
@@ -3142,6 +3143,7 @@ export default function ProjectExperienceShell({
               className="mt-2 w-full resize-none rounded-md border border-border/50 bg-black/20 p-2 font-ui text-[13px] leading-4 outline-none"
             />
           </div>
+          <ProjectMemoryRecallControl key={home.project.id} projectId={home.project.id} />
           <div className="border-b border-border/70 p-3">
             <div className="font-terminal text-[11px] uppercase tracking-[0.18em] text-muted-foreground">AI transmission</div>
             <select

@@ -37,6 +37,7 @@ import {
 } from "./conversationGrantStore";
 import { conversationRequestSchema } from "@shared/conversationRuntime";
 import { filterTelegramHistoryForAi } from "./telegramConnectionService";
+import { prepareProjectMemoryRecall } from "./projectMemoryRecall";
 import { resolveRecordedClaimReview } from "./recordedClaimReview";
 import type { ProjectChatMessage, ProjectResource } from "@shared/schemaProjects";
 import type {
@@ -680,8 +681,16 @@ async function runProjectChat(
       const pendingArtifacts: Extract<ConversationRuntimeEvent, { type: "artifact" }>[] = [];
       try {
         const admittedHistory = await filterTelegramHistoryForAi(context, runtimeHistory.slice(-20));
-        const sourceRelease = admittedHistory.some(message => message.metadata.channelIngress !== undefined)
+        const memoryRecall = chat.scope === "project" && chat.projectId &&
+          runtimeRequest.transmissionPolicy.allowResourceReferences &&
+          (runtimeRequest.sourceScope === "auto" || runtimeRequest.sourceScope === "my_data")
+          ? await prepareProjectMemoryRecall(context, chat.projectId, runtimeRequest.message)
+          : null;
+        if (memoryRecall) emit({ type: "status", requestId: request.requestId, at: new Date().toISOString(), stepId: null,
+          message: `Using ${memoryRecall.sourceRefs.length} relevant owner-authored Project memor${memoryRecall.sourceRefs.length === 1 ? "y" : "ies"} under your recall consent; private provider fallback is disabled.`, state: "running" });
+        const sourceRelease = memoryRecall || admittedHistory.some(message => message.metadata.channelIngress !== undefined)
           ? async () => {
+            await memoryRecall?.assertCurrent();
             const currentHistory = await filterTelegramHistoryForAi(context, admittedHistory);
             if (currentHistory.length !== admittedHistory.length) {
               throw new Error("Channel source transmission permission changed during this conversation.");
@@ -696,6 +705,7 @@ async function runProjectChat(
           projectId: chat.projectId,
           projectName,
           projectInstructions,
+          memoryRecall,
           resources: resources.map((resource) => ({
             id: resource.id,
             kind: resource.kind,

@@ -5,6 +5,8 @@ import { createMemoryUpload, uploadErrorResponse } from "./uploadPolicy";
 import { p6PersonalFinanceRequestSchema } from "@shared/p6FinanceContracts";
 import { tenantContext, type TenantContext } from "./tenantContext";
 import { requireAuth } from "./auth";
+import { projectMemoryRecallChoiceSchema } from "@shared/projectMemoryRecall";
+import { projectMemoryRecallConsent, setProjectMemoryRecallConsent } from "./projectMemoryRecall";
 import {
   archiveProject,
   createProject,
@@ -256,7 +258,11 @@ export function registerProjectRoutes(app: Express): void {
   });
 
   app.get("/api/projects/:projectId", async (req, res) => {
-    try { res.json(await getProject(ctx(req), pathId(req.params.projectId))); }
+    try {
+      const projectId = pathId(req.params.projectId);
+      const project = await getProject(ctx(req), projectId);
+      res.json({ ...project, memoryRecall: project.status === "active" ? await projectMemoryRecallConsent(ctx(req), projectId) : null });
+    }
     catch (error) { fail(res, error); }
   });
 
@@ -268,6 +274,7 @@ export function registerProjectRoutes(app: Express): void {
         instructions: z.string().trim().max(4000).nullable().optional(),
         pinned: z.boolean().optional(),
         status: z.enum(["active", "archived"]).optional(),
+        memoryRecall: projectMemoryRecallChoiceSchema.optional(),
       }).strict().parse(req.body);
       let project = await getProject(ctx(req), projectId);
       if (body.name !== undefined) project = await renameProject(ctx(req), projectId, body.name);
@@ -277,6 +284,7 @@ export function registerProjectRoutes(app: Express): void {
       if (body.status === "active" && project.status === "archived") {
         project = project.trashedAt ? await restoreTrashedProject(ctx(req), projectId) : await restoreProject(ctx(req), projectId);
       }
+      if (body.memoryRecall !== undefined) await setProjectMemoryRecallConsent(ctx(req), projectId, body.memoryRecall.enabled);
       res.json(project);
     } catch (error) { fail(res, error); }
   });
