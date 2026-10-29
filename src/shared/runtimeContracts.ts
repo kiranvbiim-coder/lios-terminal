@@ -365,6 +365,8 @@ export interface ToolAdapter extends RuntimeAdapter {
 export interface SkillDefinition {
   skillId: string;
   description: string;
+  instructions?: string;
+  modelInvocable?: boolean;
   requiredInputs: string[];
   supportedObjectKinds: string[];
   /** Governed tool ids this skill may invoke. Empty means the skill is descriptive and can invoke nothing. */

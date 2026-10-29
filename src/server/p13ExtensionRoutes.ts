@@ -14,13 +14,16 @@ import { ExtensionAdmissionError, P13ExtensionService, type ExtensionPrincipal }
 import { recordAuditEvent } from "./auditEvents";
 import { listSourceConnections } from "./sourceConnectionService";
 import { chatExtensionCatalog } from "./chatExtensionCatalog";
+import { listAgentConversationTools } from "./conversationRuntime";
 
 let service: P13ExtensionService | null = null;
 export function getP13ExtensionService(): P13ExtensionService {
   if (!service) {
     const platform = hiddenEnginePackPlatformSchema.safeParse(`${process.platform}-${process.arch}`);
     const packs = platform.success ? new P11PackManager({ rootDir: path.join(dataRoot(), "p11-packs"), coreVersion: "1.0.0", platform: platform.data, publisherKeys: {} }) : null;
-    service = new P13ExtensionService(getP13PluginRuntimeHost(), packs);
+    service = new P13ExtensionService(getP13PluginRuntimeHost(), packs, Date.now, () => listAgentConversationTools().map(tool => ({
+      id: tool.id, label: tool.label, permissionClass: tool.permissionClass,
+    })));
   }
   return service;
 }

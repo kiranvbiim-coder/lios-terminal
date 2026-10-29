@@ -61,6 +61,15 @@ export const pluginSkillContributionSchema = pluginContributionSchema.extend({
   requiredInputs: z.array(componentIdSchema).max(100).default([]),
   supportedObjectKinds: z.array(componentIdSchema).max(20).default([]),
   toolIds: z.array(componentIdSchema).max(100).default([]),
+  /** Reviewed declarative procedure only; never executable code or permission authority. */
+  instructions: z.string().max(16_000).optional(),
+  modelInvocable: z.boolean().optional(),
+  ownerAdoption: z.object({
+    kind: z.literal("home_owner"),
+    ownerUserId: z.number().int().positive(),
+    documentSha256: sha256Schema,
+    originalPublisherVerified: z.literal(false),
+  }).strict().optional(),
 }).strict().superRefine((skill, ctx) => {
   for (const key of ["requiredInputs", "supportedObjectKinds", "toolIds"] as const) {
     if (new Set(skill[key]).size !== skill[key].length) {

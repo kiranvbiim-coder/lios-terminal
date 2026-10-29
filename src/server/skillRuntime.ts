@@ -51,8 +51,12 @@ export function ensureFirstPartySkillsInstalled(): void {
 
 export function listInstalledSkillAdapters(): SkillAdapter[] {
   ensureFirstPartySkillsInstalled();
-  const registry = getP13PluginRuntimeHost().registry;
-  return registry.list("skill").flatMap((descriptor) => {
+  const host = getP13PluginRuntimeHost();
+  const registry = host.registry;
+  const trustedComponents = new Set(host.plugins.list().filter(plugin =>
+    host.trustStore.verify(plugin.manifest, plugin.trust.packageDigest).state === "trusted",
+  ).flatMap(plugin => plugin.manifest.skills.map(skill => skill.componentId)));
+  return registry.list("skill").filter(descriptor => trustedComponents.has(descriptor.id)).flatMap((descriptor) => {
     const adapter = registry.get(descriptor.id);
     return isSkillAdapter(adapter) ? [adapter] : [];
   });

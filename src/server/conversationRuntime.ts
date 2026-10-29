@@ -4286,7 +4286,7 @@ interface AgentLoopCatalogue {
     validateInput?: (input: Record<string, unknown>) => boolean;
     inputValidationIssue?: (input: Record<string, unknown>) => string | null;
   }>;
-  skills: Array<{ id: string; name: string; description: string; toolIds: string[] }>;
+  skills: Array<{ id: string; name: string; description: string; instructions?: string; toolIds: string[] }>;
 }
 
 /** The server-owned tool/skill catalogue one agent run is offered, decided for `role`. Shared by execution and resume. */
@@ -4304,12 +4304,16 @@ function offeredAgentLoopCatalogue(role: string): AgentLoopCatalogue {
     inputValidationIssue: (input: Record<string, unknown>) => modelSafeToolInputIssue(tool.inputSchema, input),
   }));
   const offeredToolIds = new Set(tools.filter((tool) => tool.decision !== "deny").map((tool) => tool.id));
-  const skills = listInstalledSkillAdapters().map((skill) => ({
+  const skills = listInstalledSkillAdapters().filter((skill) => skill.definition.modelInvocable !== false).map((skill) => ({
     id: skill.definition.skillId,
     name: skill.descriptor.name,
     description: skill.definition.description,
+    ...(skill.definition.instructions ? { instructions: skill.definition.instructions } : {}),
     toolIds: skill.definition.toolIds.filter((toolId) => offeredToolIds.has(toolId)),
   })).filter((skill) => skill.toolIds.length > 0);
+  if (skills.reduce((sum, skill) => sum + (skill.instructions?.length ?? 0), 0) > 64_000) {
+    throw new Error("Installed skill procedures exceed the governed planning instruction budget.");
+  }
   return { tools, skills };
 }
 
@@ -4324,7 +4328,7 @@ function agentLoopFactsFor(
   const toolSetSha256 = sha256Json({
     version: 1,
     tools: byId(tools).map((tool) => ({ id: tool.id, label: tool.label, planningHint: tool.planningHint ?? null, inputJsonSchema: tool.inputJsonSchema, kind: tool.kind, permissionClass: tool.permissionClass, sideEffect: tool.sideEffect })),
-    skills: byId(skills).map((skill) => ({ id: skill.id, toolIds: [...skill.toolIds].sort() })),
+    skills: byId(skills).map((skill) => ({ id: skill.id, name: skill.name, description: skill.description, instructions: skill.instructions ?? null, toolIds: [...skill.toolIds].sort() })),
   });
   const policySha256 = sha256Json({
     version: 1,

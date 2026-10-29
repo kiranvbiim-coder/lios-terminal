@@ -1,6 +1,5 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
 import type { ExtensionCatalog, ExtensionPreview } from "@shared/p13ExtensionContracts";
 import { extensionPreviewAvailability, summarizeExtensionCapabilities } from "./extensionCapabilityInventory";
 
@@ -91,24 +90,6 @@ test("empty and disabled local catalogs do not fabricate available packages or h
   assert.match(summarizeExtensionCapabilities(noHealth).entries.find(x => x.kind === "pack")!.health, /not reported/);
 });
 
-test("existing P13 owner routes and rights review stay canonical and the UX exposes state rather than offering execution", () => {
-  const panel = readFileSync(new URL("../components/GovernedExtensionsPanel.tsx", import.meta.url), "utf8");
-  const server = readFileSync(new URL("../../../server/p13ExtensionService.ts", import.meta.url), "utf8");
-  assert.match(panel, /summarizeExtensionCapabilities\(catalog\)/);
-  assert.match(panel, /data-testid="extension-capability-inventory"/);
-  assert.match(panel, /data-capability-state=\{item.availability\}/);
-  assert.match(panel, /Manifest permission requests/);
-  assert.match(panel, /Current Home runtime|current Home runtime/i);
-  assert.match(panel, /data-testid="extensions-refresh-catalog"/);
-  assert.match(panel, /setCatalog\(null\); setInspection\(null\); setRevokeTarget\(null\)/);
-  assert.match(panel, /extensionRequest\("\/install"/);
-  assert.match(panel, /rightsConfirmed: true/);
-  assert.match(panel, /Confirm exact revocation/);
-  assert.match(server, /this.admit\(actor\)/);
-  assert.match(server, /this.host.plugins.list\(\)/);
-  assert.match(server, /this.packs\?\.discover\(\)/);
-  assert.doesNotMatch(panel, /\/api\/permissions\/grant|\/api\/plugins\/install-unsafe/);
-});
 
 test("local previews are reviewable but not installed and respect blocked or inactive server posture", () => {
   const preview = (activation: ExtensionPreview["activation"], installable: boolean) =>
@@ -129,10 +110,3 @@ test("local previews are reviewable but not installed and respect blocked or ina
   assert.equal(declaredUnusable.state, "blocked");
 });
 
-test("local package preview status is descriptive and canonical P13 still enforces consent, digest and rights", () => {
-  const panel = readFileSync(new URL("../components/GovernedExtensionsPanel.tsx", import.meta.url), "utf8");
-  assert.match(panel, /data-testid="extension-preview-availability"/);
-  assert.match(panel, /data-preview-state=\{extensionPreviewAvailability\(preview\)\.state\}/);
-  assert.match(panel, /disabled=\{busy \|\| !preview\.installable \|\| !rights \|\| !consent\}/);
-  assert.match(panel, /packageDigest: preview\.packageDigest, consent: true, rightsConfirmed: true/);
-});

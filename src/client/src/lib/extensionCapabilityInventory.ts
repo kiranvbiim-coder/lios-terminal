@@ -98,6 +98,11 @@ export function extensionPreviewAvailability(preview: ExtensionPreview): {
   label: string;
   explanation: string;
 } {
+  if (preview.ownerAdoption && preview.installable) return {
+    state: "reviewable_session",
+    label: "Available for explicit owner adoption · not installed",
+    explanation: "Original publisher is unverified. Exact document and tool choices will be adopted only after Home-owner rights/consent; this grants no tool execution permission.",
+  };
   if (!preview.installable || preview.activation === "unavailable") return {
     state: "blocked",
     label: "Unavailable to install",

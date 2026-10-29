@@ -289,6 +289,8 @@ function createManagedAdapters(
     definition: {
       skillId: contribution.id,
       description: contribution.description,
+      ...(contribution.instructions !== undefined ? { instructions: contribution.instructions } : {}),
+      ...(contribution.modelInvocable !== undefined ? { modelInvocable: contribution.modelInvocable } : {}),
       requiredInputs: [...contribution.requiredInputs],
       supportedObjectKinds: [...contribution.supportedObjectKinds],
       toolIds: [...contribution.toolIds],

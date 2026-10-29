@@ -9,8 +9,8 @@
   "controlledForkCount": 10,
   "sourceSnapshot": {
     "baselineSha": "ad77f2d53189a7d98583e9d9996d532b79e4686d",
-    "componentsSha": "4ce781a1f2966f7d8ab50d4471607c5d8a94b5fd",
-    "upstreamPinsSha": "bfafe1ddf251fb05fd99b75864a3d4436a7550cb",
+    "componentsSha": "d57c4655025ea48506d6714a45f36d4945db16cb",
+    "upstreamPinsSha": "27db481b1d9c5f00940d8f6de2a89e997fb387e2",
     "controlledForkSha": "142ff14c5e6b5d6804b20a346d5e31435db2f33b"
   },
   "releaseClaims": {
@@ -2157,6 +2157,8 @@
         "src/process/terminal-pty.test.ts",
         "packages/retry/src/index.ts",
         "packages/retry/src/index.test.ts",
+        "packages/markdown-core/src/frontmatter.ts",
+        "src/skills/loading/frontmatter.ts",
         "extensions/browser/src/browser/pw-role-snapshot.ts",
         "extensions/browser/src/browser/bounded-utf8-tail.ts",
         "extensions/browser/src/browser/bounded-utf8-tail.test.ts"
@@ -2244,6 +2246,7 @@
         "server/exec/retry-timing.test.ts",
         "server/browser-runtime-pack/bounded-utf8-tail.ts",
         "server/browser-runtime-pack/bounded-utf8-tail.test.ts",
+        "server/skillDocument.ts",
         "server/browser-runtime-pack/worker-source.ts",
         "server/browserConnectorRuntime.ts",
         "server/governedBrowserTool.ts",
