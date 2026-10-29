@@ -6,15 +6,15 @@ import {
   sourceConnections, userDataConsents, users,
 } from "@shared/schema";
 import {
-  TELEGRAM_CONNECTION_CONSENT_VERSION, parseTelegramSourceConfig,
-  telegramConsentScope, telegramCredentialName,
+  TELEGRAM_CONNECTION_CONSENT_VERSION, TELEGRAM_OUTBOUND_CONSENT_VERSION, parseTelegramSourceConfig,
+  telegramConsentScope, telegramOutboundConsentScope, telegramCredentialName,
   channelMessageExcludedFromAi,
 } from "@shared/telegramConnection";
 import { getDb } from "./db";
 import type { TenantContext } from "./tenantContext";
 import { tenantContext } from "./tenantContext";
 import { getVaultCredential, getVaultProtection } from "./credentialVault";
-import { assertOrganizationCredentialSnapshotCurrent, loadOrganizationCredentialSnapshot, organizationCredentialStoreEnabled } from "./organizationCredentialVault";
+import { assertOrganizationCredentialSnapshotCurrent, loadOrganizationCredentialSnapshot, organizationCredentialStoreEnabled, organizationCredentialRevision } from "./organizationCredentialVault";
 import { providerCredentialRevision } from "./providerCredentialRevision";
 import { safeEqualSecret } from "./safeEqualSecret";
 import { hashLedgerValue } from "./ledgerStore";
@@ -71,6 +71,47 @@ async function currentBinding(ctx: TenantContext, connectionId: number, db: any 
     digest: hashLedgerValue({ binding, policy, credentialRef: source.credentialRef, sourceUpdatedAt: source.updatedAt,
       consentId: consent.id, acceptedAt: consent.acceptedAt, role: user.role,
     }),
+  };
+}
+
+/** Home-only current outbound scope/credential snapshot. A review digest is data, not an execution grant. */
+export async function prepareTelegramOutboundConnection(ctx: TenantContext, connectionId: number, projectId: number, chatId: number) {
+  const admitted = await currentBinding(ctx, connectionId);
+  if (!admitted.policy.allowOutbound || admitted.binding.projectId !== projectId || admitted.binding.chatId !== chatId) throw new TelegramConnectionRefusal();
+  const readConsent = async () => {
+    const [row] = await getDb().select().from(userDataConsents).where(and(eq(userDataConsents.userId, ctx.userId),
+      eq(userDataConsents.scope, telegramOutboundConsentScope(admitted.binding.accountBindingId)))).limit(1);
+    if (!row || row.revokedAt || row.consentVersion !== TELEGRAM_OUTBOUND_CONSENT_VERSION) throw new TelegramConnectionRefusal();
+    return hashLedgerValue({ id: row.id, acceptedAt: row.acceptedAt, version: row.consentVersion });
+  };
+  const consentDigest = await readConsent();
+  const organizationStore = organizationCredentialStoreEnabled();
+  if (organizationStore && ctx.organizationId === null) throw new TelegramConnectionRefusal();
+  const revision = () => organizationStore ? organizationCredentialRevision(ctx.organizationId!) : providerCredentialRevision();
+  const credentialRevision = revision();
+  let organizationSnapshot = organizationStore ? await loadOrganizationCredentialSnapshot(ctx.organizationId!, admitted.name) : null;
+  let token = organizationStore ? organizationSnapshot?.[admitted.name] : getVaultProtection() === "configured_secret" ? getVaultCredential(admitted.name) : null;
+  if (!token || !/^[0-9]{1,20}:[A-Za-z0-9_-]{1,256}$/.test(token) || revision() !== credentialRevision) throw new TelegramConnectionRefusal();
+  const reviewBinding = hashLedgerValue({ authority: admitted.digest, consentDigest, credentialRevision, tokenHash: hashLedgerValue(token), organizationStore });
+  let closed = false;
+  const assertCurrent = async () => {
+    if (closed || organizationCredentialStoreEnabled() !== organizationStore || revision() !== credentialRevision) throw new TelegramConnectionRefusal();
+    const current = await currentBinding(ctx, connectionId);
+    if (current.digest !== admitted.digest || await readConsent() !== consentDigest) throw new TelegramConnectionRefusal();
+    let fence: (() => void) | undefined;
+    if (organizationStore) {
+      if (!organizationSnapshot) throw new TelegramConnectionRefusal();
+      fence = await assertOrganizationCredentialSnapshotCurrent(ctx.organizationId!, organizationSnapshot, admitted.name);
+    } else if (getVaultProtection() !== "configured_secret" || !safeEqualSecret(getVaultCredential(admitted.name) ?? "", token ?? "")) throw new TelegramConnectionRefusal();
+    return () => {
+      if (closed || organizationCredentialStoreEnabled() !== organizationStore || revision() !== credentialRevision) throw new TelegramConnectionRefusal();
+      fence?.();
+    };
+  };
+  return {
+    binding: admitted.binding, policy: admitted.policy, reviewBinding, assertCurrent,
+    resolveBotToken: async () => { const fence = await assertCurrent(); fence(); if (!token) throw new TelegramConnectionRefusal(); return token; },
+    close: () => { closed = true; token = null; organizationSnapshot = null; },
   };
 }
 

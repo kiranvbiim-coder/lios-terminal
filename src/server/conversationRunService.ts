@@ -38,6 +38,7 @@ import {
 import { conversationRequestSchema } from "@shared/conversationRuntime";
 import { filterTelegramHistoryForAi } from "./telegramConnectionService";
 import { prepareProjectMemoryRecall } from "./projectMemoryRecall";
+import { prepareTelegramTextReview } from "./governedTelegramTextTool";
 import { resolveRecordedClaimReview } from "./recordedClaimReview";
 import type { ProjectChatMessage, ProjectResource } from "@shared/schemaProjects";
 import type {
@@ -896,6 +897,12 @@ async function runProjectChat(
           if (!step || !descriptor || (descriptor.permissionClass !== "user_confirm" && descriptor.permissionClass !== "admin_confirm")) {
             throw new Error("Agent approval pause no longer matches a registered confirming tool.");
           }
+          const channelTextReview = pause.toolId === "lios.channel.telegram.send_text"
+            ? await prepareTelegramTextReview(step.input, {
+                source: "agent", userId: user.id, tenant: context, requestId: request.requestId, projectId: chat.projectId, chatId,
+                resourceTransmissionAllowed: runtimeRequest.transmissionPolicy.allowResourceReferences, sourceScope: runtimeRequest.sourceScope,
+              }, signal)
+            : undefined;
           const policy = currentConversationToolApprovalPolicy(pause.toolId);
           const proposal = await proposeGovernedToolOperation({
             user,
@@ -964,8 +971,9 @@ async function runProjectChat(
             replaySafe: descriptor.replaySafe,
             externalSideEffect: descriptor.sideEffect === "external",
             blastRadius,
-            // Only the canonical pending grant's immutable identifiers/hashes cross
-            // the wire. Never send the tool arguments or credential-bearing target.
+            ...(channelTextReview ? { channelTextReview } : {}),
+            // Generic tool arguments and credential-bearing targets stay server-only.
+            // The separately typed channel display above is exact owner-reviewed plain text, not an execution grant.
             reviewBinding: {
               toolId: proposal.binding.toolId,
               stepId: proposal.binding.stepId,

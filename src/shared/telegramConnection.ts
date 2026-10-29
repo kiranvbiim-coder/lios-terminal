@@ -2,6 +2,7 @@ import { z } from "zod";
 
 export const TELEGRAM_CONNECTOR_ID = "telegram" as const;
 export const TELEGRAM_CONNECTION_CONSENT_VERSION = "telegram-channel-data/1";
+export const TELEGRAM_OUTBOUND_CONSENT_VERSION = "telegram-reviewed-outbound/1";
 const uuid = z.string().uuid();
 const conversationId = z.string().regex(/^-?[1-9][0-9]{0,19}$/);
 
@@ -49,6 +50,9 @@ export function telegramCredentialName(userId: number, accountBindingId: string)
 export function telegramConsentScope(accountBindingId: string): string {
   return `channel:telegram:${uuid.parse(accountBindingId)}:ingress`;
 }
+export function telegramOutboundConsentScope(accountBindingId: string): string {
+  return `channel:telegram:${uuid.parse(accountBindingId)}:outbound`;
+}
 
 /** Adoption-time AI opt-in is necessary, not sufficient: Home must also admit current source/consent/work policy. */
 export function channelMessageExcludedFromAi(metadata: unknown): boolean {
@@ -70,7 +74,29 @@ export const telegramConnectInputSchema = z.object({
   allowedUpdateTypes: z.array(z.enum(TELEGRAM_UPDATE_TYPES)).min(1).max(TELEGRAM_UPDATE_TYPES.length).default(["message"]),
   retentionDays: z.number().int().min(1).max(365).default(30),
   allowAiTransmission: z.boolean().default(false),
+  allowOutbound: z.boolean().default(false),
+  outboundConsent: z.boolean().optional(),
   // Explicit, versioned data-use consent: Telegram content imported into this Chat, optionally AI-visible per policy.
   consent: z.literal(true),
-}).strict();
+}).strict().superRefine((value, ctx) => {
+  if (value.allowOutbound && value.outboundConsent !== true) ctx.addIssue({ code: "custom", path: ["outboundConsent"], message: "Reviewed outbound use requires explicit consent." });
+});
 export type TelegramConnectInput = z.infer<typeof telegramConnectInputSchema>;
+
+const positiveMessageId = z.number().int().positive().safe();
+/** Model input is still only a proposal; the canonical exact grant and current connection are mandatory. */
+export const telegramTextInputSchema = z.object({
+  connectionId: positiveMessageId,
+  reviewBinding: z.string().regex(/^[a-f0-9]{64}$/),
+  recipientId: conversationId,
+  text: z.string().min(1).max(4_096).refine(text => Boolean(text.trim()) && !/[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f]/.test(text), "Plain text must be nonempty and contain no control characters."),
+  topic: z.discriminatedUnion("kind", [
+    z.object({ kind: z.literal("forum"), id: positiveMessageId }).strict(),
+    z.object({ kind: z.literal("private"), id: positiveMessageId }).strict(),
+    z.object({ kind: z.literal("direct_messages"), id: positiveMessageId }).strict(),
+  ]).optional(),
+  replyToMessageId: positiveMessageId.optional(),
+  silent: z.boolean().default(false),
+}).strict();
+/** Safe owner-only display of the exact reviewed message, never generic tool arguments or credentials. */
+export const telegramTextReviewSchema = telegramTextInputSchema.omit({ reviewBinding: true });

@@ -83,6 +83,8 @@ export interface GovernedToolCall {
   reportExternalDispatchStatus?: (message: string) => Promise<void>;
   /** Server-only, per-run ephemeral MCP evidence collector; never model/client input. */
   recordExternalMcpObservation?: (capture: McpAgentEvidenceCapture) => void;
+  /** Ephemeral connected-channel target metadata; never model-supplied or checkpointed. */
+  recordTelegramTargets?: (capture: import("./governedTelegramTextTool").TelegramTargetsCapture) => void;
   role?: string;
   /** Server-held canonical authorization. Request/model/body objects cannot manufacture authority. */
   authorization?: unknown;

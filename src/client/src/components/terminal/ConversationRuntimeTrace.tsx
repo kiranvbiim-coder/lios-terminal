@@ -805,6 +805,12 @@ export default function ConversationRuntimeTrace({
                 <p><strong>Review expiry:</strong> {governedApproval.expiresAt ?? "not recorded"} {reviewRisk.expired ? "· expired: allow disabled" : ""}</p>
                 {governedApproval.blastRadius && <p><strong>Potential effects:</strong> {governedApproval.blastRadius}</p>}
                 <p>{reviewRisk.inputDisclosure}</p>
+                {governedApproval.channelTextReview && <section aria-label="Exact Telegram message review" className="space-y-2 rounded border border-amber-300/30 p-3">
+                  <p><strong>Connection:</strong> {governedApproval.channelTextReview.connectionId} · <strong>Recipient:</strong> {governedApproval.channelTextReview.recipientId}</p>
+                  <p><strong>Topic:</strong> {governedApproval.channelTextReview.topic ? `${governedApproval.channelTextReview.topic.kind} ${governedApproval.channelTextReview.topic.id}` : "Chat default"} · <strong>Reply to message:</strong> {governedApproval.channelTextReview.replyToMessageId ?? "No reply"} · <strong>Silent:</strong> {governedApproval.channelTextReview.silent ? "Yes" : "No"}</p>
+                  <pre aria-label="Exact outbound message text" className="max-h-72 overflow-auto whitespace-pre-wrap break-words font-ui text-sm">{governedApproval.channelTextReview.text}</pre>
+                  <p>No automatic response, resend, recipient/topic fallback or hidden text splitting. Disconnect to revoke future sends.</p>
+                </section>}
                 {governedApproval.reviewBinding && <details><summary className="cursor-pointer underline underline-offset-2">Exact server-bound tool call and SHA-256 fingerprints</summary>
                   <dl className="mt-1 space-y-1 break-all font-terminal text-[11px]">
                     <div>Tool: {governedApproval.reviewBinding.toolId}</div>
@@ -818,7 +824,7 @@ export default function ConversationRuntimeTrace({
                 {reviewRisk.blockAllow && <p role="alert" className="text-amber-200">This privileged review lacks a current exact server binding or has expired. Allow is unavailable; deny or refresh the run.</p>}
                 {reviewRisk.highRisk && !reviewRisk.blockAllow && <label className="flex cursor-pointer items-start gap-2">
                   <input type="checkbox" data-testid="governed-review-risk-ack" checked={acknowledgedRiskKey === reviewKey} disabled={reviewing} onChange={event => setAcknowledgedRiskKey(event.target.checked ? reviewKey : null)} />
-                  <span>I reviewed the recorded scope and impact. The raw external target is not verified by this card; I will reconcile any side effects separately.</span>
+                  <span>{governedApproval.channelTextReview ? "I reviewed the exact recipient, message, topic and reply above and have permission to send this text. Delivery/read remain unverified." : "I reviewed the recorded scope and impact. The raw external target is not verified by this card; I will reconcile any side effects separately."}</span>
                 </label>}
               </div>}
               {reviewError?.key === reviewKey && <p role="alert" data-testid="governed-review-error" className="mt-2 text-amber-200">{reviewError.message}</p>}

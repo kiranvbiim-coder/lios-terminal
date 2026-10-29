@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { remoteNodePlacementPolicySchema } from "./remoteNode";
+import { telegramTextReviewSchema } from "./telegramConnection";
 import {
   conversationSourceScopeSchema,
   CONVERSATION_SOURCE_SCOPE_LABELS,
@@ -395,6 +396,8 @@ export const conversationRuntimeEventSchema = z.discriminatedUnion("type", [
     replaySafe: z.boolean().optional(),
     externalSideEffect: z.boolean().optional(),
     blastRadius: z.string().trim().min(1).max(500).optional(),
+    /** Exact owner-approved outbound text display; pre-admitted server fields, never a credential or generic argument dump. */
+    channelTextReview: telegramTextReviewSchema.optional(),
     /** Safe exact binding identities from the canonical server-owned pending grant.
      * Never include raw tool arguments, credentials, provider URLs or target payloads. */
     reviewBinding: z.object({

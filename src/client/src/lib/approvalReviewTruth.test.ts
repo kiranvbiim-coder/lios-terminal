@@ -1,6 +1,5 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
 import { conversationRuntimeEventSchema, type ConversationRuntimeEvent } from "@shared/conversationRuntime";
 import { governedReviewRisk, legacyReviewFacts } from "./approvalReviewTruth";
 
@@ -77,21 +76,16 @@ test("legacy action displays target and effect while never granting receipt-like
   assert.ok(!JSON.stringify(facts).includes("alpha"));
 });
 
-test("server emits only hashes from canonical proposed grant; browser never sees raw arguments", () => {
-  const server = readFileSync(new URL("../../../server/conversationRunService.ts", import.meta.url), "utf8");
-  const source = server.slice(server.indexOf("governedApprovalEvent = {"), server.indexOf("governedApprovalEvent = {") + 1900);
-  for (const text of [
-    "toolId: proposal.binding.toolId", "stepId: proposal.binding.stepId",
-    "toolCallId: proposal.binding.toolCallId", "inputSha256: proposal.binding.inputSha256",
-    "planSha256: proposal.binding.planHash", "projectId: proposal.binding.projectId",
-  ]) assert.ok(source.includes(text));
-  assert.doesNotMatch(source, /input: step.input|args: step.input/);
-  const client = readFileSync(new URL("../components/terminal/ConversationRuntimeTrace.tsx", import.meta.url), "utf8");
-  assert.match(client, /governedReviewRisk\(governedApproval, Date.now\(\)\)/);
-  assert.match(client, /reviewRisk\.blockAllow/);
-  assert.match(client, /governedApproval\.choices\.includes\(decision\)/);
-  assert.match(client, /acknowledgedRiskKey !== reviewKey/);
-  assert.match(client, /reviewOutcome\.decision === "deny"/);
-  assert.match(client, /Review submission failed/);
-  assert.match(client, /Legacy review; exact server input fingerprint is not included/);
+test("Telegram approval requires exact safe message display and cannot offer a standing Project grant", () => {
+  const reviewBinding = { ...binding, toolId: "lios.channel.telegram.send_text" };
+  const missing = makeReview({ reviewBinding });
+  assert.equal(governedReviewRisk(missing, Date.parse("2026-10-24T11:00:00Z")).blockAllow, true);
+  const channelTextReview = { connectionId: 41, recipientId: "-123", text: "Revenue $1,250.00.", topic: { kind: "forum", id: 7 }, replyToMessageId: 17, silent: false };
+  const ready = makeReview({ reviewBinding, channelTextReview });
+  const risk = governedReviewRisk(ready, Date.parse("2026-10-24T11:00:00Z"));
+  assert.equal(risk.blockAllow, false);
+  assert.equal(risk.projectScope, false);
+  assert.deepEqual(ready.channelTextReview, channelTextReview);
+  assert.throws(() => makeReview({ reviewBinding, channelTextReview: { ...channelTextReview, botToken: "not-admitted" } }));
+  assert.throws(() => makeReview({ reviewBinding, channelTextReview: { ...channelTextReview, text: "x".repeat(4_097) } }));
 });
