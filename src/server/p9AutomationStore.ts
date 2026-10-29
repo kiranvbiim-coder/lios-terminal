@@ -15,6 +15,7 @@ import {
   p9WorkflowActionSchema,
   p9WorkflowDefinitionInputSchema,
   p9WorkflowTriggerSchema,
+  P9_RECURRING_FAILURE_PAUSE_LIMIT,
   type P9AutomationEventType,
   type P9WorkflowDefinitionInput,
   type P9WorkflowRunResult,
@@ -184,6 +185,7 @@ export async function replaceP9Workflow(
     engineRefs: input.engineRefs,
     artifactRefs: input.artifactRefs,
     nextRunAt,
+    consecutiveFailures: 0,
     claimToken: null,
     claimExpiresAt: null,
     updatedAt: now,
@@ -211,6 +213,7 @@ export async function setP9WorkflowEnabled(
   const [row] = await getDb().update(projectAutomationWorkflows).set({
     enabled,
     nextRunAt: enabled ? nextP9ScheduledRun(trigger, now) : null,
+    ...(enabled ? { consecutiveFailures: 0 } : {}),
     claimToken: null,
     claimExpiresAt: null,
     updatedAt: now,
@@ -449,8 +452,10 @@ export async function completeP9Run(
   const trigger = p9WorkflowTriggerSchema.parse(workflow.trigger);
   const scheduled = workflow.enabled ? nextP9ScheduledRun(trigger, now) : null;
   const failures = success ? 0 : workflow.consecutiveFailures + 1;
-  // Backoff applies only to future recurring work. It never replays this run or brings a later schedule forward.
-  const nextRunAt = scheduled
+  // Auto-disable threshold adapted from approved OpenClaw src/cron/service/auto-disable.ts.
+  // Only recurring scheduled definitions are paused; explicit owner recovery resets the failure streak.
+  const pauseForFailures = !success && trigger.type === "schedule" && failures >= P9_RECURRING_FAILURE_PAUSE_LIMIT;
+  const nextRunAt = scheduled && !pauseForFailures
     ? new Date(Math.max(scheduled.getTime(), now.getTime() + p9FailureBackoff(failures)))
     : null;
   const updateConditions = [
@@ -462,6 +467,7 @@ export async function completeP9Run(
     lastSuccessAt: success ? now : workflow.lastSuccessAt,
     lastFailureAt: success ? workflow.lastFailureAt : now,
     consecutiveFailures: failures,
+    ...(pauseForFailures ? { enabled: false } : {}),
     nextRunAt,
     claimToken: null,
     claimExpiresAt: null,
@@ -479,6 +485,7 @@ export async function completeP9Run(
       workflowId: workflow.id,
       workflowRunId: run.id,
       status: success ? "succeeded" : "failed",
+      pausedForConsecutiveFailures: pauseForFailures,
       changed: result.changed,
       conditionMet: result.conditionMet,
       relevanceScore: result.relevanceScore,

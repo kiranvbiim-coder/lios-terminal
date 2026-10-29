@@ -50,6 +50,7 @@
         "client/src/lib/telegramConnectionForm.ts",
         "server/p9AutomationEngine.ts",
         "server/p9AutomationStore.ts",
+        "shared/p9AutomationContracts.ts",
         "server/mcpStartupBackoff.ts",
         "server/providerSdk.ts",
         "server/browserRuntimePack.ts"

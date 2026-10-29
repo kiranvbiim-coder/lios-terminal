@@ -113,6 +113,8 @@
 
 **Service-first distribution prerequisite:** [published `openclaw@2026.9.7` metadata](https://registry.npmjs.org/openclaw/2026.9.7) reports388,950,288 unpacked bytes and a large SDK/native dependency graph. Its [decoded SLSA attestation](https://registry.npmjs.org/-/npm/v1/attestations/openclaw@2026.9.7) identifies source `2b4055f8dd703e9c09985940dce9a9c6fc3c29bf`, not approved donor `c074824a`. Attestation signatures have not been cryptographically verified here. Decision: do not silently substitute the similarly versioned published executable; build/derive the service distribution from the exact approved source and locked dependency closure, or obtain explicit new-pin approval if that proves necessary. No host install, package lifecycle script, runtime download or donor executable was run for this inspection.
 
+**Recurring-failure containment follow-through (local, not pushed into frozen CI):** the approved donor's ten-failure recurring-run boundary now pauses existing scheduled P9 workflows and clears future due time. Existing exact-owner enable/edit or a known successful manual diagnostic resets the streak; no interrupted/failed action is replayed. The current workflow projection exposes paused state/failure count and the existing minimal Ledger receipt records the containment classification. Seven focused recovery/owner-mutation behaviors and typecheck passed; actual PGlite completion/cold-reopen smoke retained ten failures and disabled scheduling, then explicit owner recovery reset the streak. Failure-alert delivery and broader schedule/catch-up depth remain open.
+
 
 
 
