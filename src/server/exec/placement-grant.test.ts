@@ -1,7 +1,7 @@
 // Relevant cases adapted from OpenClaw operator-approval-placement-grants.test.ts
 // (MIT, Copyright (c) 2026 OpenClaw Foundation), c074824a27c96d3983043f9eeb33823cd1772d8c.
 import assert from "node:assert/strict";
-import test from "node:test";
+import test, { after } from "node:test";
 import { GATEWAY_METHODS } from "../../shared/gatewayProtocol";
 import { localExecutionBackend } from "./backends/local";
 import { nodePermissionExecutionBackend } from "./backends/node-permission";
@@ -14,6 +14,9 @@ import { createProcessSupervisor } from "./supervisor";
 import { createExecutionPolicySnapshot, ExecutionAuthorizationLease } from "./execution-authorization";
 import { createStubChildAdapter, createStubSupervisor } from "./supervisor.test-support";
 import type { ExecutionJournal } from "./execution-journal";
+import { installContainerAdmissionIdentity } from "./container-admission.test-support";
+
+after(installContainerAdmissionIdentity());
 
 const REQUEST_ID = "961b6b26-e25e-4a65-9eae-6889bc80de5d";
 const REVISION = "a".repeat(64);
@@ -208,7 +211,7 @@ function homeServiceFixture() {
   f.request.scopeKey = `home-service:${serviceId}:${REQUEST_ID}`;
   f.request.isolation = { filesystem: "sandbox", network: "deny", processes: "sandbox" };
   delete f.request.cwd;
-  f.request.argv = [process.execPath, "-e", "process.stdout.write('safe')"];
+  f.request.argv = ["/usr/bin/node", "-e", "process.stdout.write('safe')"];
   return f;
 }
 

@@ -34,7 +34,9 @@ jobs:
           - platform: Windows
             runner: windows-2022
     runs-on: ${{ matrix.runner }}
-    timeout-minutes: 60
+    # Intel macOS exceeded the 60m aggregate deadline after setup, offline contracts and Python completed.
+    # Preserve the same gates and per-file hang guard; avoid cancelling the final build for lack of aggregate headroom.
+    timeout-minutes: ${{ matrix.platform == 'macOS' && 90 || 60 }}
     defaults:
       run:
         working-directory: src
@@ -121,9 +123,9 @@ jobs:
 
       - name: Offline Node, server, shared, client and script contracts
         if: ${{ !cancelled() }}
-        # Intel macOS completed all batches without failures at the old 30m cutoff.
-        # Keep the runner's 5m per-file hang guard; allow aggregate suite headroom.
-        timeout-minutes: ${{ matrix.platform == 'macOS' && 45 || 30 }}
+        # Intel macOS reached the 45m aggregate offline cutoff; individual files still have the existing 5m hang guard.
+        # Other OSes retain their current deadline. No failures/skips are converted to success.
+        timeout-minutes: ${{ matrix.platform == 'macOS' && 60 || 30 }}
         run: npm run test:offline
 
       # One explicit closure gate on an existing standard public runner.

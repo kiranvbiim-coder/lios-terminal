@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import crypto from "node:crypto";
-import test from "node:test";
+import test, { after } from "node:test";
 import { startSupportingServiceSession } from "./supportingServiceSession";
 import { createContainerExecutionBackend } from "./exec/backends/container";
 import { ExecutionPlacementGrant, type ExecutionPlacementAuthority } from "./exec/placement-grant";
@@ -8,6 +8,9 @@ import { prepareAnalyzedGovernedCommand } from "./exec/authority/governed-comman
 import { ExecutionAuthorizationLease, createExecutionPolicySnapshot } from "./exec/execution-authorization";
 import type { ExecutionBackendRequest } from "./exec/backends/types";
 import { createStubSupervisor, createStubChildAdapter } from "./exec/supervisor.test-support";
+import { installContainerAdmissionIdentity } from "./exec/container-admission.test-support";
+
+after(installContainerAdmissionIdentity());
 
 async function preparedFixture() {
   const serviceId = crypto.randomUUID(), requestId = crypto.randomUUID();
@@ -17,7 +20,7 @@ async function preparedFixture() {
   const authority: ExecutionPlacementAuthority = { requestId, homeServiceId: serviceId, owner,
     target: { nodeId: "owned-home", kind: "container", owner, generation: "runtime-1", available: true, revoked: false, backend, endpoint },
     policy: { revision, allowedKinds: ["container"], allowHomeService: true, dataLocality: "runtime-only", secretLocality: "none" } };
-  const request: ExecutionBackendRequest = { argv: [process.execPath, "-e", "process.exit(0)"], stdinMode: "pipe-open", interactiveInputPolicy: "sandbox-broker-rpc", scopeKey: `home-service:${serviceId}:${requestId}`,
+  const request: ExecutionBackendRequest = { argv: ["/usr/bin/node", "-e", "process.exit(0)"], stdinMode: "pipe-open", interactiveInputPolicy: "sandbox-broker-rpc", scopeKey: `home-service:${serviceId}:${requestId}`,
     isolation: { filesystem: "sandbox", network: "deny", processes: "sandbox" }, resources: { maxWallTimeMs: 5000, maxCapturedOutputChars: 4096 } };
   const controller = new AbortController();
   const placement = ExecutionPlacementGrant.select({ authority, request, currentAuthority: () => authority, signal: controller.signal });

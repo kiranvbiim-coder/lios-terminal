@@ -18,8 +18,11 @@ const tenantSchema = z.object({
 
 const inspectInputSchema = z.object({
   memoryKey: z.string().trim().min(1).max(2_000).optional(),
+  query: z.string().trim().min(1).max(2_000).optional(),
   limit: z.number().int().min(1).max(100).optional(),
-}).strict();
+}).strict().superRefine((value, ctx) => {
+  if (value.query && value.memoryKey) ctx.addIssue({ code: "custom", message: "Choose either a query or an exact revision history key." });
+});
 
 const correctInputSchema = z.object({
   memoryKey: z.string().trim().min(1).max(2_000),
@@ -125,7 +128,7 @@ export const memoryInspectTool: ConversationToolDefinition = {
     const parsed = inspectInputSchema.parse(input);
     const rows = parsed.memoryKey
       ? await getDurableMemoryHistory({ memoryKey: parsed.memoryKey, projectId })
-      : await listDurableMemories({ projectId, limit: parsed.limit ?? 50 });
+      : await listDurableMemories({ projectId, limit: parsed.limit ?? 50, query: parsed.query });
     assertNotAborted(signal);
     return {
       output: { operation: "inspect", memories: rows.slice(0, 100).map(memoryView) },
