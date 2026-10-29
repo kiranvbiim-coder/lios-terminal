@@ -11,12 +11,13 @@ const SHA = /^[a-f0-9]{40}$/;
 const RECEIPT = "LIOS_SOURCE_TREE_RECEIPT ";
 const fallback = () => ({ reuse: false, reason: "No complete successful same-tree PR proof; run all source checks." });
 
+/** Format only. findReusableValidation separately binds the approved repository and current merged tree. */
 export function parseSourceReceipt(line) {
   const text = line.replace(/\x1b\[[0-9;]*[A-Za-z]/g, "").replace(/^\d{4}-\d\d-\d\dT\S+\s/, "");
   if (!text.startsWith(RECEIPT)) return null;
   try {
     const receipt = JSON.parse(text.slice(RECEIPT.length));
-    if (receipt.schema !== 1 || receipt.repository !== REPOSITORY || !PLATFORMS.includes(receipt.platform) ||
+    if (receipt.schema !== 1 || typeof receipt.repository !== "string" || !/^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/.test(receipt.repository) || !PLATFORMS.includes(receipt.platform) ||
         !Number.isSafeInteger(receipt.runId) || receipt.runId < 1 || !Number.isSafeInteger(receipt.runAttempt) || receipt.runAttempt < 1 ||
         typeof receipt.tree !== "string" || !SHA.test(receipt.tree) || typeof receipt.checkout !== "string" || !SHA.test(receipt.checkout)) return null;
     return receipt;

@@ -149,6 +149,9 @@ test("CLI receipts bind actual clean source and refuse tracked worktree drift", 
   const clean = spawnSync(process.execPath, args, { cwd: root, env, encoding: "utf8", timeout: 10_000 });
   assert.equal(clean.status, 0, clean.stderr);
   assert.ok(parseSourceReceipt(clean.stdout.trim()));
+  const fork = spawnSync(process.execPath, args, { cwd: root, env: { ...env, GITHUB_REPOSITORY: "another/repository" }, encoding: "utf8", timeout: 10_000 });
+  assert.equal(fork.status, 0, fork.stderr);
+  assert.equal(parseSourceReceipt(fork.stdout.trim()).repository, "another/repository", "fork source CI may emit metadata but never supplies canonical-repository proof");
   fs.writeFileSync(path.join(root, "source.txt"), "different source");
   const changed = spawnSync(process.execPath, args, { cwd: root, env, encoding: "utf8", timeout: 10_000 });
   assert.notEqual(changed.status, 0);
