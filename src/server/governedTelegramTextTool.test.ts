@@ -131,13 +131,59 @@ test("reviewed Telegram text uses current consent, one exact grant, pinned Home 
     await assert.rejects(preflightTelegramText({ ...f.input, recipientId: "123456" }, f.call, new AbortController().signal));
     let capture: import("./governedTelegramTextTool").TelegramTargetsCapture | undefined;
     await telegramTargetsTool.invoke({}, new AbortController().signal, { ...f.call, recordTelegramTargets: value => { capture = value; } });
-    assert.ok(capture); await capture.assertCurrent();
+    assert.ok(capture); await capture.assertCurrent(f.call);
+    const excluded = { ...f.call, researchSourcePolicy: { mode: "only_refs" as const, allowedSourceRefs: [], providerAllow: [], providerDeny: [] } };
+    await assert.rejects(capture.assertCurrent(excluded), /source|policy|scope/i);
     const [source] = await dbModule.getDb().select().from(schema.sourceConnections).where(eq(schema.sourceConnections.id, f.summary.connectionId));
     const policy = policyModule.parseTelegramSourceConfig(source.config);
     vault.setVaultCredential(policyModule.telegramCredentialName(f.user.id, policy.accountBindingId), "123456:synthetic_rotated_text");
-    await assert.rejects(capture.assertCurrent());
+    await assert.rejects(capture.assertCurrent(f.call));
     await assert.rejects(preflightTelegramText(f.input, f.call, new AbortController().signal));
     assert.equal(observed.length, before);
+  });
+  await t.test("actual runtime withholds captured target metadata when the active ResearchArtifact source policy changes", async () => {
+    const f = await fixture();
+    const { createArtifact, createArtifactVersion } = await import("./artifactStore");
+    const { researchArtifactContentSchema } = await import("@shared/artifactContracts");
+    const { executeConversationRuntime } = await import("./conversationRuntime");
+    const { conversationRequestSchema } = await import("@shared/conversationRuntime");
+    const { createAttribution } = await import("./byoaiRouter");
+    const content = researchArtifactContentSchema.parse({ kind: "research", question: "Inspect channel targets", blocks: [], claims: [], evidence: [],
+      sourcePolicy: { mode: "only_refs", allowedSourceRefs: [`source-connection:${f.summary.connectionId}`] } });
+    const saved = await createArtifact(f.tenant, { projectId: f.project.id, title: "Selected channel source", content });
+    let calls = 0, changed = false;
+    const events: Array<import("@shared/conversationRuntime").ConversationRuntimeEvent> = [];
+    const model = createServer((req, res) => {
+      calls++; req.resume(); req.on("end", () => {
+        res.writeHead(200, { "content-type": "application/json" });
+        res.end(JSON.stringify({ text: JSON.stringify({ steps: [{ id: "targets", toolId: "lios.channel.telegram.targets", label: "Inspect targets", input: {}, dependsOn: [] }] }) }));
+      });
+    });
+    await new Promise<void>(resolve => model.listen(0, "127.0.0.1", resolve));
+    try {
+      await assert.rejects(executeConversationRuntime({ tenant: f.tenant, scope: "project", projectId: f.project.id, chatId: f.chat.id, history: [],
+        request: conversationRequestSchema.parse({ requestId: crypto.randomUUID(), message: "Inspect the connected Telegram target.", executionMode: "ai_assisted", sourceScope: "my_data",
+          context: { activeObjectRefs: [saved.artifact.id] }, transmissionPolicy: { mode: "configured", allowResourceReferences: true } }),
+        agentLoop: { maxSteps: 2, maxAiCalls: 2, maxRevisions: 1, ledger: async () => {} },
+        aiCompletion: async request => {
+          await request.beforeTransmission?.();
+          const response = await fetch(`http://127.0.0.1:${(model.address() as { port: number }).port}/model`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(request) });
+          const { text } = await response.json() as { text: string };
+          return { provider: "openai", model: "synthetic-local", text, attribution: createAttribution({ provider: "openai", model: "synthetic-local", prompt: "synthetic", output: text }) };
+        },
+        emit: async event => {
+          events.push(event);
+          if (!changed && event.type === "tool_result" && event.stepId === "targets" && event.outcome === "completed") {
+            changed = true;
+            await createArtifactVersion(f.tenant, { artifactId: saved.artifact.id, baseVersion: 1,
+              content: researchArtifactContentSchema.parse({ ...content, sourcePolicy: { mode: "only_refs", allowedSourceRefs: ["document:unrelated"] } }) });
+          }
+        },
+      }), error => error instanceof Error && "code" in error && error.code === "policy_denied");
+      assert.equal(changed, true);
+      assert.equal(calls, 1, "only the metadata-free initial planning request reaches the actual HTTP model");
+      assert.equal(events.some(event => event.type === "text" && /recipientIds/.test(event.text)), false);
+    } finally { model.closeAllConnections(); await new Promise<void>(resolve => model.close(() => resolve())); }
   });
   await t.test("provider rejection is known no-effect; lost response stays unknown with no retry", async () => {
     for (const mode of ["reject", "lost"] as const) {

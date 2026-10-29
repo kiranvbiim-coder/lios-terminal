@@ -189,6 +189,8 @@ Exact approved-source inspection with a real frozen development dependency insta
 
 Actual scratch canonical conversation-run smoke used three synthetic local model HTTP calls: discover→current private review→exact owner pause→allow once→one real pinned-loopback send→canonical L5 intent/commit→one user/assistant message pair→cold-reopened acceptance751. Zero send before approval; replayed review refused. Actual source Connections UI started outbound-off and refused missing outbound consent before any setup POST. Actual production review component rendered the recorded exact text/topic/reply, kept its expired approval disabled and visibly refused a stale submission through the real review endpoint. This is source/real DB/HTTP/renderer evidence; no entitled Telegram, native install or SP acceptance. Rich formatting, long/multipart/media send, edits/deletes/reactions, inbound execution/automatic replies, full worker/SDK bridge, delivery/read events and other channel families remain open.
 
+Target-metadata follow-through: source-policy revalidation reloads the active ResearchArtifact head at actual review/provider release, not only the original connection's digest. Exclusion/head drift or changed Project/Chat/reference-transmission scope requires fresh inspection. Failing-before/passing-after real-DB regression plus canonical runtime/local-model HTTP proved zero metadata-bearing requests after actual source-policy version change; current account/consent/credential checks remain composed.
+
 
 
 ### Selected lifecycle and Telegram package assessment — P1.04 evidence

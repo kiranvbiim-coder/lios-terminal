@@ -4701,7 +4701,9 @@ async function executeAgentLoop(
       });
       const assertTelegramTargetsCurrent = async () => {
         try {
-          for (const capture of telegramTargets) await capture.assertCurrent();
+          if (!telegramTargets.length) return;
+          const currentCall = createConversationToolCall(input, "agent", await activeResearchSourcePolicy(input));
+          for (const capture of telegramTargets) await capture.assertCurrent(currentCall);
         } catch {
           assertNotAborted(reviewSignal);
           throw new AIProviderError("policy_denied", "Connected channel target consent or scope changed; inspect targets again before AI review.");

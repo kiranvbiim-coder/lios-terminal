@@ -23,7 +23,7 @@ export interface TelegramTextDependencies {
   resolveAddress?: typeof resolvePinnedPublicAddress;
   requester?: typeof requestPinned;
 }
-export interface TelegramTargetsCapture { text: string; sourceRefs: string[]; assertCurrent(): Promise<void> }
+export interface TelegramTargetsCapture { text: string; sourceRefs: string[]; assertCurrent(currentCall: GovernedToolCall): Promise<void> }
 const outputSchema = z.object({ output: z.unknown(), summary: z.string().max(2_000), deterministic: z.boolean(), sourceRefs: z.array(z.string()).max(100) }).strict().transform((value): ConversationToolResult => {
   if (value.output === undefined) throw new Error("Telegram tools require explicit output.");
   return { ...value, output: value.output };
@@ -162,9 +162,16 @@ export const telegramTargetsTool: ConversationToolDefinition = {
     if (Buffer.byteLength(text, "utf8") > 32 * 1024) throw new Error("Telegram target metadata exceeds the bounded review; reduce configured recipient lists.");
     if (targets.length && call.recordTelegramTargets) call.recordTelegramTargets({
       text, sourceRefs,
-      assertCurrent: async () => {
+      assertCurrent: async currentCall => {
         signal.throwIfAborted();
+        const currentScope = scope(currentCall);
+        if (currentScope.tenant.userId !== tenant.userId || currentScope.tenant.organizationId !== tenant.organizationId ||
+            currentScope.projectId !== projectId || currentScope.chatId !== chatId ||
+            hashLedgerValue(currentCall.researchSourcePolicyBinding ?? null) !== hashLedgerValue(call.researchSourcePolicyBinding ?? null)) {
+          throw new Error("Telegram target source policy or scope changed before provider use.");
+        }
         for (const target of targets) {
+          if (!sourceSelected(currentCall, target.connectionId)) throw new Error("Telegram target is excluded by the current source policy.");
           const current = await prepareTelegramOutboundConnection(tenant, target.connectionId, projectId, chatId);
           try { if (current.reviewBinding !== target.reviewBinding) throw new Error("Telegram target metadata changed before provider use."); }
           finally { current.close(); }
