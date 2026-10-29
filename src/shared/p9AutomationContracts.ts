@@ -3,6 +3,8 @@ import { conversationRequestSchema } from "./conversationRuntime";
 import { p9PortfolioMaterialityActionSchema } from "./p9PortfolioMateriality";
 
 export const P9_AUTOMATION_SCHEMA_VERSION = "1" as const;
+/** Repeated recurring-run failures require explicit owner recovery, not an endless background retry loop. */
+export const P9_RECURRING_FAILURE_PAUSE_LIMIT = 10;
 
 export const p9WorkflowTemplateSchema = z.enum([
   "custom",

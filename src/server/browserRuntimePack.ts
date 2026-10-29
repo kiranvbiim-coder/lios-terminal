@@ -1,6 +1,6 @@
 import crypto from "node:crypto";
 import { z } from "zod";
-import type { BrowserAutomationAdapter, BrowserProjectNetworkAuthority } from "./browserConnectorRuntime";
+import type { BrowserAutomationAdapter, BrowserConnectorRequest, BrowserProjectNetworkAuthority } from "./browserConnectorRuntime";
 import type { ExecutionBackendLaunchPlan } from "./exec/backends/types";
 import { describeExecutionOperation } from "./exec/operation-identity";
 import { startPreparedSpawn, type PreparedSpawnSession } from "./exec/run-command";
@@ -306,7 +306,7 @@ class BrowserRuntimePackAdapter implements BrowserAutomationAdapter {
     return result.url;
   }
 
-  async extract(input: { kind: "text" | "links" | "json"; selector?: string | null }): Promise<unknown> {
+  async extract(input: BrowserConnectorRequest["extraction"]): Promise<unknown> {
     return this.command("extract", { input });
   }
 

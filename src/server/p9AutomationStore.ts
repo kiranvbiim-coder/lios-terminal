@@ -15,6 +15,7 @@ import {
   p9WorkflowActionSchema,
   p9WorkflowDefinitionInputSchema,
   p9WorkflowTriggerSchema,
+  P9_RECURRING_FAILURE_PAUSE_LIMIT,
   type P9AutomationEventType,
   type P9WorkflowDefinitionInput,
   type P9WorkflowRunResult,
@@ -184,6 +185,7 @@ export async function replaceP9Workflow(
     engineRefs: input.engineRefs,
     artifactRefs: input.artifactRefs,
     nextRunAt,
+    consecutiveFailures: 0,
     claimToken: null,
     claimExpiresAt: null,
     updatedAt: now,
@@ -211,6 +213,7 @@ export async function setP9WorkflowEnabled(
   const [row] = await getDb().update(projectAutomationWorkflows).set({
     enabled,
     nextRunAt: enabled ? nextP9ScheduledRun(trigger, now) : null,
+    ...(enabled ? { consecutiveFailures: 0 } : {}),
     claimToken: null,
     claimExpiresAt: null,
     updatedAt: now,
@@ -449,8 +452,10 @@ export async function completeP9Run(
   const trigger = p9WorkflowTriggerSchema.parse(workflow.trigger);
   const scheduled = workflow.enabled ? nextP9ScheduledRun(trigger, now) : null;
   const failures = success ? 0 : workflow.consecutiveFailures + 1;
-  // Backoff applies only to future recurring work. It never replays this run or brings a later schedule forward.
-  const nextRunAt = scheduled
+  // Auto-disable threshold adapted from approved OpenClaw src/cron/service/auto-disable.ts.
+  // Only recurring scheduled definitions are paused; explicit owner recovery resets the failure streak.
+  const pauseForFailures = !success && trigger.type === "schedule" && failures >= P9_RECURRING_FAILURE_PAUSE_LIMIT;
+  const nextRunAt = scheduled && !pauseForFailures
     ? new Date(Math.max(scheduled.getTime(), now.getTime() + p9FailureBackoff(failures)))
     : null;
   const updateConditions = [
@@ -462,6 +467,7 @@ export async function completeP9Run(
     lastSuccessAt: success ? now : workflow.lastSuccessAt,
     lastFailureAt: success ? workflow.lastFailureAt : now,
     consecutiveFailures: failures,
+    ...(pauseForFailures ? { enabled: false } : {}),
     nextRunAt,
     claimToken: null,
     claimExpiresAt: null,
@@ -479,6 +485,7 @@ export async function completeP9Run(
       workflowId: workflow.id,
       workflowRunId: run.id,
       status: success ? "succeeded" : "failed",
+      pausedForConsecutiveFailures: pauseForFailures,
       changed: result.changed,
       conditionMet: result.conditionMet,
       relevanceScore: result.relevanceScore,
@@ -568,6 +575,12 @@ export async function createP9Notification(
         )).limit(1);
       if (alreadyDelivered) decision.status = "suppressed";
     }
+    const failurePause = input.error && !current.enabled &&
+      current.consecutiveFailures >= P9_RECURRING_FAILURE_PAUSE_LIMIT &&
+      p9WorkflowTriggerSchema.parse(current.trigger).type === "schedule";
+    const body = failurePause
+      ? `Workflow paused after ${current.consecutiveFailures} consecutive failures. Review the failure, then explicitly enable the workflow to resume future runs; failed actions are not replayed.\n${input.error}`
+      : input.error || input.result?.summary || decision.explanation;
     const [row] = await tx.insert(projectAutomationNotifications).values({
       id: "workflow-notification:" + crypto.randomUUID(),
       workflowId: current.id,
@@ -579,7 +592,7 @@ export async function createP9Notification(
       status: decision.status,
       reason: decision.reason,
       title: p9NotificationTitle(current.name, decision.reason).slice(0, 500),
-      body: (input.error || input.result?.summary || decision.explanation).slice(0, 20_000),
+      body: body.slice(0, 20_000),
       relevanceScore: input.result?.relevanceScore ?? 1,
       createdAt: now,
     }).returning();

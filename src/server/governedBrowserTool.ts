@@ -1,7 +1,7 @@
 import { z } from "zod";
 import type { BrowserConnectorPolicy } from "@shared/universalDataFabric";
 import type { ConversationToolDefinition, ConversationToolResult } from "./conversationRuntime";
-import { createBrowserProjectNetworkAuthority, executeBrowserConnector } from "./browserConnectorRuntime";
+import { createBrowserProjectNetworkAuthority, executeBrowserConnector, type BrowserConnectorRequest } from "./browserConnectorRuntime";
 import { createBrowserBrokeredExecutionBackend } from "./exec/backends/browser-brokered";
 import { requireStrictSandboxRuntime } from "./exec/sandbox-runtime-profile";
 import { createPlaywrightBrowserAdapter } from "./playwrightBrowserAdapter";
@@ -14,13 +14,14 @@ type BrowserConnectorResult = Awaited<ReturnType<typeof executeBrowserConnector>
 
 export function browserTextEvidenceDocuments(
   result: BrowserConnectorResult,
-  extraction: { kind: "text" | "links" | "json"; selector?: string | null },
+  extraction: BrowserConnectorRequest["extraction"],
 ) {
-  if (extraction.kind !== "text") return [];
+  if (extraction.kind !== "text" && extraction.kind !== "snapshot") return [];
   return result.pages.flatMap((page) => {
     const payload = page.output;
     const text = typeof payload === "string" ? payload
-      : payload && typeof payload === "object" && "text" in payload && typeof payload.text === "string" ? payload.text : null;
+      : payload && typeof payload === "object" && "text" in payload && typeof payload.text === "string" ? payload.text
+      : payload && typeof payload === "object" && "snapshot" in payload && typeof payload.snapshot === "string" ? payload.snapshot : null;
     if (!text?.trim()) return [];
     const refs = [...new Set([page.resolvedUrl, page.requestedUrl])];
     return [{
@@ -51,7 +52,7 @@ export function browserTextEvidenceDocuments(
 const browserToolInputSchema = z.object({
   urls: z.array(z.string().url().max(2_000)).min(1).max(10),
   extraction: z.object({
-    kind: z.enum(["text", "links", "json"]),
+    kind: z.enum(["text", "links", "json", "snapshot"]),
     selector: z.string().trim().max(1_000).nullable().optional(),
   }).strict(),
 }).strict();
@@ -121,7 +122,7 @@ export function browserConversationToolDescriptor(
       });
       const result = await executeBrowserConnector(policy, parsed, adapter);
       assertNotAborted(signal);
-      if (call.sourceScope === "auto" && parsed.extraction.kind === "text") {
+      if (call.sourceScope === "auto" && (parsed.extraction.kind === "text" || parsed.extraction.kind === "snapshot")) {
         const tenant = z.object({
           userId: z.number().int().positive(),
           organizationId: z.number().int().positive().nullable(),

@@ -12,7 +12,7 @@ delete process.env.DATABASE_URL;
 const { initDb, closeDb, getDb } = await import("./db");
 const { users, projectAutomationRuns, projectAutomationWorkflows } = await import("@shared/schema");
 const { createProject } = await import("./projectStore");
-const { beginP9Run, completeP9Run, createP9Workflow, getP9Workflow } = await import("./p9AutomationStore");
+const { beginP9Run, claimDueP9Workflows, completeP9Run, createP9Notification, createP9Workflow, getP9Workflow, setP9WorkflowEnabled } = await import("./p9AutomationStore");
 const { recoverInterruptedP9Runs, renewP9RunLease } = await import("./p9RunContinuity");
 
 test("automation interruption ends stale running status without replaying an unknown action", { timeout: 120_000 }, async t => {
@@ -98,5 +98,37 @@ test("automation interruption ends stale running status without replaying an unk
     assert.ok(dailyAttempt);
     const failedDaily = await completeP9Run(ctx, { ...daily, consecutiveFailures: 5 }, dailyAttempt.id, { error: "controlled failure" });
     assert.equal((await getP9Workflow(ctx, daily.id)).nextRunAt!.getTime() - failedDaily.completedAt!.getTime(), 1440 * 60_000);
+  });
+  await t.test("ten scheduled failures pause durably and only explicit recovery resets the streak", async () => {
+    let failing = await createP9Workflow(ctx, project.id, {
+      name: "Pause repeated failure", enabled: true,
+      trigger: { type: "schedule", schedule: { kind: "interval", everyMinutes: 5 } },
+      action: { kind: "project_what_changed" }, notificationPolicy: { enabled: false },
+    });
+    for (let n = 1; n <= 10; n++) {
+      const attempt = await beginP9Run(ctx, failing, "schedule", {});
+      assert.ok(attempt);
+      await completeP9Run(ctx, failing, attempt.id, { error: "controlled unavailable input" });
+      failing = await getP9Workflow(ctx, failing.id);
+      assert.equal(failing.enabled, n < 10);
+      if (n === 10) {
+        const notice = await createP9Notification(ctx, failing, attempt.id, { result: null, error: "controlled unavailable input" });
+        assert.equal(notice?.status, "suppressed", "failure containment must not bypass the owner's notification mute");
+        assert.match(notice!.body, /paused after 10 consecutive failures/);
+        assert.match(notice!.body, /explicitly enable/);
+        assert.equal((await createP9Notification(ctx, failing, attempt.id, { result: null, error: "controlled unavailable input" }))?.id, notice!.id);
+      }
+    }
+    await closeDb();
+    await initDb();
+    const retained = await getP9Workflow(ctx, failing.id);
+    assert.equal(retained.enabled, false);
+    assert.equal(retained.nextRunAt, null);
+    assert.equal(retained.consecutiveFailures, 10);
+    assert.equal((await claimDueP9Workflows(new Date(Date.now() + 2 * 86_400_000))).some(item => item.workflow.id === failing.id), false);
+    const resumed = await setP9WorkflowEnabled(ctx, failing.id, true, retained.updatedAt.toISOString());
+    assert.equal(resumed.enabled, true);
+    assert.equal(resumed.consecutiveFailures, 0);
+    assert.ok(resumed.nextRunAt && resumed.nextRunAt > new Date());
   });
 });

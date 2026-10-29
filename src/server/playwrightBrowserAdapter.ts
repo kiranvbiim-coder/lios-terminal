@@ -133,6 +133,9 @@ export async function createPlaywrightBrowserAdapter(
     },
     async extract(input) {
       const selector = input.selector?.trim() || null;
+      if (input.kind === "snapshot") {
+        throw new BrowserRuntimeIsolationUnavailableError("Accessible page snapshots require the approved isolated Browser Runtime Pack.");
+      }
       if (input.kind === "text") {
         return selector
           ? await page.locator(selector).allTextContents()

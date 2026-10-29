@@ -9,7 +9,7 @@
   "controlledForkCount": 10,
   "sourceSnapshot": {
     "baselineSha": "ad77f2d53189a7d98583e9d9996d532b79e4686d",
-    "componentsSha": "b12e03cdda1449166001705e7047f23ae9d2ed13",
+    "componentsSha": "4ce781a1f2966f7d8ab50d4471607c5d8a94b5fd",
     "upstreamPinsSha": "bfafe1ddf251fb05fd99b75864a3d4436a7550cb",
     "controlledForkSha": "142ff14c5e6b5d6804b20a346d5e31435db2f33b"
   },
@@ -2131,6 +2131,7 @@
         "src/process/bounded-line-framer.ts",
         "src/process/bounded-line-framer.test.ts",
         "src/cron/service/jobs-scheduling.ts",
+        "src/cron/service/auto-disable.ts",
         "src/agents/mcp-startup-backoff.ts",
         "src/web-search/runtime-execution.ts",
         "src/shared/bounded-buffer.test.ts",
@@ -2156,6 +2157,7 @@
         "src/process/terminal-pty.test.ts",
         "packages/retry/src/index.ts",
         "packages/retry/src/index.test.ts",
+        "extensions/browser/src/browser/pw-role-snapshot.ts",
         "extensions/browser/src/browser/bounded-utf8-tail.ts",
         "extensions/browser/src/browser/bounded-utf8-tail.test.ts"
       ],
@@ -2220,6 +2222,7 @@
         "client/src/lib/telegramConnectionForm.ts",
         "server/p9AutomationEngine.ts",
         "server/p9AutomationStore.ts",
+        "shared/p9AutomationContracts.ts",
         "server/mcpStartupBackoff.ts",
         "server/providerSdk.ts",
         "server/exec/bounded-buffer.test.ts",
@@ -2241,6 +2244,10 @@
         "server/exec/retry-timing.test.ts",
         "server/browser-runtime-pack/bounded-utf8-tail.ts",
         "server/browser-runtime-pack/bounded-utf8-tail.test.ts",
+        "server/browser-runtime-pack/worker-source.ts",
+        "server/browserConnectorRuntime.ts",
+        "server/governedBrowserTool.ts",
+        "server/playwrightBrowserAdapter.ts",
         "server/browserRuntimePack.ts",
         "sandbox-image/browser-artifact-inventory.json",
         "sandbox-image/browser-dependency-inventory.json",

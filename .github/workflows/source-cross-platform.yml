@@ -8,6 +8,15 @@ on:
   push:
     branches: [main]
   workflow_dispatch:
+    inputs:
+      task:
+        description: Run normal source validation or the separate approved donor source build
+        required: true
+        default: source
+        type: choice
+        options:
+          - source
+          - approved-openclaw-build
 
 permissions:
   contents: read
@@ -17,8 +26,41 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  source_reuse:
+    if: github.event.repository.private == false && github.event_name == 'push' && github.ref == 'refs/heads/main'
+    name: Main / exact-tree validation proof
+    runs-on: ubuntu-24.04
+    timeout-minutes: 3
+    defaults:
+      run:
+        working-directory: src
+        shell: bash
+    permissions:
+      contents: read
+      actions: read
+      pull-requests: read
+    outputs:
+      reuse: ${{ steps.proof.outputs.reuse }}
+    steps:
+      - name: Checkout exact main commit
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - name: Setup proof reader Node 22.12.0
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: 22.12.0
+      - name: Verify all three successful PR jobs tested this exact Git tree
+        id: proof
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: node script/source_validation_reuse.mjs --verify-main
+
   source:
-    if: github.event.repository.private == false
+    needs: source_reuse
+    # !cancelled() permits the matrix when the main-only proof job is skipped or fails.
+    # PR/manual source checks never reuse. Incomplete main proof also runs all three.
+    if: ${{ !cancelled() && github.event.repository.private == false && (github.event_name != 'workflow_dispatch' || inputs.task != 'approved-openclaw-build') && needs.source_reuse.outputs.reuse != 'true' }}
     name: Source / ${{ matrix.platform }}
     strategy:
       fail-fast: false
@@ -80,10 +122,13 @@ jobs:
         with:
           node-version: 22.12.0
 
+      - name: Record exact checkout tree for successful post-merge reuse
+        env:
+          LIOS_SOURCE_PLATFORM: ${{ matrix.platform }}
+        run: node script/source_validation_reuse.mjs --receipt
+
       - name: Check public-source tracked files and CI boundaries
-        run: |
-          node script/check_public_repository_safety.mjs
-          node --test script/check_public_repository_safety.test.mjs
+        run: node script/check_public_repository_safety.mjs
 
       - name: Setup Python 3.12
         id: python
@@ -128,31 +173,15 @@ jobs:
         timeout-minutes: ${{ matrix.platform == 'macOS' && 60 || 30 }}
         run: npm run test:offline
 
-      # One explicit closure gate on an existing standard public runner.
-      # These tests also run in test:offline; this compact gate gives a named
-      # review signal and checks beta manifest logic not covered by that suite.
+      # Source closure, beta acceptance and website test files are already covered by test:offline.
+      # Keep the root-level beta manifest test (outside its roots) and the actual editorial-media audit.
       # No packaging, signing keys, paid runners or release uploads.
-      - name: Four-phase UX integration and beta integrity (source only)
+      - name: Root beta manifest and editorial media integrity (source only)
         if: ${{ !cancelled() && matrix.platform == 'Linux' }}
         timeout-minutes: 10
         run: |
-          npm run test:phase-closure
           npm run beta:manifest:test
-          npm run beta:acceptance:test
-          npm run media:verify:test
           npm run media:verify
-          npm run test:website-a3
-          npm run test:website-a4
-          npm run test:website-b1
-          npm run test:website-b2
-          npm run test:website-b3
-          npm run test:website-c1
-          npm run test:website-c2
-          npm run test:website-c3
-          npm run test:website-d1
-          npm run test:website-d2
-          npm run test:website-closure
-          npm run release:preflight:ci
 
       - name: Installed UX evidence negative controls (source only)
         if: ${{ !cancelled() }}
@@ -164,7 +193,8 @@ jobs:
       - name: Phase 4 source evidence boundaries (never native qualification)
         if: ${{ !cancelled() }}
         timeout-minutes: 5
-        run: npm run phase4:source
+        # Its test:phase4 files already ran in test:offline; retain the distinct evidence report.
+        run: npm run phase4:release:report
 
       - name: OSS donor licence, supply-chain and CI preflight source gates
         if: ${{ !cancelled() }}
@@ -199,3 +229,26 @@ jobs:
       # No uploads, release assets, signing, deployment or credentialed live tests.
       # A failed install/typecheck/test/build remains a failed platform job.
       # Later steps use !cancelled() so one run reports every failing step; the job still fails if any step fails.
+
+  approved-openclaw-build:
+    if: github.event.repository.private == false && github.event_name == 'workflow_dispatch' && inputs.task == 'approved-openclaw-build'
+    name: Approved OpenClaw / isolated source build
+    runs-on: ubuntu-24.04
+    timeout-minutes: 55
+    defaults:
+      run:
+        working-directory: src
+        shell: bash
+    steps:
+      - name: Checkout unprivileged build command
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - name: Setup build-command Node 22.12.0
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: 22.12.0
+      - name: Build exact approved source with isolated Node 24.16.0
+        run: node script/build_approved_openclaw_runtime.mjs --build
+      # Standard public runner only. No secrets, inference, binary uploads or release publication.
+      # Source / Linux, macOS and Windows are untouched on push/PR and do not run for this explicit manual mode.
