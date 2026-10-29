@@ -16,7 +16,7 @@ const registryKey = "MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAEY6Ya7W++7aUPzvMTrezH6Yc
 const nativeSignature = "MEUCIQCTS9y2/ZT/OB604KbwSJwSPxTIlwW3VijIIkuXjASGIwIgcnN7YITaIhwqFjp/ezjpfK+yyg5WNvwsPsXLoOFk8mQ=";
 const plan = {
   kind: "approved-source-build-only", sourceCommit, sourceArchiveSha256, image,
-  packageManager: "pnpm@12.5.1", platform: "linux/x64", compilerMemoryBytes: 6 * 1024 ** 3,
+  packageManager: "pnpm@12.5.1", platform: "linux/x64", compilerMemoryBytes: 12 * 1024 ** 3,
   phases: ["verified-downloads", "frozen-install-without-hooks", "offline-runtime-build", "offline-compiled-cli-version"],
   donorProfile: "qaRuntime", installScripts: false, pnpmfileHooks: false,
   hostSecretsPassed: false, runtimeArtifactsPublished: false, releaseQualification: false,
@@ -105,7 +105,7 @@ async function build() {
       return command("docker", ["run", ...sharedArgs, "--name", name, "--network", network, "--memory", memory, "--entrypoint", entrypoint, image, ...args], { capture, timeout: label === "compile" ? 30 * 60_000 : 15 * 60_000 });
     };
     dockerPhase("install", "bridge", "2g", "/tools/pnpm", ["install", "--frozen-lockfile", "--ignore-scripts", "--ignore-pnpmfile", "--network-concurrency", "8", "--reporter", "append-only", "--filter", "openclaw...", "--filter", "./packages/**", "--filter", "./extensions/**"]);
-    dockerPhase("compile", "none", "6g", "/usr/local/bin/node", ["--import", "./scripts/tsx.mjs", "scripts/build-all.mts", "qaRuntime"]);
+    dockerPhase("compile", "none", "12g", "/bin/sh", ["-c", 'node --import ./scripts/tsx.mjs scripts/build-all.mts qaRuntime; status=$?; printf "\\nCompiler cgroup memory events / peak bytes:\\n"; cat /sys/fs/cgroup/memory.events /sys/fs/cgroup/memory.peak; exit "$status"']);
     const compiledCliVersion = dockerPhase("version", "none", "512m", "/usr/local/bin/node", ["dist/entry.js", "--version"], true);
     if (!compiledCliVersion.includes(packageJson.version)) throw new Error("Compiled CLI did not report the pinned source version");
     phase = "output-inventory";
