@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import type { ExtensionCatalog, ExtensionPreview, LocalExtensionInput } from "@shared/p13ExtensionContracts";
-import { LOCAL_EXTENSION_MAX_BYTES } from "@shared/p13ExtensionContracts";
+import { LOCAL_EXTENSION_MAX_BYTES, SKILL_DOCUMENT_MAX_BYTES } from "@shared/p13ExtensionContracts";
 import { extensionPreviewAvailability, summarizeExtensionCapabilities } from "@/lib/extensionCapabilityInventory";
 
 async function extensionRequest<T>(path: string, body?: unknown): Promise<T> {
@@ -23,6 +23,8 @@ export default function GovernedExtensionsPanel({ onCatalogChanged }: { onCatalo
   const [fingerprint, setFingerprint] = useState("");
   const [trustConsent, setTrustConsent] = useState(false);
   const [revokeTarget, setRevokeTarget] = useState<{ kind: "p13" | "p11"; id: string; digest: string; version?: string } | null>(null);
+  const [skillDocument, setSkillDocument] = useState("");
+  const [skillToolIds, setSkillToolIds] = useState<string[]>([]);
   const inventory = catalog ? summarizeExtensionCapabilities(catalog) : null;
   useEffect(() => {
     let live = true;
@@ -51,7 +53,11 @@ export default function GovernedExtensionsPanel({ onCatalogChanged }: { onCatalo
       if (preview) await extensionRequest("/cancel", { previewId: preview.previewId });
       setPreview(null); setInspection(null); setRights(false); setConsent(false); setPublicKeyPem(""); setFingerprint(""); setTrustConsent(false);
       let input: LocalExtensionInput;
-      if (file.name.endsWith(".lios-pack")) {
+      if (/\.md$/i.test(file.name)) {
+        if (file.size > SKILL_DOCUMENT_MAX_BYTES) throw new Error("Choose a SKILL.md document no larger than 24 KiB.");
+        setSkillDocument(await file.text()); setSkillToolIds([]);
+        return;
+      } else if (file.name.endsWith(".lios-pack")) {
         const bytes = new Uint8Array(await file.arrayBuffer());
         let binary = "";
         for (let start = 0; start < bytes.length; start += 8192) binary += String.fromCharCode(...bytes.subarray(start, start + 8192));
@@ -96,10 +102,23 @@ export default function GovernedExtensionsPanel({ onCatalogChanged }: { onCatalo
           </div>
         )}
       </section>}
-      <label className="block text-sm">Import owner-supplied local package (.json P13 envelope or .lios-pack archive)
-        <input type="file" accept=".json,.lios-pack" disabled={busy} onChange={event => { const file = event.target.files?.[0]; event.target.value = ""; void importFile(file); }} className="mt-2 block w-full" />
+      <label className="block text-sm">Import owner-supplied local package or SKILL.md (.json, .lios-pack, .md)
+        <input type="file" accept=".json,.lios-pack,.md" disabled={busy} onChange={event => { const file = event.target.files?.[0]; event.target.value = ""; void importFile(file); }} className="mt-2 block w-full" />
       </label>
       <details className="text-sm"><summary>Package format and rights</summary><p>P13 JSON contains kind: p13, a signed manifest and payloadBase64 holding the exact publisher-signed bytes. The server computes SHA-256 from these bytes, never from a claimed digest. Only signed, trusted declarative Artifact/skill contributions can activate here; connectors, executable tools and agents require a separately provisioned supervised broker and remain unavailable. Obtain the publisher Ed25519 public key separately and compare its full SPKI SHA-256 fingerprint through a trusted channel. Only import packages you have rights to use; source, binaries, data, models and external APIs have separate rights. No package installs its dependencies automatically.</p></details>
+      <details className="rounded border border-border/60 p-3 text-sm" open={skillDocument ? true : undefined}>
+        <summary>Adopt a reviewed SKILL.md procedure</summary>
+        <p className="mt-2 text-muted-foreground">Original publisher unverified. Only this Markdown procedure is adopted for the current Home session. Referenced files, installers and commands are not installed or authorized. Review its exact text and choose existing governed tools; every action still needs normal policy and approvals.</p>
+        <label className="mt-2 block">Exact skill document<textarea aria-label="Exact SKILL.md document" value={skillDocument} maxLength={SKILL_DOCUMENT_MAX_BYTES} disabled={busy} onChange={event => { setSkillDocument(event.target.value); setPreview(null); setRights(false); setConsent(false); }} rows={8} className="mt-1 block w-full rounded border bg-background p-2 font-mono text-xs" /></label>
+        <fieldset className="mt-2 max-h-52 overflow-auto rounded border p-2"><legend>Explicit governed-tool allowlist</legend>
+          {(catalog.skillTools ?? []).map(tool => <label key={tool.id} className="flex items-start gap-2 py-1"><input type="checkbox" disabled={busy} checked={skillToolIds.includes(tool.id)} onChange={event => { setSkillToolIds(previous => event.target.checked ? [...previous, tool.id] : previous.filter(id => id !== tool.id)); setPreview(null); setRights(false); setConsent(false); }} /><span>{tool.label} · <code>{tool.id}</code> · {tool.permissionClass}</span></label>)}
+        </fieldset>
+        <button type="button" disabled={busy || !skillDocument.trim() || skillToolIds.length === 0 || skillToolIds.length > 30} className="mt-2 rounded border px-3 py-1 disabled:opacity-50" onClick={() => void action(async () => {
+          if (preview) await extensionRequest("/cancel", { previewId: preview.previewId });
+          setPreview(null); setRights(false); setConsent(false);
+          setPreview(await extensionRequest<ExtensionPreview>("/preview", { kind: "skill_document", document: skillDocument, toolIds: skillToolIds }));
+        })}>Review exact owner adoption</button>
+      </details>
       <div className="space-y-3"><h3 className="font-medium">Installed P13 contributions</h3>
         {catalog.plugins.length === 0 && <p className="text-sm text-muted-foreground">No plugins registered in this Home runtime.</p>}
         {catalog.plugins.map(plugin => <article key={plugin.id} className="rounded border p-3 text-sm space-y-2">
@@ -123,9 +142,15 @@ export default function GovernedExtensionsPanel({ onCatalogChanged }: { onCatalo
       <p role="status" data-testid="extension-preview-availability" data-preview-state={extensionPreviewAvailability(preview).state} className="font-medium">{extensionPreviewAvailability(preview).label}</p>
       <p className="text-muted-foreground">{extensionPreviewAvailability(preview).explanation}</p>
       <p>{preview.manifest?.id ?? "Unrecognized package"} · {preview.kind} · {preview.byteLength} bytes · {preview.trust}</p>
-      <p className="break-all">Package bytes SHA-256: {preview.packageDigest}</p><p className="break-all">Signed manifest SHA-256: {preview.manifestDigest}</p><p className="break-all">Publisher key: {preview.publisherKeyId ?? "Unsigned"} · fingerprint: {preview.publisherFingerprint ?? "Not trusted"}</p>
+      <p className="break-all">Package bytes SHA-256: {preview.packageDigest}</p><p className="break-all">{preview.ownerAdoption ? "Proposed manifest" : "Signed manifest"} SHA-256: {preview.manifestDigest}</p><p className="break-all">{preview.ownerAdoption ? "Original publisher: unverified · no publisher key claimed" : `Publisher key: ${preview.publisherKeyId ?? "Unsigned"} · fingerprint: ${preview.publisherFingerprint ?? "Not trusted"}`}</p>
       <p>Activation: {preview.activation === "inactive_only" ? "Verified storage only; no executable activation" : preview.activation}. Review expires {preview.expiresAt}.</p>
-      <details open><summary>Signed manifest, signature, permissions, tools, dependencies and compatibility</summary><pre className="max-h-80 overflow-auto whitespace-pre-wrap break-all text-xs">{JSON.stringify(preview.manifest, null, 2)}</pre></details>
+      <details open><summary>{preview.ownerAdoption ? "Proposed owner-adopted procedure and governed tool constraints" : "Signed manifest, signature, permissions, tools, dependencies and compatibility"}</summary><pre className="max-h-80 overflow-auto whitespace-pre-wrap break-all text-xs">{JSON.stringify(preview.manifest, null, 2)}</pre></details>
+      {preview.ownerAdoption && <section aria-label="Owner-adopted skill provenance" className="space-y-2 rounded border p-2">
+        <p className="font-semibold">Home-owner adoption · original publisher unverified</p>
+        {preview.ownerAdoption.warnings.map(warning => <p key={warning}>{warning}</p>)}
+        <p>Only these governed tools may be selected by the procedure: {preview.ownerAdoption.toolIds.join(", ")}. This list grants no execution permission.</p>
+        <pre className="max-h-80 overflow-auto whitespace-pre-wrap break-words text-xs">{preview.ownerAdoption.document}</pre>
+      </section>}
       {preview.reasons.map(reason => <p key={reason} className="text-destructive">{reason}</p>)}
       {preview.publisherKeyId && !["trusted", "revoked"].includes(preview.trust) && <fieldset className="space-y-2 rounded border p-3"><legend>Explicit publisher trust</legend>
         <label className="block">Publisher Ed25519 public key (PEM)<textarea className="mt-1 block w-full rounded border bg-background p-2" rows={3} value={publicKeyPem} onChange={event => { setPublicKeyPem(event.target.value); setFingerprint(""); setTrustConsent(false); }} /></label>
@@ -133,9 +158,9 @@ export default function GovernedExtensionsPanel({ onCatalogChanged }: { onCatalo
         {fingerprint && <><p className="break-all">SPKI SHA-256: {fingerprint}</p><label className="flex gap-2"><input type="checkbox" checked={trustConsent} onChange={event => setTrustConsent(event.target.checked)} />I verified this full key fingerprint independently and choose to trust this publisher key for this Home session. This choice is not independent publisher or rights verification by LiOS.</label><button type="button" disabled={busy || !trustConsent} className="rounded border px-3 py-1" onClick={() => void action(async () => { setPreview(await extensionRequest<ExtensionPreview>("/publisher-key/consent", { previewId: preview.previewId, reviewHash: preview.reviewHash, publicKeyPem, fingerprint, trustPublisher: true })); setConsent(false); setRights(false); setTrustConsent(false); })}>Trust exact key and recheck package</button></>}
       </fieldset>}
       <label className="flex gap-2"><input type="checkbox" disabled={!preview.installable || busy} checked={rights} onChange={event => setRights(event.target.checked)} />I have reviewed the package licenses/notices and hold the separate code, data, model and API rights required for my use.</label>
-      <label className="flex gap-2"><input type="checkbox" disabled={!preview.installable || busy} checked={consent} onChange={event => setConsent(event.target.checked)} />I consent to this exact digest, signed manifest, permissions and contributions {preview.activation === "inactive_only" ? "being stored inactive without execution" : "being registered in this Home runtime session"}. No Decision or external-action approval is granted.</label>
-      <button type="button" disabled={busy || !preview.installable || !rights || !consent} className="rounded border px-3 py-1" onClick={() => void action(async () => { await extensionRequest("/install", { previewId: preview.previewId, reviewHash: preview.reviewHash, packageDigest: preview.packageDigest, consent: true, rightsConfirmed: true }); onCatalogChanged?.(); setPreview(null); setCatalog(await extensionRequest<ExtensionCatalog>("")); })}>{preview.activation === "inactive_only" ? "Install verified inactive pack" : "Activate reviewed declarative contributions"}</button>
-      <button type="button" disabled={busy} className="ml-2 rounded border px-3 py-1" onClick={() => void action(async () => { await extensionRequest("/cancel", { previewId: preview.previewId }); setPreview(null); })}>Cancel and discard bytes</button>
+      <label className="flex gap-2"><input type="checkbox" disabled={!preview.installable || busy} checked={consent} onChange={event => setConsent(event.target.checked)} />I consent to this exact digest, {preview.ownerAdoption ? "owner-adopted procedure (original publisher unverified)" : "signed manifest"}, permissions and contributions {preview.activation === "inactive_only" ? "being stored inactive without execution" : "being registered in this Home runtime session"}. No Decision or external-action approval is granted.</label>
+      <button type="button" disabled={busy || !preview.installable || !rights || !consent} className="rounded border px-3 py-1" onClick={() => void action(async () => { await extensionRequest("/install", { previewId: preview.previewId, reviewHash: preview.reviewHash, packageDigest: preview.packageDigest, consent: true, rightsConfirmed: true }); onCatalogChanged?.(); setPreview(null); setSkillDocument(""); setSkillToolIds([]); setCatalog(await extensionRequest<ExtensionCatalog>("")); })}>{preview.activation === "inactive_only" ? "Install verified inactive pack" : "Activate reviewed declarative contributions"}</button>
+      <button type="button" disabled={busy} className="ml-2 rounded border px-3 py-1" onClick={() => void action(async () => { await extensionRequest("/cancel", { previewId: preview.previewId }); if (preview.ownerAdoption) { setSkillDocument(""); setSkillToolIds([]); } setPreview(null); })}>Cancel and discard bytes</button>
     </section>}
     {inspection !== null && <details open><summary>Canonical installed contribution inspection</summary><pre className="max-h-96 overflow-auto whitespace-pre-wrap break-all rounded border p-3 text-xs">{JSON.stringify(inspection, null, 2)}</pre></details>}
     {revokeTarget && <section aria-label="Confirm extension revocation" className="space-y-2 rounded border p-3 text-sm"><h3 className="font-semibold">Revoke {revokeTarget.id}{revokeTarget.version ? `@${revokeTarget.version}` : ""}?</h3><p className="break-all">Exact digest: {revokeTarget.digest}</p><p>{revokeTarget.kind === "p13" ? "This removes current adapters and dependent plugin adapters, disposes brokers through P13, and revokes this package digest for the session. Saved Artifacts are not deleted." : "This removes this exact inactive package through P11. Active executable packages cannot be removed here."}</p><button type="button" disabled={busy} className="rounded border px-3 py-1" onClick={() => void action(async () => { await extensionRequest("/revoke", { ...revokeTarget, revoke: true }); onCatalogChanged?.(); setRevokeTarget(null); setInspection(null); setCatalog(await extensionRequest<ExtensionCatalog>("")); })}>Confirm exact revocation</button><button type="button" disabled={busy} className="ml-2 rounded border px-3 py-1" onClick={() => setRevokeTarget(null)}>Keep installed</button></section>}

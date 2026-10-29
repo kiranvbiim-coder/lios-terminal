@@ -6,7 +6,8 @@ import {
 import { liosPluginManifestV1Schema } from "@shared/pluginSdk";
 import type { P13PluginRuntimeHost } from "./p13PluginRuntime";
 import type { P11PackManager } from "./p11PackManager";
-import { PluginTrustStore, computePluginPackageDigest } from "./p13PluginTrust";
+import { PluginTrustStore, computePluginPackageDigest, signPluginManifest } from "./p13PluginTrust";
+import { skillDocumentManifest } from "./skillDocument";
 
 export interface ExtensionPrincipal {
   userId: number;
@@ -31,7 +32,8 @@ const PREVIEW_TTL_MS = 10 * 60 * 1000;
 /** Review custody only: installations and adapters remain owned by P13/P11. No vendor catalog or downloader. */
 export class P13ExtensionService {
   private readonly pending = new Map<string, PendingPackage>();
-  constructor(private readonly host: P13PluginRuntimeHost, private readonly packs: P11PackManager | null, private readonly clock: () => number = Date.now) {}
+  constructor(private readonly host: P13PluginRuntimeHost, private readonly packs: P11PackManager | null, private readonly clock: () => number = Date.now,
+    private readonly skillTools: () => NonNullable<ExtensionCatalog["skillTools"]> = () => []) {}
 
   private admit(actor: ExtensionPrincipal): void {
     if (!actor.homeOwner || actor.role !== "internal_admin" || actor.organizationId !== null || !actor.active || actor.mustChangePassword || (actor.lockedUntil && actor.lockedUntil.getTime() > this.clock())) {
@@ -41,13 +43,28 @@ export class P13ExtensionService {
 
   catalog(actor: ExtensionPrincipal): ExtensionCatalog {
     this.admit(actor);
-    return { managementAllowed: true, sessionOnly: true, plugins: this.host.plugins.list(), packs: this.packs?.discover() ?? [], packImportAvailable: this.packs !== null };
+    return { managementAllowed: true, sessionOnly: true, plugins: this.host.plugins.list(), packs: this.packs?.discover() ?? [], packImportAvailable: this.packs !== null, skillTools: this.skillTools() };
   }
 
-  private assess(input: LocalExtensionInput, bytes: Buffer, previewId: string, expiresAt: string): ExtensionPreview {
+  private assess(input: LocalExtensionInput, bytes: Buffer, previewId: string, expiresAt: string, ownerId: number): ExtensionPreview {
     const packageDigest = computePluginPackageDigest(bytes);
     let details: Omit<ExtensionPreview, "previewId" | "reviewHash" | "packageDigest" | "byteLength" | "expiresAt">;
-    if (input.kind === "p13") {
+    if (input.kind === "skill_document") {
+      const { manifest, warnings } = skillDocumentManifest(input.document, ownerId, input.toolIds, new Date(Date.parse(expiresAt) - PREVIEW_TTL_MS).toISOString());
+      const allowedTools = new Set(this.skillTools().map(tool => tool.id));
+      const reasons: string[] = [];
+      if (input.toolIds.some(id => !allowedTools.has(id))) reasons.push("A selected tool is unavailable in the current canonical governed registry.");
+      if (this.host.plugins.get(manifest.id)) reasons.push("This exact owner-adopted document is already installed.");
+      if (this.host.trustStore.isDigestRevoked(packageDigest)) reasons.push("This document digest has been revoked.");
+      const instructionCharacters = this.host.plugins.list().reduce((sum, plugin) => sum + plugin.manifest.skills.reduce((n, skill) => n + (skill.instructions?.length ?? 0), 0), 0);
+      if (instructionCharacters + manifest.skills[0].instructions!.length > 64_000) reasons.push("Installed skill procedures exceed the 64000-character Home instruction budget; revoke unused procedures first.");
+      details = {
+        kind: "p13", manifest, manifestDigest: crypto.createHash("sha256").update(JSON.stringify(manifest)).digest("hex"),
+        publisherKeyId: null, publisherFingerprint: null, trust: "owner_review_required",
+        reasons, installable: reasons.length === 0, activation: "declarative",
+        ownerAdoption: { document: input.document, toolIds: input.toolIds, warnings, originalPublisherVerified: false },
+      };
+    } else if (input.kind === "p13") {
       const assessment = this.host.plugins.preview({ manifest: input.manifest, observedPackageDigest: packageDigest });
       const manifest = assessment.manifest;
       const reasons = [...assessment.reasons];
@@ -81,13 +98,15 @@ export class P13ExtensionService {
   preview(actor: ExtensionPrincipal, raw: unknown): ExtensionPreview {
     this.admit(actor);
     const input = localExtensionInputSchema.parse(raw);
-    const base64 = input.kind === "p13" ? input.payloadBase64 : input.archiveBase64;
-    const bytes = Buffer.from(base64, "base64");
-    if (bytes.length === 0 || bytes.length > LOCAL_EXTENSION_MAX_BYTES || bytes.toString("base64") !== base64) throw new ExtensionAdmissionError(400, "Supply canonical base64 package bytes, at most 8 MiB.");
+    const bytes = input.kind === "skill_document" ? Buffer.from(input.document, "utf8") : Buffer.from(input.kind === "p13" ? input.payloadBase64 : input.archiveBase64, "base64");
+    if (bytes.length === 0 || bytes.length > LOCAL_EXTENSION_MAX_BYTES ||
+      (input.kind !== "skill_document" && bytes.toString("base64") !== (input.kind === "p13" ? input.payloadBase64 : input.archiveBase64))) {
+      throw new ExtensionAdmissionError(400, "Supply exact document text or canonical base64 package bytes, at most 8 MiB.");
+    }
     if (input.kind === "p13") input.manifest = liosPluginManifestV1Schema.parse(input.manifest);
     for (const [id, item] of this.pending) if (Date.parse(item.preview.expiresAt) <= this.clock()) this.pending.delete(id);
     if (this.pending.size >= 16) throw new ExtensionAdmissionError(429, "Too many pending local package reviews. Cancel a review or let it expire.");
-    const preview = this.assess(input, bytes, crypto.randomUUID(), new Date(this.clock() + PREVIEW_TTL_MS).toISOString());
+    const preview = this.assess(input, bytes, crypto.randomUUID(), new Date(this.clock() + PREVIEW_TTL_MS).toISOString(), actor.userId);
     this.pending.set(preview.previewId, { ownerId: actor.userId, input, bytes, preview });
     return structuredClone(preview);
   }
@@ -100,7 +119,7 @@ export class P13ExtensionService {
       this.pending.delete(previewId);
       throw new ExtensionAdmissionError(409, "Package review expired; import and inspect the bytes again.");
     }
-    const current = this.assess(item.input, item.bytes, previewId, item.preview.expiresAt);
+    const current = this.assess(item.input, item.bytes, previewId, item.preview.expiresAt, actor.userId);
     if (reviewHash !== item.preview.reviewHash || current.reviewHash !== reviewHash) throw new ExtensionAdmissionError(409, "Package trust, compatibility or runtime state changed; import and review again.");
     return item;
   }
@@ -114,6 +133,7 @@ export class P13ExtensionService {
     if (fingerprint !== consent.fingerprint) throw new ExtensionAdmissionError(409, "Publisher key fingerprint differs from the reviewed key.");
     const keyId = item.preview.publisherKeyId;
     if (!keyId) throw new ExtensionAdmissionError(409, "Package has no signed publisher key identity.");
+    if (item.input.kind === "skill_document") throw new ExtensionAdmissionError(409, "Owner adoption cannot claim original publisher trust.");
     if (item.input.kind === "p13") {
       const manifest = liosPluginManifestV1Schema.parse(item.input.manifest);
       const verifier = new PluginTrustStore();
@@ -127,7 +147,7 @@ export class P13ExtensionService {
       if (!verified.ok) throw new ExtensionAdmissionError(409, "Publisher/package verification failed: " + verified.errors.join(" "));
       this.packs!.trustPublisher(keyId, key);
     }
-    item.preview = this.assess(item.input, item.bytes, item.preview.previewId, item.preview.expiresAt);
+    item.preview = this.assess(item.input, item.bytes, item.preview.previewId, item.preview.expiresAt, actor.userId);
     return structuredClone(item.preview);
   }
 
@@ -137,6 +157,20 @@ export class P13ExtensionService {
     if (consent.packageDigest !== item.preview.packageDigest) throw new ExtensionAdmissionError(409, "Consent does not identify the reviewed package bytes.");
     if (!item.preview.installable) throw new ExtensionAdmissionError(409, "Package is unavailable: " + item.preview.reasons.join(" "));
     this.pending.delete(consent.previewId);
+    if (item.input.kind === "skill_document") {
+      const manifest = liosPluginManifestV1Schema.parse(item.preview.manifest);
+      const pair = crypto.generateKeyPairSync("ed25519");
+      const keyId = "lios.home-owner-adoption." + crypto.randomUUID();
+      // Local signing attests only this explicit owner adoption, never the upstream publisher.
+      const signed = signPluginManifest(manifest, keyId, pair.privateKey, item.preview.packageDigest);
+      this.host.trustStore.trustKey(keyId, pair.publicKey);
+      try {
+        return { kind: "p13" as const, installed: this.host.installDeclarativePlugin({ manifest: signed, observedPackageDigest: item.preview.packageDigest }), sessionOnly: true };
+      } catch (error) {
+        this.host.trustStore.revokeKey(keyId);
+        throw error;
+      }
+    }
     if (item.input.kind === "p13") {
       return { kind: "p13" as const, installed: this.host.installDeclarativePlugin({ manifest: item.input.manifest, observedPackageDigest: computePluginPackageDigest(item.bytes) }), sessionOnly: true };
     }

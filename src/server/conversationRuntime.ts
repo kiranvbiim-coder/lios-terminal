@@ -204,6 +204,8 @@ export interface ConversationRuntimeInput {
   projectId: number | null;
   projectName?: string | null;
   projectInstructions?: string | null;
+  /** Server-resolved opt-in Project memory; never a client field or persisted checkpoint payload. */
+  memoryRecall?: import("./projectMemoryRecall").ProjectMemoryRecall | null;
   resources?: ProjectRuntimeResource[];
   /** Server-resolved Project file content; never accepted from the client. */
   resolvedAttachments?: ResolvedConversationAttachment[];
@@ -1247,7 +1249,7 @@ const PRIVATE_RESULT_CAPABILITIES = new Set<string>(["portfolio.risk", "personal
  * portfolio or personal-finance data is never re-sent to a different vendor after a failure.
  */
 function privateAiContentReason(input: ConversationRuntimeInput, plan: WorkflowPlan): string | null {
-  if (transmittedAttachmentSourceRefs(input).length) return "Project files";
+  if (transmittedContextSourceRefs(input).length) return "Project files";
   if (input.scope === "project" && input.request.transmissionPolicy.allowResourceReferences && input.request.context?.activeObjectRefs?.some(ref => /^artifact:[0-9a-f-]{36}$/i.test(ref))) return "Project Artifacts";
   if (input.scope === "project" && input.request.transmissionPolicy.allowResourceReferences) {
     const attachments = input.request.attachments ?? [];
@@ -1269,8 +1271,18 @@ async function invokeGovernedAi(
   request: Omit<AIRoutedCompletionRequest, "fallback">,
   content: { containsPrivateResearch?: true; beforeTransmission?: () => Promise<void> } = {},
 ): Promise<AICompletionResult> {
-  const privateReason = content.containsPrivateResearch ? "Project research observations" : privateAiContentReason(input, plan);
+  const privateReason = input.memoryRecall ? "owner-authored Project memory" : content.containsPrivateResearch ? "Project research observations" : privateAiContentReason(input, plan);
   try {
+    if (input.memoryRecall && (input.scope !== "project" || !input.projectId ||
+        !input.request.transmissionPolicy.allowResourceReferences || !sourceScopeAllowsProjectData(input.request.sourceScope ?? "auto"))) {
+      throw new AIProviderError("policy_denied", "Current source/transmission policy excludes Project memory.");
+    }
+    const release = input.memoryRecall || content.beforeTransmission || request.beforeTransmission ? async () => {
+      await request.beforeTransmission?.();
+      await content.beforeTransmission?.();
+      await input.memoryRecall?.assertCurrent();
+    } : undefined;
+    if (input.memoryRecall && invokeAI !== invokeAIRoutedCompletion) await release!();
     if (content.containsPrivateResearch) {
       if (!content.beforeTransmission) throw new AIProviderError("policy_denied", "Current research release authorization is unavailable.");
       // Canonical transport checks at final dispatch; injected adapters need this guard here.
@@ -1280,11 +1292,12 @@ async function invokeGovernedAi(
     const boundedResearch = plan.intent.parameters.workflow === "ws26_natural_research";
     const answered = await invokeAI({
       ...request,
+      ...(input.memoryRecall ? { system: `${request.system ?? ""}\n\n${input.memoryRecall.text}` } : {}),
       maxTokens: Math.min(request.maxTokens ?? 1_800, policy.maxAiOutputTokens ?? 1_800),
       maxAttempts: privateReason || boundedResearch ? 1 : policy.maxProviderAttempts ?? 2,
-      ...(content.containsPrivateResearch || privateReason === "Project Artifacts" ? { dataClassification: "organization" as const } : {}),
+      ...(input.memoryRecall || content.containsPrivateResearch || privateReason === "Project Artifacts" ? { dataClassification: "organization" as const } : {}),
       fallback: privateReason || boundedResearch || policy.maxProviderAttempts === 1 ? "none" : "configured",
-      ...(content.containsPrivateResearch ? { beforeTransmission: content.beforeTransmission } : {}),
+      ...(release ? { beforeTransmission: release } : {}),
     });
     if (answered.fallback?.attempts.length) {
       const failed = answered.fallback.attempts.map((attempt) => `${attempt.provider} (${attempt.code.replaceAll("_", " ")})`).join(", ");
@@ -1305,10 +1318,12 @@ async function invokeGovernedAi(
   }
 }
 
-function transmittedAttachmentSourceRefs(input: ConversationRuntimeInput): string[] {
-  return input.request.transmissionPolicy.allowResourceReferences && sourceScopeAllowsFiles(input.request.sourceScope ?? "auto")
-    ? attachmentSourceRefs(input.resolvedAttachments ?? [])
-    : [];
+function transmittedContextSourceRefs(input: ConversationRuntimeInput): string[] {
+  if (!input.request.transmissionPolicy.allowResourceReferences) return [];
+  return [
+    ...(sourceScopeAllowsFiles(input.request.sourceScope ?? "auto") ? attachmentSourceRefs(input.resolvedAttachments ?? []) : []),
+    ...(sourceScopeAllowsProjectData(input.request.sourceScope ?? "auto") ? input.memoryRecall?.sourceRefs ?? [] : []),
+  ];
 }
 
 export function buildConversationContext(input: Omit<ConversationRuntimeInput, "emit" | "history">): ConversationContextEnvelope {
@@ -4197,14 +4212,14 @@ async function executeAI(
     aiDerived: true,
     input: { message: request.message, providerPolicy: request.transmissionPolicy, context },
     output: { text, attribution: result.attribution },
-    sourceRefs: [...new Set([`ai-provider:${result.attribution.provider}`, ...transmittedAttachmentSourceRefs(input)])],
+    sourceRefs: [...new Set([`ai-provider:${result.attribution.provider}`, ...transmittedContextSourceRefs(input)])],
     warnings: [
       ...(aiDirect ? ["AI-direct estimate: user-authorized and not a deterministic LiOS engine result."] : []),
       ...(plan.intent.parameters.workflow === "ws26_natural_research" ? ["WS-26 preliminary AI research: no automatic source retrieval or independent claim verification."] : []),
       ...attachmentWarnings,
     ],
   });
-  await emit(input, { ...eventBase(request.requestId), type: "tool_result", outcome: "completed", stepId: aiDirect ? "ai-direct-estimate" : "ai-assist", label: "BYOAI response complete", summary: `${result.attribution.provider}${result.attribution.model ? ` · ${result.attribution.model}` : ""}${attachmentWarnings.length ? " · attachment extraction incomplete (see receipt)" : ""}`, deterministic: false, sourceRefs: [...new Set([`ai-provider:${result.attribution.provider}`, ...transmittedAttachmentSourceRefs(input)])] });
+  await emit(input, { ...eventBase(request.requestId), type: "tool_result", outcome: "completed", stepId: aiDirect ? "ai-direct-estimate" : "ai-assist", label: "BYOAI response complete", summary: `${result.attribution.provider}${result.attribution.model ? ` · ${result.attribution.model}` : ""}${attachmentWarnings.length ? " · attachment extraction incomplete (see receipt)" : ""}`, deterministic: false, sourceRefs: [...new Set([`ai-provider:${result.attribution.provider}`, ...transmittedContextSourceRefs(input)])] });
   await emit(input, { ...eventBase(request.requestId), type: "receipt", receipt });
   await emit(input, { ...eventBase(request.requestId), type: "text", text, label: "ai_derived" });
   return { text, label: "ai_derived", plan, receiptIds: [receipt.id], artifacts: [], cancelled: false, awaitingApproval: false };
@@ -4286,7 +4301,7 @@ interface AgentLoopCatalogue {
     validateInput?: (input: Record<string, unknown>) => boolean;
     inputValidationIssue?: (input: Record<string, unknown>) => string | null;
   }>;
-  skills: Array<{ id: string; name: string; description: string; toolIds: string[] }>;
+  skills: Array<{ id: string; name: string; description: string; instructions?: string; toolIds: string[] }>;
 }
 
 /** The server-owned tool/skill catalogue one agent run is offered, decided for `role`. Shared by execution and resume. */
@@ -4304,12 +4319,16 @@ function offeredAgentLoopCatalogue(role: string): AgentLoopCatalogue {
     inputValidationIssue: (input: Record<string, unknown>) => modelSafeToolInputIssue(tool.inputSchema, input),
   }));
   const offeredToolIds = new Set(tools.filter((tool) => tool.decision !== "deny").map((tool) => tool.id));
-  const skills = listInstalledSkillAdapters().map((skill) => ({
+  const skills = listInstalledSkillAdapters().filter((skill) => skill.definition.modelInvocable !== false).map((skill) => ({
     id: skill.definition.skillId,
     name: skill.descriptor.name,
     description: skill.definition.description,
+    ...(skill.definition.instructions ? { instructions: skill.definition.instructions } : {}),
     toolIds: skill.definition.toolIds.filter((toolId) => offeredToolIds.has(toolId)),
   })).filter((skill) => skill.toolIds.length > 0);
+  if (skills.reduce((sum, skill) => sum + (skill.instructions?.length ?? 0), 0) > 64_000) {
+    throw new Error("Installed skill procedures exceed the governed planning instruction budget.");
+  }
   return { tools, skills };
 }
 
@@ -4324,7 +4343,7 @@ function agentLoopFactsFor(
   const toolSetSha256 = sha256Json({
     version: 1,
     tools: byId(tools).map((tool) => ({ id: tool.id, label: tool.label, planningHint: tool.planningHint ?? null, inputJsonSchema: tool.inputJsonSchema, kind: tool.kind, permissionClass: tool.permissionClass, sideEffect: tool.sideEffect })),
-    skills: byId(skills).map((skill) => ({ id: skill.id, toolIds: [...skill.toolIds].sort() })),
+    skills: byId(skills).map((skill) => ({ id: skill.id, name: skill.name, description: skill.description, instructions: skill.instructions ?? null, toolIds: [...skill.toolIds].sort() })),
   });
   const policySha256 = sha256Json({
     version: 1,
@@ -4944,7 +4963,7 @@ async function executeAgentLoop(
   const providerRefs = [...providers].map((provider) => `ai-provider:${provider}`);
   const requiredSourceRefs = [...new Set([...outcome.reviewedSourceRefs, ...providerRefs])];
   const requiredRefSet = new Set(requiredSourceRefs);
-  const additionalSourceRefs = [...new Set(outcome.steps.flatMap((step) => step.sourceRefs))].filter((ref) => !requiredRefSet.has(ref));
+  const additionalSourceRefs = [...new Set([...outcome.steps.flatMap((step) => step.sourceRefs), ...(outcome.aiCalls > 0 ? transmittedContextSourceRefs(input) : [])])].filter((ref) => !requiredRefSet.has(ref));
   const sourceRefs = [...requiredSourceRefs, ...additionalSourceRefs.slice(0, Math.max(0, 500 - requiredSourceRefs.length))];
   const summaryOutput = { status: outcome.status, aiCalls: outcome.aiCalls, revisions: outcome.revisions, steps: outcome.steps.map((step) => ({ id: step.id, toolId: step.toolId, status: step.status })) };
   if (outcome.status === "awaiting_approval") {
@@ -5012,7 +5031,7 @@ async function maybeSynthesizeDeterministicResult(
     const upstreamRefs = Array.from(new Set([
       ...result.receiptIds.map((id) => `execution-receipt:${id}`),
       ...result.artifacts.flatMap((artifact) => artifact.sourceRefs),
-      ...transmittedAttachmentSourceRefs(input),
+      ...transmittedContextSourceRefs(input),
     ])).slice(0, 100);
     const synthesisInstruction = [
       "Synthesize the authoritative deterministic LiOS result below for the user.",

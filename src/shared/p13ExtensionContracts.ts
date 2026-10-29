@@ -3,10 +3,17 @@ import type { LiosPluginManifestV1 } from "./pluginSdk";
 import type { HiddenEnginePackManifestV1 } from "./hiddenEnginePackManifest";
 
 export const LOCAL_EXTENSION_MAX_BYTES = 8 * 1024 * 1024;
+export const SKILL_DOCUMENT_MAX_BYTES = 24 * 1024;
 const digest = z.string().regex(/^[a-f0-9]{64}$/);
 export const localExtensionInputSchema = z.discriminatedUnion("kind", [
   z.object({ kind: z.literal("p13"), manifest: z.unknown(), payloadBase64: z.string().min(4).max(12 * 1024 * 1024) }).strict(),
   z.object({ kind: z.literal("p11"), archiveBase64: z.string().min(4).max(12 * 1024 * 1024) }).strict(),
+  z.object({
+    kind: z.literal("skill_document"),
+    document: z.string().min(1).max(SKILL_DOCUMENT_MAX_BYTES),
+    toolIds: z.array(z.string().trim().min(1).max(160).regex(/^[a-z0-9][a-z0-9_.:-]*$/)).min(1).max(30)
+      .refine(values => new Set(values).size === values.length, "Skill tool identifiers must be unique."),
+  }).strict(),
 ]);
 export type LocalExtensionInput = z.infer<typeof localExtensionInputSchema>;
 export const extensionConsentSchema = z.object({
@@ -34,6 +41,7 @@ export interface ExtensionPreview {
   reasons: string[];
   installable: boolean;
   activation: "declarative" | "inactive_only" | "unavailable";
+  ownerAdoption?: { document: string; toolIds: string[]; warnings: string[]; originalPublisherVerified: false };
 }
 export interface ExtensionCatalog {
   managementAllowed: boolean;
@@ -41,4 +49,5 @@ export interface ExtensionCatalog {
   plugins: Array<{ id: string; version: string; manifest: LiosPluginManifestV1; componentIds: string[]; trust: { state: string; reason: string; packageDigest: string | null; manifestDigest: string; keyId: string | null } }>;
   packs: Array<{ packId: string; activeVersion: string | null; versions: Array<{ version: string; state: string; lastHealth: string }> }>;
   packImportAvailable: boolean;
+  skillTools?: Array<{ id: string; label: string; permissionClass: string }>;
 }

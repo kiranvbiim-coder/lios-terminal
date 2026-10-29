@@ -111,6 +111,10 @@ export class PluginTrustStore {
     this.revokedDigests.add(digest);
   }
 
+  isDigestRevoked(digest: string): boolean {
+    return this.revokedDigests.has(digest);
+  }
+
   verify(
     input: LiosPluginManifestV1,
     observedPackageDigest: string | null = null,

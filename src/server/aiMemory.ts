@@ -300,7 +300,7 @@ export async function appendDurableMemory(input: DurableMemoryInput): Promise<Du
   return existing;
 }
 
-export async function listDurableMemories(input: { projectId?: number | null; limit?: number; query?: string } = {}): Promise<DurableMemoryRow[]> {
+export async function listDurableMemories(input: { projectId?: number | null; limit?: number; query?: string; projectOnly?: boolean; ownerAuthoredOnly?: boolean; matchAnyTerm?: boolean } = {}): Promise<DurableMemoryRow[]> {
   const identity = currentIdentity();
   if (!identity) return [];
   await ensureLegacyMemoryMigrated(identity);
@@ -312,10 +312,21 @@ export async function listDurableMemories(input: { projectId?: number | null; li
   if (input.query !== undefined && !query) throw new Error("Durable memory query cannot be empty.");
   // Query current canonical rows directly; do not create another memory/index store or invoke an embedding provider.
   const vector = sql`to_tsvector('simple', ${durableMemories.content})`;
-  const parsedQuery = query ? sql`plainto_tsquery('simple', ${query})` : null;
+  const anyTermQuery = input.matchAnyTerm && query
+    ? query.match(/[\p{L}\p{N}_-]+/gu)?.slice(0, 32).map(term => `"${term}"`).join(" OR ") ?? ""
+    : null;
+  if (input.matchAnyTerm && !anyTermQuery) return [];
+  const parsedQuery = query ? anyTermQuery
+    ? sql`websearch_to_tsquery('simple', ${anyTermQuery})`
+    : sql`plainto_tsquery('simple', ${query})` : null;
 
   return getDb().select().from(durableMemories)
     .where(and(ownerFilter(identity), eq(durableMemories.state, "active"), memoryScopeFilter(projectId),
+      input.projectOnly ? and(eq(durableMemories.scope, "project"), projectId === null ? sql`false` : eq(durableMemories.projectId, projectId)) : undefined,
+      input.ownerAuthoredOnly ? and(eq(durableMemories.originClass, "owner"), sql`NOT EXISTS (
+        SELECT 1 FROM jsonb_array_elements_text(${durableMemories.sourceRefs}) AS refs(ref)
+        WHERE NOT starts_with(ref, ${durableMemories.memoryKey} || '@r') OR ref !~ '@r[1-9][0-9]*$'
+      )`) : undefined,
       parsedQuery ? sql`${vector} @@ ${parsedQuery}` : undefined))
     .orderBy(
       ...(parsedQuery ? [sql`ts_rank_cd(${vector}, ${parsedQuery}) DESC`] : []),
