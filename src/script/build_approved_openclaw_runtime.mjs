@@ -130,7 +130,14 @@ async function build() {
     const attributionDirectory = path.join(source, ".artifacts", "lios-module-attribution");
     const graphFiles = (await readdir(attributionDirectory, { withFileTypes: true })).filter(entry => entry.isFile() && entry.name.endsWith(".json"));
     const graphs = await Promise.all(graphFiles.map(async entry => JSON.parse(await readFile(path.join(attributionDirectory, entry.name), "utf8"))));
-    const rootPackClosure = inspectRootPackClosure(packed[0], graphs);
+    const { rootPackPaths, moduleIdentifiers, ...rootPackClosure } = inspectRootPackClosure(packed[0], graphs);
+    // Retain public OSS identifiers in existing job logs, not binary artifacts or paid storage.
+    // The hashes in the final report let later review verify complete reconstruction.
+    for (const [kind, entries] of Object.entries({ ROOT_FILES: rootPackPaths, ROOT_MODULES: moduleIdentifiers })) {
+      for (let offset = 0; offset < entries.length; offset += 128) {
+        console.log(`LIOS_AUDIT_${kind} ${JSON.stringify(entries.slice(offset, offset + 128))}`);
+      }
+    }
     await writeFile(path.join(root, "root-package-files.json"), JSON.stringify(packed[0].files), { flag: "wx" });
     phase = "output-inventory";
     const files = await inventory(path.join(source, "dist"));
