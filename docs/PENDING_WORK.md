@@ -128,6 +128,8 @@
 
 **Same-job duplicate removal, no lost tests:** actual offline discovery covers1,179 unique source test files. Every removed phase/website/media-test alias was verified to reference only those files (68 redundant file invocations in the former Linux closure group including its Phase4 duplicate). Root beta-manifest tests and installed-UX evals are outside discovery and remain explicit; actual media, licence/supply-chain, source reports, Python, desktop and built-asset gates remain. Phase4 keeps its report without rerunning its already-discovered tests; CI preflight remains once per platform instead of twice on Linux. The early public-file policy scan remains before installation; its own unit suite runs once in offline discovery. No broad local suite was rerun to prove this set membership.
 
+**PR394 exact-head correction after completed run40824831430:** Linux/macOS failed the existing source-relative script-manifest check for the two new root-relative proof/build command paths; new jobs now explicitly use established `working-directory:src` and `script/...`. Windows also reported the obsolete implementation-text cross-phase suite requiring the old duplicate `phase4:source` command; its source-regex-only file is removed, not re-pinned. Actual Phase4 behavior tests/report/asset gates remain. Corrected manifest command and its three behavior tests passed locally; no broad suite was rerun. All three prior jobs finished before one corrective push. Owner-reviewed skill work stays on a separate local follow-through branch and is not included in this validation candidate.
+
 
 
 
