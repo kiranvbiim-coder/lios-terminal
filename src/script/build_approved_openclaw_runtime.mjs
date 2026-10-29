@@ -104,7 +104,7 @@ async function build() {
       names.push(name);
       return command("docker", ["run", ...sharedArgs, "--name", name, "--network", network, "--memory", memory, "--entrypoint", entrypoint, image, ...args], { capture, timeout: label === "compile" ? 30 * 60_000 : 15 * 60_000 });
     };
-    dockerPhase("install", "bridge", "2g", "/tools/pnpm", ["install", "--frozen-lockfile", "--ignore-scripts", "--ignore-pnpmfile", "--network-concurrency", "8", "--reporter", "append-only", "--filter", "openclaw...", "--filter", "./extensions/**"]);
+    dockerPhase("install", "bridge", "2g", "/tools/pnpm", ["install", "--frozen-lockfile", "--ignore-scripts", "--ignore-pnpmfile", "--network-concurrency", "8", "--reporter", "append-only", "--filter", "openclaw...", "--filter", "./packages/**", "--filter", "./extensions/**"]);
     dockerPhase("compile", "none", "6g", "/usr/local/bin/node", ["--import", "./scripts/tsx.mjs", "scripts/build-all.mts", "qaRuntime"]);
     const compiledCliVersion = dockerPhase("version", "none", "512m", "/usr/local/bin/node", ["dist/entry.js", "--version"], true);
     if (!compiledCliVersion.includes(packageJson.version)) throw new Error("Compiled CLI did not report the pinned source version");
