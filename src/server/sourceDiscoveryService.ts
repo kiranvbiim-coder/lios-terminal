@@ -6,6 +6,7 @@ import { discoverApiSource, type ApiDiscoveryResult, type ApiSourceConfig } from
 import { discoverDatabaseCatalog, type DatabaseCatalogDiscovery } from "./databaseDiscovery";
 import type { DatabaseSourceConfig } from "./databaseConnector";
 import { sourceConnections, type SourceConnection, type User } from "@shared/schema";
+import { TELEGRAM_CONNECTOR_ID } from "@shared/telegramConnection";
 import { assertLocalByodRuntime } from "./runtimeSecurity";
 
 async function ownedConnection(userId: number, connectionId: number): Promise<SourceConnection> {
@@ -13,7 +14,7 @@ async function ownedConnection(userId: number, connectionId: number): Promise<So
     eq(sourceConnections.id, connectionId),
     eq(sourceConnections.userId, userId),
   )).limit(1);
-  if (!connection) throw new Error("Source connection not found.");
+  if (!connection || connection.connectorId === TELEGRAM_CONNECTOR_ID) throw new Error("Source connection not found.");
   return connection;
 }
 

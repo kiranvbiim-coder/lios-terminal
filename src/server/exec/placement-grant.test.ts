@@ -1,7 +1,7 @@
 // Relevant cases adapted from OpenClaw operator-approval-placement-grants.test.ts
 // (MIT, Copyright (c) 2026 OpenClaw Foundation), c074824a27c96d3983043f9eeb33823cd1772d8c.
 import assert from "node:assert/strict";
-import test from "node:test";
+import test, { after } from "node:test";
 import { GATEWAY_METHODS } from "../../shared/gatewayProtocol";
 import { localExecutionBackend } from "./backends/local";
 import { nodePermissionExecutionBackend } from "./backends/node-permission";
@@ -14,6 +14,9 @@ import { createProcessSupervisor } from "./supervisor";
 import { createExecutionPolicySnapshot, ExecutionAuthorizationLease } from "./execution-authorization";
 import { createStubChildAdapter, createStubSupervisor } from "./supervisor.test-support";
 import type { ExecutionJournal } from "./execution-journal";
+import { installContainerAdmissionIdentity } from "./container-admission.test-support";
+
+after(installContainerAdmissionIdentity());
 
 const REQUEST_ID = "961b6b26-e25e-4a65-9eae-6889bc80de5d";
 const REVISION = "a".repeat(64);
@@ -190,4 +193,81 @@ test("placement drift at the final authorization fence creates no native process
   assert.equal(createAdapter.mock.calls.length, 0);
   f.current.target.generation = "runtime-1";
   assert.throws(() => placement.assertCurrent(), denied("revoked-grant"));
+});
+
+function homeServiceFixture() {
+  const f = fixture();
+  const serviceId = "bda490b0-ad33-46ba-85f6-dab1c20a68f2";
+  const owner = { userId: OWNER.userId, projectId: null, chatId: null };
+  const endpoint = "unix:///var/run/owned.sock";
+  f.current = {
+    ...f.current, owner, homeServiceId: serviceId,
+    target: { ...f.current.target, owner, kind: "container", endpoint, backend: createContainerExecutionBackend({
+      engine: "docker", engineTarget: endpoint, image: "ghcr.io/example/sandbox@sha256:" + "b".repeat(64),
+      user: "10001:10001", maxMemoryBytes: 512 * 1024 * 1024, maxProcesses: 32,
+    }) },
+    policy: { ...f.current.policy, allowedKinds: ["container"], allowHomeService: true },
+  };
+  f.request.scopeKey = `home-service:${serviceId}:${REQUEST_ID}`;
+  f.request.isolation = { filesystem: "sandbox", network: "deny", processes: "sandbox" };
+  delete f.request.cwd;
+  f.request.argv = ["/usr/bin/node", "-e", "process.stdout.write('safe')"];
+  return f;
+}
+
+test("Home-service placement requires explicit policy and never inherits a Chat or host placement", () => {
+  const f = homeServiceFixture();
+  const grant = f.select();
+  assert.equal(grant.facts.homeServiceId, f.current.homeServiceId);
+  assert.equal(grant.facts.trustPosture, "isolated-container");
+  assert.equal(grant.facts.owner.projectId, null);
+  grant.assertRequest(f.current.target.backend!, f.request);
+  assert.throws(() => grant.assertRequest(f.current.target.backend!, { ...f.request, scopeKey: `conversation:${REQUEST_ID}` }), denied("scope-mismatch"));
+  for (const scenario of ["policy", "chat", "project", "host", "network", "secrets", "locality", "scope", "identity"] as const) {
+    const changed = homeServiceFixture();
+    if (scenario === "policy") delete changed.current.policy.allowHomeService;
+    if (scenario === "chat") changed.current.owner.chatId = changed.current.target.owner.chatId = 13;
+    if (scenario === "project") changed.current.owner.projectId = changed.current.target.owner.projectId = 11;
+    if (scenario === "host") {
+      changed.current.target = { ...changed.current.target, kind: "host", backend: localExecutionBackend, endpoint: null };
+      changed.current.policy.allowedKinds = ["host"];
+    }
+    if (scenario === "network") changed.request.isolation.network = "inherit";
+    if (scenario === "secrets") changed.current.policy.secretLocality = "runtime-only";
+    if (scenario === "locality") changed.current.policy.dataLocality = "workspace-copy";
+    if (scenario === "scope") changed.request.scopeKey = `conversation:${REQUEST_ID}`;
+    if (scenario === "identity") changed.current.homeServiceId = "../other-home";
+    assert.throws(() => changed.select(), denied(scenario === "scope" || scenario === "identity" ? "scope-mismatch" : "policy-denied"));
+  }
+});
+
+test("service revocation, replacement and generation changes cannot revive a retained placement", () => {
+  for (const scenario of ["service", "policy", "generation"] as const) {
+    const f = homeServiceFixture();
+    const retained = f.select();
+    if (scenario === "service") f.current.homeServiceId = "797aebf8-f3e4-4e38-a431-7ee62024c67c";
+    if (scenario === "policy") f.current.policy.allowHomeService = false;
+    if (scenario === "generation") f.current.target.generation = "runtime-2";
+    assert.throws(() => retained.assertCurrent(), error => error instanceof ExecutionPlacementError);
+    f.current = homeServiceFixture().current;
+    assert.throws(() => retained.assertCurrent(), denied("revoked-grant"));
+  }
+});
+
+test("a Home-service identity is bound into exact prepared approval and remains off the public operation proposal", async () => {
+  const f = homeServiceFixture();
+  const firstPlacement = f.select();
+  const first = await prepareAnalyzedGovernedCommand({ backend: firstPlacement.backend, request: f.request, placement: firstPlacement });
+  assert.equal(first.launchSnapshot().scopeKey, f.request.scopeKey);
+  f.current.homeServiceId = "797aebf8-f3e4-4e38-a431-7ee62024c67c";
+  f.request.scopeKey = `home-service:${f.current.homeServiceId}:${REQUEST_ID}`;
+  const secondPlacement = f.select();
+  const second = await prepareAnalyzedGovernedCommand({ backend: secondPlacement.backend, request: f.request, placement: secondPlacement });
+  assert.notEqual(first.approvalDigest, second.approvalDigest);
+  assert.equal(GATEWAY_METHODS["execution.operation.propose"].result.safeParse({
+    requestId: REQUEST_ID, label: "service", argv: ["node"], cwd: "/tmp", backendId: firstPlacement.facts.backendId,
+    operationDigest: REVISION, approvalDigest: REVISION, policyRevision: REVISION, permissionClass: "user_confirm",
+    expiresAtMs: Date.now() + 60000, isolation: f.request.isolation, resources: f.request.resources,
+    placement: firstPlacement.facts, interactiveInputPolicy: null, allowedInteractiveInputs: [],
+  }).success, false, "The public Chat proposal schema must not accept internal service placement facts");
 });

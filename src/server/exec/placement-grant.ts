@@ -24,12 +24,16 @@ export interface ExecutionPlacementPolicy {
   allowedKinds: readonly ExecutionPlacementKind[];
   dataLocality: "runtime-only" | "workspace-copy";
   secretLocality: "none" | "runtime-only";
+  /** Server-owned opt-in. Existing conversation policies do not grant Home-service placement. */
+  allowHomeService?: boolean;
 }
 export interface ExecutionPlacementAuthority {
   requestId: string;
   owner: ExecutionOwner;
   target: ExecutionPlacementTarget;
   policy: ExecutionPlacementPolicy;
+  /** Internal Home lifecycle identity, never accepted from a Chat/Gateway request. */
+  homeServiceId?: string;
 }
 export interface ExecutionPlacementFacts {
   requestId: string;
@@ -43,6 +47,7 @@ export interface ExecutionPlacementFacts {
   trustPosture: "host-access" | "restricted-node" | "isolated-container";
   dataLocality: ExecutionPlacementPolicy["dataLocality"];
   secretLocality: ExecutionPlacementPolicy["secretLocality"];
+  homeServiceId?: string;
 }
 export class ExecutionPlacementError extends Error {
   constructor(readonly reason: "wrong-owner" | "target-unavailable" | "unsupported-target" | "policy-denied" | "capability-denied" | "stale-grant" | "revoked-grant" | "scope-mismatch") {
@@ -52,6 +57,9 @@ export class ExecutionPlacementError extends Error {
 }
 function sameOwner(left: ExecutionOwner, right: ExecutionOwner): boolean {
   return left.userId === right.userId && left.projectId === right.projectId && left.chatId === right.chatId;
+}
+function placementScopeKey(requestId: string, homeServiceId?: string): string {
+  return homeServiceId === undefined ? `conversation:${requestId}` : `home-service:${homeServiceId}:${requestId}`;
 }
 function requireEligible(authority: ExecutionPlacementAuthority, request: ExecutionBackendRequest): ExecutionPlacementFacts {
   const { owner, target, policy, requestId } = authority;
@@ -77,6 +85,20 @@ function requireEligible(authority: ExecutionPlacementAuthority, request: Execut
     || (policy.secretLocality === "none" && Object.keys(request.env ?? {}).length > 0)) {
     throw new ExecutionPlacementError("policy-denied");
   }
+  const homeServiceId = authority.homeServiceId;
+  if (homeServiceId !== undefined) {
+    if (typeof homeServiceId !== "string" || !/^[a-f0-9]{8}-[a-f0-9]{4}-[1-8][a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/i.test(homeServiceId)) {
+      throw new ExecutionPlacementError("scope-mismatch");
+    }
+    if (policy.allowHomeService !== true || !Number.isSafeInteger(owner.userId) || owner.userId <= 0 ||
+        owner.projectId !== null || owner.chatId !== null || expectedKind !== "container" ||
+        request.isolation.filesystem !== "sandbox" || request.isolation.network !== "deny" ||
+        request.isolation.processes !== "sandbox" || policy.dataLocality !== "runtime-only" ||
+        policy.secretLocality !== "none" || request.workspaceTransfer !== undefined ||
+        Object.keys(request.env ?? {}).length > 0) {
+      throw new ExecutionPlacementError("policy-denied");
+    }
+  }
   const caps = backend.capabilities;
   if (!caps.filesystem.includes(request.isolation.filesystem)
     || !caps.network.includes(request.isolation.network)
@@ -88,13 +110,14 @@ function requireEligible(authority: ExecutionPlacementAuthority, request: Execut
     || (request.resources.maxProcesses !== undefined && !caps.resourceControls.includes("process-count"))) {
     throw new ExecutionPlacementError("capability-denied");
   }
-  if (request.scopeKey !== `conversation:${requestId}`) throw new ExecutionPlacementError("scope-mismatch");
+  if (request.scopeKey !== placementScopeKey(requestId, homeServiceId)) throw new ExecutionPlacementError("scope-mismatch");
   return Object.freeze({
     requestId, owner: Object.freeze({ ...owner }), nodeId: target.nodeId, kind: expectedKind,
     backendId, generation: target.generation, endpoint: target.endpoint,
     policyRevision: policy.revision,
     trustPosture: expectedKind === "host" ? "host-access" : expectedKind === "node-permission" ? "restricted-node" : "isolated-container",
     dataLocality: policy.dataLocality, secretLocality: policy.secretLocality,
+    ...(homeServiceId === undefined ? {} : { homeServiceId }),
   });
 }
 
@@ -151,7 +174,7 @@ export class ExecutionPlacementGrant {
     if (result.outcome === "rejected") throw result.error;
   }
   assertRequest(backend: ExecutionBackend, request: ExecutionBackendRequest): void {
-    if (backend !== this.backend || request.scopeKey !== `conversation:${this.facts.requestId}`) {
+    if (backend !== this.backend || request.scopeKey !== placementScopeKey(this.facts.requestId, this.facts.homeServiceId)) {
       throw new ExecutionPlacementError("scope-mismatch");
     }
     this.check(request);

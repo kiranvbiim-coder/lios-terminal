@@ -13,6 +13,9 @@ import type { AddressInfo } from "node:net";
 import type { SourceConnection } from "@shared/schema";
 import { callExternalMcpTool, type ExternalMcpServerConfig } from "./externalMcpClient";
 import { invokeGovernedExternalMcpTool } from "./governedExternalMcpTool";
+import { withOfficialMcpClient } from "./sdkExternalMcpClient";
+import { McpStartupBackoffError } from "./mcpStartupBackoff";
+import { runWithRequestIdentity } from "./requestContext";
 
 interface RpcRequest {
   jsonrpc?: string;
@@ -160,4 +163,37 @@ test("GM20 Stop aborts a real in-flight MCP HTTP tool with no successful result"
     enteredTool();
     return true; // deliberately withhold a response until Stop aborts fetch
   });
+});
+
+test("failed HTTP startup is cooled down only for its exact request owner and configuration", { timeout: 15_000 }, async () => {
+  let requests = 0;
+  const server = createServer((_req, res) => {
+    requests++;
+    res.writeHead(503, { "content-type": "text/plain" }).end("private upstream detail");
+  });
+  server.listen(0, "127.0.0.1");
+  try {
+    await once(server, "listening");
+    const endpoint = `http://127.0.0.1:${(server.address() as AddressInfo).port}/mcp`;
+    const { config } = fixture(endpoint);
+    let operations = 0;
+    const attempt = (userId: number, projectId = 77) => runWithRequestIdentity(
+      { userId, organizationId: 9 },
+      () => withOfficialMcpClient({ ...config, policy: { ...config.policy, projectId } }, async () => { operations++; }),
+    );
+    await assert.rejects(attempt(7), McpStartupBackoffError);
+    assert.ok(requests > 0);
+    const afterFirstFailure = requests;
+    await assert.rejects(attempt(7), McpStartupBackoffError);
+    assert.equal(requests, afterFirstFailure, "same owner cannot contact the unhealthy endpoint during cooldown");
+    await assert.rejects(attempt(8), McpStartupBackoffError);
+    assert.ok(requests > afterFirstFailure, "one owner's outage observation cannot suppress another owner's startup");
+    const beforeChangedPolicy = requests;
+    await assert.rejects(attempt(7, 78), McpStartupBackoffError);
+    assert.ok(requests > beforeChangedPolicy, "changed scoped configuration must obtain its own startup observation");
+    assert.equal(operations, 0, "failed initialization never reaches an invocation");
+  } finally {
+    server.closeAllConnections();
+    await new Promise<void>(resolve => server.close(() => resolve()));
+  }
 });

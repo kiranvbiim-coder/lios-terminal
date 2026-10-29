@@ -18,8 +18,9 @@ import crypto from "node:crypto";
 import { performance } from "node:perf_hooks";
 import { createChildAdapter, type ChildAdapterInput } from "./child";
 import { GRACEFUL_CANCEL_TIMEOUT_MS } from "./cancellation-policy";
-import { normalizeOptionalString, resolveTimerTimeoutMs, sliceUtf16Safe } from "./coerce";
+import { normalizeOptionalString, resolveTimerTimeoutMs, sliceUtf16Safe, toErrorObject } from "./coerce";
 import { createDeferredCore } from "./deferred";
+import { joinProcessCompletionAndOutput } from "./decoded-output";
 import { setProcessTimeout } from "./process-deadline";
 import { assertExecutionOperationBinding } from "./operation-identity";
 import type {
@@ -256,6 +257,7 @@ export function createProcessSupervisor(options: ProcessSupervisorOptions = {}):
     let cleanupSettled = false;
     const outputCompletion = createDeferredCore();
     let outputError: Error | undefined;
+    let awaitedOutput: Promise<void> | undefined;
     const captured = { stdout: "", stderr: "" };
     const truncated = { stdout: false, stderr: false };
     // Forced settlement (kill-wait fallback) resolves the result while inherited
@@ -396,6 +398,7 @@ export function createProcessSupervisor(options: ProcessSupervisorOptions = {}):
           : input.windowsVerbatimArguments,
         input: verifiedOperation ? approvalBoundInput!.input : input.input,
         stdinMode: verifiedOperation ? approvalBoundInput!.stdinMode : input.stdinMode,
+        stdoutConsumption: input.onStdoutAsync ? "awaited" : undefined,
       });
     } catch (err) {
       settleResult();
@@ -450,13 +453,16 @@ export function createProcessSupervisor(options: ProcessSupervisorOptions = {}):
         adapter.dispose();
       }
     });
-    // Successful cleanup joins every output tail. A known native failure must
-    // remain reportable even if an inherited pipe never produces EOF.
-    const extinctionPromise = Promise.all([nativeExtinctionPromise, outputCompletion.promise]).then(() => {
+    // Ordinary pipes retain the existing fast native-failure report. Opted async consumers
+    // retain their cleanup owner until accepted work settles, even when native cleanup failed.
+    const joinedOutput = outputCompletion.promise.then(() => {
       if (outputError) {
         throw outputError;
       }
     });
+    const extinctionPromise = input.onStdoutAsync
+      ? joinProcessCompletionAndOutput(nativeExtinctionPromise, joinedOutput)
+      : Promise.all([nativeExtinctionPromise, joinedOutput]);
     void extinctionPromise.then(
       () => {
         ownedRuns.delete(owner);
@@ -487,6 +493,10 @@ export function createProcessSupervisor(options: ProcessSupervisorOptions = {}):
         if (source === "stdout" || source === "stderr") {
           outputError ??= error;
           recordScopeCleanupFailure(owner.cleanupOwners, error);
+          if (source === "stdout" && input.onStdoutAsync) {
+            // Revoke pending host work now, before the adapter joins its accepted consumer.
+            requestCancel("spawn-error");
+          }
         } else if (source === "stdin") {
           requestCancel("spawn-error");
         } else if (adapter.pid === undefined) {
@@ -497,29 +507,57 @@ export function createProcessSupervisor(options: ProcessSupervisorOptions = {}):
         ["stdout", adapter.onStdout, input.onStdout, input.onStdoutRaw],
         ["stderr", adapter.onStderr, input.onStderr, input.onStderrRaw],
       ] as const) {
-        subscribe(
-          withOutputFence((chunk: string) => {
-            if (captureOutput) {
-              const next = appendCapturedOutput(captured[stream], chunk, stream, maxCapturedOutputChars);
-              captured[stream] = next.text;
-              truncated[stream] ||= next.truncated;
+        const onDecoded = withOutputFence((chunk: string) => {
+          if (captureOutput) {
+            const next = appendCapturedOutput(captured[stream], chunk, stream, maxCapturedOutputChars);
+            captured[stream] = next.text;
+            truncated[stream] ||= next.truncated;
+          }
+          onText?.(chunk);
+        }, !adapter.supportsRawOutput);
+        const onBytes = withOutputFence(onRaw);
+        if (stream === "stdout" && input.onStdoutAsync) {
+          if (!adapter.consumeStdout) {
+            throw new Error("Process adapter does not support awaited stdout consumption");
+          }
+          const consume = input.onStdoutAsync;
+          awaitedOutput = adapter.consumeStdout((chunk) => {
+            onDecoded(chunk);
+            if (!outputDetached) {
+              return consume(chunk);
             }
-            onText?.(chunk);
-          }, !adapter.supportsRawOutput),
-          withOutputFence(onRaw),
-        );
+          }, onBytes).catch((error: unknown) => {
+            outputError ??= toErrorObject(error, "Process stdout consumption failed");
+            recordScopeCleanupFailure(owner.cleanupOwners, outputError);
+            try {
+              requestCancel("spawn-error");
+            } catch (stopError) {
+              throw new AggregateError([error, stopError], "Process stdout consumption and stop failed");
+            }
+            throw error;
+          });
+          void awaitedOutput.catch(() => undefined);
+        } else {
+          subscribe(onDecoded, onBytes);
+        }
       }
     } catch (error) {
       // The adapter already owns a native child. Retain cleanup and join its drain
       // even though subscribing failed and spawn must reject.
       adapter.kill("SIGKILL");
-      void Promise.resolve().then(() => adapter.wait()).finally(() => settleResult(adapter)).catch(() => undefined);
+      const completion = Promise.resolve().then(() => adapter.wait());
+      void (awaitedOutput ? joinProcessCompletionAndOutput(completion, awaitedOutput) : completion)
+        .finally(() => settleResult(adapter)).catch(() => undefined);
       throw error;
     }
 
     const waitOutcome = Promise.allSettled([
       (async (): Promise<RunExit> => {
-        const result = await adapter.wait();
+        const completion = adapter.wait();
+        const result = await (awaitedOutput ? joinProcessCompletionAndOutput(completion, awaitedOutput) : completion);
+        if (awaitedOutput && outputError) {
+          throw outputError;
+        }
         const terminalReason = forcedReason;
         settleResult(adapter);
 

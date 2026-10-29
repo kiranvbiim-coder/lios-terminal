@@ -92,7 +92,7 @@ function isPrivateOrSpecialAddress(address: string): boolean {
   return true;
 }
 
-async function resolvePinnedPublicAddress(hostname: string): Promise<{ address: string; family: 4 | 6 }> {
+export async function resolvePinnedPublicAddress(hostname: string): Promise<{ address: string; family: 4 | 6 }> {
   const addresses = await dns.promises.lookup(hostname, { all: true, verbatim: true });
   if (addresses.length === 0) throw new Error("network_dns_empty");
   if (addresses.some((entry) => isPrivateOrSpecialAddress(entry.address))) {

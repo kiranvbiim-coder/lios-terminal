@@ -28,6 +28,7 @@ import { createAlertMonitor, runAlertEvaluationCycle } from "./alertMonitor";
 import { runDecisionMonitoringCycle } from "./decisionMonitor";
 import { runDataSpineIngestionCycle } from "./dataSpineIngestionMonitor";
 import { emitP9AutomationEvent, startP9AutomationRuntime } from "./p9AutomationService";
+import { startTelegramPollingRuntime } from "./telegramPollingRuntime";
 import { storage } from "./storage";
 import { getQuotes, getNews, getEconomicsSnapshot, getForexQuotes, getFundamentals } from "./marketData";
 import { WebSocketServer } from "ws";
@@ -469,6 +470,7 @@ app.use((req, res, next) => {
       6 * 60 * 60_000,
     );
     const stopP9Automation = startP9AutomationRuntime();
+    const stopTelegramPolling = startTelegramPollingRuntime();
 
     // Hosted control-plane retention is an executed lifecycle, not just a
     // configuration document. Customer desktops have no DATABASE_URL, so the
@@ -496,6 +498,7 @@ app.use((req, res, next) => {
     stopDecisionMonitor();
     stopDataSpineIngestion();
     stopP9Automation();
+    await stopTelegramPolling();
     stopAlertMonitor();
     if (productionRetentionTimer) clearInterval(productionRetentionTimer);
     stopPythonService();

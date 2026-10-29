@@ -3,7 +3,7 @@
 // - Removed WindowsJobExtinction / ProcessExtinctionResult (managed Windows Job is not imported); waitForExtinction now resolves void.
 // - Removed spawn modes "pty" (GM-10b owns native PTYs in terminal-backend.ts) and "anchored-shell"; SpawnInput is child mode only.
 // - Removed cleanupOwnership "external", ProcessScopeCleanupPolicy, SpawnSecretInput, ProcessAdapterConstruction,
-//   ProcessAdapterStartup, AwaitedStdoutConsumer, ProcessCleanupResult, oomScoreWrapperSelected, resolveArgs, exactEnv,
+//   ProcessAdapterStartup, ProcessCleanupResult, oomScoreWrapperSelected, resolveArgs, exactEnv,
 //   assertCurrent/beforeSpawn admission hooks (all tied to OpenClaw service relays, secret-input or Gateway internals).
 // - Added RunExit.stdoutTruncated/stderrTruncated, SpawnInput.gracefulCancelMs, and SpawnInput.stdinMode default of "pipe-closed".
 // SpawnInput.env is an explicit overlay checked by ./env; only the fixed internal python-runtime profile permits its Python settings.
@@ -81,6 +81,8 @@ export type SpawnProcessAdapter<WaitSignal = NodeJS.Signals | number | null> = {
   supportsRawOutput: boolean;
   onStdout: (listener: (chunk: string) => void, onRaw?: (chunk: Buffer) => void) => void;
   onStderr: (listener: (chunk: string) => void, onRaw?: (chunk: Buffer) => void) => void;
+  /** Present only when stdout owns a backpressured, single-consumer awaited pipe. */
+  consumeStdout?: (listener: (chunk: string) => void | Promise<void>, onRaw?: (chunk: Buffer) => void) => Promise<void>;
   onExit?: (listener: (code: number | null, signal: WaitSignal) => void) => void;
   onError?: (
     listener: (error: Error, source: "process" | "stdin" | "stdout" | "stderr") => void,
@@ -118,6 +120,12 @@ export type SpawnInput = {
    */
   maxCapturedOutputChars?: number;
   onStdout?: (chunk: string) => void;
+  /**
+   * Explicit native-pipe backpressure: after synchronous/raw observers, await this one stdout consumer.
+   * Completion and cleanup join accepted work; rejection stops the run and rejects completion.
+   * Adapters without consumeStdout are refused rather than emulating this with an unbounded queue.
+   */
+  onStdoutAsync?: (chunk: string) => void | Promise<void>;
   onStderr?: (chunk: string) => void;
   onStdoutRaw?: (chunk: Buffer) => void;
   onStderrRaw?: (chunk: Buffer) => void;

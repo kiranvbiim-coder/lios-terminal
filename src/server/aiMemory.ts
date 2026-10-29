@@ -300,7 +300,7 @@ export async function appendDurableMemory(input: DurableMemoryInput): Promise<Du
   return existing;
 }
 
-export async function listDurableMemories(input: { projectId?: number | null; limit?: number } = {}): Promise<DurableMemoryRow[]> {
+export async function listDurableMemories(input: { projectId?: number | null; limit?: number; query?: string } = {}): Promise<DurableMemoryRow[]> {
   const identity = currentIdentity();
   if (!identity) return [];
   await ensureLegacyMemoryMigrated(identity);
@@ -308,10 +308,19 @@ export async function listDurableMemories(input: { projectId?: number | null; li
   const projectId = input.projectId ?? null;
   if (projectId !== null) await assertProjectOwned(identity, projectId);
   const limit = Math.max(1, Math.min(MAX_LIST_LIMIT, Math.trunc(input.limit ?? DEFAULT_CONTEXT_LIMIT)));
+  const query = input.query === undefined ? null : cleanShort(input.query, "Durable memory query", 2_000);
+  if (input.query !== undefined && !query) throw new Error("Durable memory query cannot be empty.");
+  // Query current canonical rows directly; do not create another memory/index store or invoke an embedding provider.
+  const vector = sql`to_tsvector('simple', ${durableMemories.content})`;
+  const parsedQuery = query ? sql`plainto_tsquery('simple', ${query})` : null;
 
   return getDb().select().from(durableMemories)
-    .where(and(ownerFilter(identity), eq(durableMemories.state, "active"), memoryScopeFilter(projectId)))
-    .orderBy(sql`${durableMemories.observedAt} DESC NULLS LAST`, sql`${durableMemories.createdAt} DESC`)
+    .where(and(ownerFilter(identity), eq(durableMemories.state, "active"), memoryScopeFilter(projectId),
+      parsedQuery ? sql`${vector} @@ ${parsedQuery}` : undefined))
+    .orderBy(
+      ...(parsedQuery ? [sql`ts_rank_cd(${vector}, ${parsedQuery}) DESC`] : []),
+      sql`${durableMemories.observedAt} DESC NULLS LAST`, sql`${durableMemories.createdAt} DESC`,
+    )
     .limit(limit);
 }
 

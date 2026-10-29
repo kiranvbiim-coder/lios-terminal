@@ -18,6 +18,18 @@ export function nextP9ScheduledRun(trigger: P9WorkflowTrigger, from: Date): Date
   return candidate;
 }
 
+const FAILURE_BACKOFF_MS = [30_000, 60_000, 5 * 60_000, 15 * 60_000, 60 * 60_000] as const;
+/**
+ * Adapted from OpenClaw src/cron/service/jobs-scheduling.ts errorBackoffMs,
+ * c074824a27c96d3983043f9eeb33823cd1772d8c (MIT, Copyright (c) 2026 OpenClaw Foundation).
+ * LiOS: retain the approved default progression; successful runs have no delay.
+ */
+export function p9FailureBackoff(consecutiveFailures: number): number {
+  if (!Number.isSafeInteger(consecutiveFailures) || consecutiveFailures < 0) throw new Error("Invalid automation failure count.");
+  if (consecutiveFailures === 0) return 0;
+  return FAILURE_BACKOFF_MS[Math.min(consecutiveFailures - 1, FAILURE_BACKOFF_MS.length - 1)];
+}
+
 function comparable(value: string | number | boolean | null | undefined): string {
   if (typeof value === "string") return value.trim().toLowerCase();
   return String(value);

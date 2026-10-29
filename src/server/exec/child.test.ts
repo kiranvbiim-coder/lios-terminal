@@ -6,6 +6,7 @@ import { setImmediate as nextTurn } from "node:timers/promises";
 import { afterEach, describe, it, mock } from "node:test";
 import { createChildAdapter } from "./child";
 import { createChildAdapterHarness, createStubChild } from "./child.test-support";
+import { createDeferredCore } from "./deferred";
 import { buildChildEnv, pythonRuntimeEnvOverlay, toStringEnv } from "./env";
 
 const T = { timeout: 5_000 };
@@ -204,6 +205,154 @@ describe("native child adapter", () => {
     await adapter.waitForExtinction();
     adapter.dispose();
     assert.equal(stub.child.listenerCount("error"), 0);
+  });
+});
+
+describe("native child awaited stdout", () => {
+  it("refuses synchronous stdout ownership and joins accepted work after native close", T, async () => {
+    const h = createChildAdapterHarness({ stdoutConsumption: "awaited" });
+    const entered = createDeferredCore();
+    const release = createDeferredCore();
+    const chunks: string[] = [];
+    const raw: Buffer[] = [];
+    assert.throws(() => h.adapter.onStdout(() => {}), /requires its awaited consumer/);
+    const consumed = h.adapter.consumeStdout!(async (chunk) => {
+      chunks.push(chunk);
+      entered.resolve();
+      await release.promise;
+    }, (chunk) => { raw.push(chunk); });
+    h.child.stdout.write("accepted");
+    await entered.promise;
+    const wait = h.adapter.wait();
+    let settled = false;
+    void wait.then(() => { settled = true; }, () => { settled = true; });
+    await h.closePipes();
+    h.emitExit(0);
+    h.emitClose(0);
+    await h.adapter.waitForExtinction();
+    assert.equal(settled, false);
+    release.resolve();
+    await consumed;
+    assert.deepEqual(await wait, { code: 0, signal: null });
+    assert.deepEqual(chunks, ["accepted"]);
+    assert.equal(Buffer.concat(raw).toString(), "accepted");
+    h.adapter.dispose();
+  });
+
+  it("stops immediately for rejected consumption but waits for native close", T, async () => {
+    const h = createChildAdapterHarness({ stdoutConsumption: "awaited" });
+    const failed = createDeferredCore();
+    const failure = new Error("async observer rejected");
+    const errors: Error[] = [];
+    h.adapter.onError((error, source) => {
+      if (source === "stdout") {
+        errors.push(error);
+        failed.resolve();
+      }
+    });
+    const consumed = h.adapter.consumeStdout!(async () => { throw failure; });
+    const wait = h.adapter.wait();
+    let settled = false;
+    void wait.then(() => { settled = true; }, () => { settled = true; });
+    h.child.stdout.write("input");
+    await failed.promise;
+    assert.equal(h.signalTreeMock.mock.calls[0].arguments[1], "SIGKILL");
+    await assert.rejects(consumed, (error) => error === failure);
+    assert.equal(settled, false);
+    await h.closePipes();
+    h.emitExit(null, "SIGKILL");
+    h.emitClose(null, "SIGKILL");
+    await assert.rejects(wait, (error) => error === failure);
+    assert.deepEqual(errors, [failure]);
+    await h.adapter.waitForExtinction();
+    h.adapter.dispose();
+  });
+
+  it("joins the awaited decoder tail after native close", T, async () => {
+    const h = createChildAdapterHarness({ stdoutConsumption: "awaited" });
+    const entered = createDeferredCore();
+    const release = createDeferredCore();
+    const chunks: string[] = [];
+    const consumed = h.adapter.consumeStdout!(async (chunk) => {
+      chunks.push(chunk);
+      entered.resolve();
+      await release.promise;
+    });
+    h.child.stdout.write(Buffer.from([0xf0, 0x9f]));
+    await h.closePipes();
+    h.emitExit(2);
+    h.emitClose(2);
+    await entered.promise;
+    let settled = false;
+    const wait = h.adapter.wait();
+    void wait.then(() => { settled = true; });
+    await nextTurn();
+    assert.equal(settled, false);
+    assert.deepEqual(chunks, ["�"]);
+    release.resolve();
+    await consumed;
+    assert.deepEqual(await wait, { code: 2, signal: null });
+    await h.adapter.waitForExtinction();
+    h.adapter.dispose();
+  });
+
+  it("does not release accepted work when disposed before EOF", T, async () => {
+    const h = createChildAdapterHarness({ stdoutConsumption: "awaited" });
+    const entered = createDeferredCore();
+    const release = createDeferredCore();
+    const consumed = h.adapter.consumeStdout!(async () => {
+      entered.resolve();
+      await release.promise;
+    });
+    const wait = h.adapter.wait();
+    let settled = false;
+    void wait.then(() => { settled = true; }, () => { settled = true; });
+    h.child.stdout.write("accepted");
+    await entered.promise;
+    h.adapter.dispose();
+    h.emitExit(0);
+    h.emitClose(0);
+    await nextTurn();
+    assert.equal(settled, false);
+    release.resolve();
+    await assert.rejects(consumed, /stdout consumption closed/);
+    await assert.rejects(wait, /stdout consumption closed/);
+    await h.adapter.waitForExtinction();
+  });
+
+  it("bounds canceled pipe retention and joins accepted work through forced drain", T, async () => {
+    mock.timers.enable({ apis: ["setTimeout"] });
+    const h = createChildAdapterHarness({ stdoutConsumption: "awaited" }, { deferSignals: true });
+    const entered = createDeferredCore();
+    const release = createDeferredCore();
+    const chunks: string[] = [];
+    const consumed = h.adapter.consumeStdout!(async (chunk) => {
+      chunks.push(chunk);
+      entered.resolve();
+      await release.promise;
+    });
+    h.child.stdout.write("accepted");
+    await entered.promise;
+    const large = Buffer.alloc(h.child.stdout.writableHighWaterMark, 0x78);
+    h.child.stdout.write(large);
+    assert.equal(h.child.stdout.write(large), false);
+    h.adapter.kill("SIGKILL");
+    assert.equal(h.child.stdout.isPaused(), true);
+    const wait = h.adapter.wait();
+    let settled = false;
+    void wait.then(() => { settled = true; }, () => { settled = true; });
+    mock.timers.tick(4_000);
+    await nextTurn();
+    assert.equal(h.child.stdout.destroyed, true);
+    assert.equal(settled, false);
+    release.resolve();
+    await assert.rejects(consumed, /stdout consumption closed/);
+    await assert.rejects(wait, /stdout consumption closed/);
+    assert.deepEqual(chunks, ["accepted"]);
+    await assert.rejects(h.adapter.waitForExtinction(), /cleanup could not be confirmed/);
+    h.deliveries.forEach((deliver) => deliver());
+    h.emitClose(null, "SIGKILL");
+    h.adapter.dispose();
   });
 });
 

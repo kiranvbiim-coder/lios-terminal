@@ -1,4 +1,5 @@
 import crypto from "node:crypto";
+import { createSafeConversationCancellationReason, currentConversationSignal } from "./exec/execution-scope";
 import {
   canonicalDataRequestSchema,
   canonicalDataResponseSchema,
@@ -515,12 +516,20 @@ function nextActions(attempts: ProviderAttempt[], reason: ReturnType<typeof gapR
   return actions;
 }
 
+/**
+ * Cancellation precedence adapted from OpenClaw src/web-search/runtime-execution.ts,
+ * c074824a27c96d3983043f9eeb33823cd1772d8c (MIT, Copyright (c) 2026 OpenClaw Foundation).
+ * LiOS retains its canonical registry, point-in-time policy, source entitlement and fallback facts.
+ */
 export async function executeCanonicalDataRequest(
   raw: CanonicalDataRequest,
   context: TenantContext,
   registry: ProviderSdkRegistry = defaultProviderSdkRegistry,
 ): Promise<CanonicalDataResponse> {
   const request = canonicalDataRequestSchema.parse(raw);
+  const signal = currentConversationSignal();
+  const assertActive = () => { if (signal?.aborted) throw createSafeConversationCancellationReason(); };
+  assertActive();
   const capabilityProviders = registry.list(request.capability);
   const candidates = capabilityProviders.filter((adapter) =>
     (!request.providerAllow.length || request.providerAllow.includes(adapter.id)) &&
@@ -532,6 +541,7 @@ export async function executeCanonicalDataRequest(
   const accessPostures: ProviderAccessPosture[] = [];
 
   for (const adapter of candidates) {
+    assertActive();
     if (!adapter.pointInTimeModes.includes(request.pointInTime.mode)) {
       const detail = `Adapter supports ${adapter.pointInTimeModes.join(", ")} but request requires ${request.pointInTime.mode}.`;
       attempts.push({ providerId: adapter.id, status: "stale_only", detail, latencyMs: 0, quota: null, entitlement: null });
@@ -552,7 +562,9 @@ export async function executeCanonicalDataRequest(
     if (adapter.entitlement) {
       try {
         entitlement = await adapter.entitlement(request, context);
+        assertActive();
       } catch (error) {
+        assertActive();
         const status = attemptStatus(error);
         // Do not expose entitlement-provider exception messages: they can
         // contain private account, token or endpoint information.
@@ -589,6 +601,7 @@ export async function executeCanonicalDataRequest(
     const started = Date.now();
     try {
       const result = await adapter.fetch(request, context);
+      assertActive();
       const latencyMs = Date.now() - started;
       if (!result) {
         const detail = "Provider returned no usable observation.";
@@ -621,6 +634,7 @@ export async function executeCanonicalDataRequest(
       const normalizedData = adapter.normalize && !result.normalized
         ? await adapter.normalize(result.data, request, context)
         : result.data;
+      assertActive();
       const observation: ProviderObservation = {
         providerId,
         capability: request.capability,
@@ -639,6 +653,7 @@ export async function executeCanonicalDataRequest(
         normalized: result.normalized === true || Boolean(adapter.normalize),
         warnings: result.warnings ?? [],
       };
+      assertActive();
       observations.push(observation);
       attempts.push({ providerId, status: "returned", detail: null, latencyMs, quota: observation.quota, entitlement: observation.entitlement });
       accessPostures.push(buildProviderAccessPosture({
@@ -651,6 +666,7 @@ export async function executeCanonicalDataRequest(
       }));
       break;
     } catch (error) {
+      assertActive();
       const status = attemptStatus(error);
       const detail = error instanceof Error ? error.message : "Provider execution failed.";
       attempts.push({
@@ -672,6 +688,7 @@ export async function executeCanonicalDataRequest(
     }
   }
 
+  assertActive();
   const observation = observations[0] ?? null;
   const reason = gapReason(attempts, request, policyFiltered);
   const gap = observation ? null : structuredDataGapSchema.parse({

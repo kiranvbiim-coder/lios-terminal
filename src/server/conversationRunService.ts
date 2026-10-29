@@ -36,6 +36,7 @@ import {
   type GovernedToolAuthorization,
 } from "./conversationGrantStore";
 import { conversationRequestSchema } from "@shared/conversationRuntime";
+import { filterTelegramHistoryForAi } from "./telegramConnectionService";
 import { resolveRecordedClaimReview } from "./recordedClaimReview";
 import type { ProjectChatMessage, ProjectResource } from "@shared/schemaProjects";
 import type {
@@ -621,11 +622,11 @@ async function runProjectChat(
       initiatingMessageId = initiatingMessage.id;
       await autoTitleProjectChat(context, chatId, request.message);
     }
-    const runtimeHistory = request.continuationOf
+    const runtimeHistory = (request.continuationOf
       && priorHistory.at(-1)?.role === "user"
       && priorHistory.at(-1)?.content === request.message
       ? priorHistory.slice(0, -1)
-      : priorHistory;
+      : priorHistory);
 
     const preparedRestart = restart ? await prepareRestartRun({
       user, chatId, chat, tenant: context, restart, runtimeRequest, resources, projectName, projectInstructions, resolvedAttachments,
@@ -678,6 +679,15 @@ async function runProjectChat(
       const persistedArtifacts: Array<{ id: string; version: number; title: string; kind: string }> = [];
       const pendingArtifacts: Extract<ConversationRuntimeEvent, { type: "artifact" }>[] = [];
       try {
+        const admittedHistory = await filterTelegramHistoryForAi(context, runtimeHistory.slice(-20));
+        const sourceRelease = admittedHistory.some(message => message.metadata.channelIngress !== undefined)
+          ? async () => {
+            const currentHistory = await filterTelegramHistoryForAi(context, admittedHistory);
+            if (currentHistory.length !== admittedHistory.length) {
+              throw new Error("Channel source transmission permission changed during this conversation.");
+            }
+          }
+          : undefined;
         const result = await withConversationExecutionScope(request.requestId, () => executeConversationRuntime({
           tenant: context,
           signal,
@@ -693,7 +703,7 @@ async function runProjectChat(
             resourceRef: resource.resourceRef,
             contextMode: resource.contextMode,
           })),
-          history: runtimeHistory.slice(-20).map((message) => ({
+          history: admittedHistory.map((message) => ({
             role: message.role === "user" ? "user" : "assistant",
             content: message.content,
           })),
@@ -803,7 +813,7 @@ async function runProjectChat(
             if (event.type === "error") held.errored = true;
             emit(event);
           },
-        }));
+        }), sourceRelease);
         if (!result.cancelled && !result.awaitingApproval && !conversationRuns.claimCompletion(request.requestId, user.id)) {
           // Stop won before durable output commit. Do not save a completed
           // assistant answer or pending Artifact after acknowledging cancellation.

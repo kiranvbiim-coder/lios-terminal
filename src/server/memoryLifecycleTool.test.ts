@@ -233,4 +233,29 @@ test("SI-03.03 governed memory lifecycle tools expose owned revisions and requir
     assert.equal(prompts.length, 2);
     assert.equal(prompts.some(prompt => prompt.includes(marker)), false, "inspection content must not enter planner or review model requests");
   });
+  await t.test("confirmed memory search finds older matching rows without crossing owner or Project scope", async () => {
+    const [otherProject] = await getDb().insert(projects).values({ ownerUserId: owner.id, organizationId: null, name: "Other private Project" }).returning();
+    const write = (userId: number, projectId: number | null, content: string, observedAt: string) =>
+      asIdentity({ userId, organizationId: null }, () => appendDurableMemory({
+        content, projectId, originClass: "owner", originKind: "owner_note", observedAt,
+      }));
+    const global = await write(owner.id, null, "Riverstone migration plan alpha", "2020-01-01T00:00:00Z");
+    const scoped = await write(owner.id, project.id, "Riverstone migration plan beta", "2020-01-02T00:00:00Z");
+    await write(owner.id, otherProject.id, "Riverstone migration plan other private Project", "2026-10-01T00:00:00Z");
+    await write(other.id, null, "Riverstone migration plan foreign owner", "2026-10-01T00:00:00Z");
+    await write(owner.id, project.id, "Recent unrelated weather note", "2026-10-01T00:00:00Z");
+    assert.ok(global && scoped);
+    const inspect = () => asIdentity({ userId: owner.id, organizationId: null }, () =>
+      memoryInspectTool.invoke({ query: "riverstone migration", limit: 10 }, new AbortController().signal, callFor(owner.id, project.id)),
+    );
+    const found = (await inspect()).output as { memories: Array<{ memoryKey: string }> };
+    assert.deepEqual(found.memories.map(row => row.memoryKey).sort(), [global.memoryKey, scoped.memoryKey].sort());
+    await asIdentity({ userId: owner.id, organizationId: null }, () =>
+      memoryDeleteTool.invoke({ memoryKey: scoped.memoryKey, expectedRevision: scoped.revision }, new AbortController().signal, callFor(owner.id, project.id)),
+    );
+    assert.deepEqual(((await inspect()).output as { memories: Array<{ memoryKey: string }> }).memories.map(row => row.memoryKey), [global.memoryKey]);
+    await assert.rejects(asIdentity({ userId: owner.id, organizationId: null }, () =>
+      memoryInspectTool.invoke({ query: "riverstone", memoryKey: global.memoryKey }, new AbortController().signal, callFor(owner.id, project.id)),
+    ));
+  });
 });

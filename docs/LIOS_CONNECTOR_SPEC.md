@@ -2,7 +2,7 @@
 
 ## Current SI execution and Shipping Point authority — 2026-10-03
 
-Read `AGENTS.md` → [SI execution plan](LIOS_SUPER_INTELLIGENCE_EXECUTION_PLAN.md) → [mandatory Shipping Point contract](technical/SUPER_INTELLIGENCE_SHIPPING_POINT_CONTRACT.md) → Master Plan → Architecture → OpenClaw Assimilation Blueprint → Capability Assimilation Workstream → UX System → this specification → detailed/historical roadmap → donor registry/current implementation → issue #192 and the active canonical issue/PR.
+Read `AGENTS.md` → [SI execution plan](LIOS_SUPER_INTELLIGENCE_EXECUTION_PLAN.md) → [mandatory Shipping Point contract](technical/SUPER_INTELLIGENCE_SHIPPING_POINT_CONTRACT.md) → Master Plan → Architecture → OpenClaw Assimilation Blueprint → Capability Assimilation Workstream → UX System → this specification → detailed/historical roadmap → donor registry/current implementation → master issue #91 and the active canonical issue/PR.
 
 `SI-01`–`SI-07` are strategic execution phases, not rigid dependency walls. `S0`–`S10` remain validation coverage; `CP1`–`CP7` remain historical evidence references. Multiple bounded owners may proceed behind stable contracts, with one canonical owner per shared core and existing GM/TC/CA/P IDs preserved. No SI data router, connector registry, identity store, permission layer or customer runtime is introduced.
 
@@ -10,6 +10,8 @@ Read `AGENTS.md` → [SI execution plan](LIOS_SUPER_INTELLIGENCE_EXECUTION_PLAN.
 
 Desktop Local/LiOS Home is the default customer runtime and owns identity, state and secrets. User NAS/server/VPS/cloud, databases, storage, models and approved providers are allowed; no LiOS-operated customer intelligence/data server or relay is assumed. Home identity/licensing is independent of connecting a source or cloud model.
 
+
+**2026-10-28 channel convergence:** Under [the existing OpenClaw isolated supporting-service contract](technical/OPENCLAW_ASSIMILATION_BLUEPRINT.md#01-owner-decision--full-openclaw-capability-convergence-through-an-isolated-supporting-service--2026-10-28), Telegram, WhatsApp and other approved user-connected channels are capability adapters behind the **existing** LiOS Gateway/Home, connector, P13 and privacy/permissions authorities. Evaluate the full useful donor/platform-supported feature surface, not only basic send/receive. Channel Add/Install is distinct from user account Connect/Authorize; each provider's actual readiness, rights/API constraints, receipts, disconnected/revoked states and per-conversation scopes must be accurately exposed. Work and Artifacts remain governed LiOS Chat/P4/P9/Workbench objects. Implement against the [five-package evidence checklist](PENDING_WORK.md#openclaw-isolated-supporting-service--five-package-agent-checklist--2026-10-28) and [master issue #91](https://github.com/kiranvbiim-coder/lios-terminal/issues/91); documentation is not implementation evidence.
 
 ## 0.0 General research and simple connection contract — 2026-10-02
 

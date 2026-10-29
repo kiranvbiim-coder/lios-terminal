@@ -1,6 +1,8 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { AIProviderError, classifyProviderFailure, invokeAIProvider, invokeAIRoutedCompletion, resolveOllamaChatEndpoint, resolveOpenAICompatibleChatEndpoint, supportsImageInput } from "./byoaiTransport";
+import crypto from "node:crypto";
+import { currentConversationTransmissionGuard, withConversationExecutionScope } from "./exec/execution-scope";
 
 function restoreEnv(name: string, value: string | undefined): void {
   if (value === undefined) delete process.env[name];
@@ -784,4 +786,41 @@ test("provider attempt ceilings stop before a connected fallback could incur ano
     }
     assert.deepEqual(contacted, ["openai"], "invalid budgets fail before any additional provider call");
   });
+});
+
+test("each routed provider call rechecks its conversation source release before network transmission", async () => {
+  const previousKey = process.env.OPENAI_API_KEY;
+  const previousFetch = globalThis.fetch;
+  process.env.OPENAI_API_KEY = "synthetic-transmission-guard";
+  let permitted = true, physicalCalls = 0;
+  globalThis.fetch = (async () => {
+    physicalCalls++;
+    return new Response(JSON.stringify({ choices: [{ message: { content: "controlled answer" } }] }), { status: 200 });
+  }) as typeof fetch;
+  let captured: (() => Promise<void>) | undefined;
+  try {
+    await withConversationExecutionScope(crypto.randomUUID(), async () => {
+      captured = currentConversationTransmissionGuard();
+      const request = { preferredProvider: "openai", messages: [{ role: "user" as const, content: "scoped source text" }] };
+      assert.equal((await invokeAIRoutedCompletion(request)).text, "controlled answer");
+      permitted = false;
+      await assert.rejects(invokeAIRoutedCompletion(request), error => {
+        assertProviderError(error, "policy_denied");
+        return true;
+      });
+      await withConversationExecutionScope(crypto.randomUUID(), async () => {
+        await assert.rejects(invokeAIProvider({ provider: "openai", messages: request.messages }), error => {
+          assertProviderError(error, "policy_denied");
+          return true;
+        });
+      });
+    }, async () => { if (!permitted) throw new Error("PRIVATE-SOURCE-AUTHORITY-DETAIL"); });
+    assert.equal(physicalCalls, 1, "denied retries and nested work cannot reach any provider");
+    assert.ok(captured);
+    await assert.rejects(captured(), /closed/);
+    assert.equal(currentConversationTransmissionGuard(), undefined);
+  } finally {
+    globalThis.fetch = previousFetch;
+    restoreEnv("OPENAI_API_KEY", previousKey);
+  }
 });

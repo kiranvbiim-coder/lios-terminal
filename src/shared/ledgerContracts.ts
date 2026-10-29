@@ -36,6 +36,7 @@ export const ledgerEventTypeSchema = z.enum([
   "artifact.exported",
   "artifact.imported",
   "policy.changed",
+  "channel.update.dispositioned",
 ]);
 export type LedgerEventType = z.infer<typeof ledgerEventTypeSchema>;
 

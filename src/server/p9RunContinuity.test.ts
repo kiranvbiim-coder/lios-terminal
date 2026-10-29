@@ -71,4 +71,32 @@ test("automation interruption ends stale running status without replaying an unk
     const reconciled = await getP9Workflow(ctx, workflow.id);
     assert.ok(reconciled.nextRunAt && reconciled.nextRunAt > claimExpiresAt);
   });
+  await t.test("repeated failures delay only future runs and a known success resets the delay", async () => {
+    const definition = { name: "Backoff diagnostic", enabled: true, trigger: { type: "schedule" as const, schedule: { kind: "interval" as const, everyMinutes: 5 } }, action: { kind: "project_what_changed" as const }, notificationPolicy: { enabled: false } };
+    let recurring = await createP9Workflow(ctx, project.id, definition);
+    for (let failures = 1; failures <= 5; failures++) {
+      const attempt = await beginP9Run(ctx, recurring, "schedule", {});
+      assert.ok(attempt);
+      const completed = await completeP9Run(ctx, recurring, attempt.id, { error: "controlled source unavailable" });
+      recurring = await getP9Workflow(ctx, recurring.id);
+      const expected = failures >= 5 ? 60 : failures === 4 ? 15 : 5;
+      assert.equal(recurring.nextRunAt!.getTime() - completed.completedAt!.getTime(), expected * 60_000);
+      assert.equal(recurring.consecutiveFailures, failures);
+      assert.equal(completed.status, "failed");
+    }
+    const retry = await beginP9Run(ctx, recurring, "manual", {});
+    assert.ok(retry);
+    const completed = await completeP9Run(ctx, recurring, retry.id, { result: {
+      summary: "Known diagnostic success", changed: false, conditionMet: false, relevanceScore: 0,
+      sourceRefs: [], engineRefs: [], artifactRefs: [], executionReceiptIds: [], output: {},
+    } });
+    recurring = await getP9Workflow(ctx, recurring.id);
+    assert.equal(recurring.consecutiveFailures, 0);
+    assert.equal(recurring.nextRunAt!.getTime() - completed.completedAt!.getTime(), 5 * 60_000);
+    const daily = await createP9Workflow(ctx, project.id, { ...definition, name: "Later normal schedule", trigger: { type: "schedule", schedule: { kind: "interval", everyMinutes: 1440 } } });
+    const dailyAttempt = await beginP9Run(ctx, daily, "schedule", {});
+    assert.ok(dailyAttempt);
+    const failedDaily = await completeP9Run(ctx, { ...daily, consecutiveFailures: 5 }, dailyAttempt.id, { error: "controlled failure" });
+    assert.equal((await getP9Workflow(ctx, daily.id)).nextRunAt!.getTime() - failedDaily.completedAt!.getTime(), 1440 * 60_000);
+  });
 });
