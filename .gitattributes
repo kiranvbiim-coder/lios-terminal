@@ -5,5 +5,6 @@
 third_party/*.json text eol=lf
 
 # Preserve exact upstream legal texts and binary donor payloads.
-third_party/licenses/* -text
+third_party/licenses/** -text
 src/vendor/*.tgz -text
+third_party/sources/** -text
