@@ -610,6 +610,20 @@
       "when": 1792800000000,
       "tag": "0086_lios_channel_ingress",
       "breakpoints": true
+    },
+    {
+      "idx": 87,
+      "version": "7",
+      "when": 1792886400000,
+      "tag": "0087_lios_channel_message_identity",
+      "breakpoints": true
+    },
+    {
+      "idx": 88,
+      "version": "7",
+      "when": 1792972800000,
+      "tag": "0088_lios_channel_ingress_execution",
+      "breakpoints": true
     }
   ]
 }

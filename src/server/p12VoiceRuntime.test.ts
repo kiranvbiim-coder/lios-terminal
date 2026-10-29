@@ -178,3 +178,108 @@ test("P12 typed and spoken versions produce equivalent governed plans and contex
   assert.deepEqual(voice.request.approvals, typed.approvals);
   assert.deepEqual(voice.request.transmissionPolicy, typed.transmissionPolicy);
 });
+
+test("P12 speech refuses pre-cancelled work without exposing its cancellation reason", async (t) => {
+  const providerId = "test.cancelled-before-tts";
+  let calls = 0;
+  registerSpeechOutputProvider({
+    id: providerId,
+    label: "Cancelled TTS",
+    local: true,
+    async synthesize() {
+      calls += 1;
+      return { audio: Buffer.from("audio"), mimeType: "audio/wav" };
+    },
+  });
+  t.after(() => unregisterSpeechOutputProvider(providerId));
+  await assert.rejects(
+    synthesizeSpeechOutput("hello", { enabled: true, providerId }, AbortSignal.abort(new Error("private-cancellation-secret"))),
+    (error: unknown) => error instanceof Error && error.name === "AbortError"
+      && error.message === "Speech synthesis was cancelled.",
+  );
+  assert.equal(calls, 0);
+});
+
+test("P12 speech cancellation joins provider cleanup and refuses late audio or private errors", async (t) => {
+  for (const ending of ["audio", "error"] as const) {
+    const providerId = `test.cancelled-during-tts-${ending}`;
+    const controller = new AbortController();
+    const started = Promise.withResolvers<void>();
+    const cleanup = Promise.withResolvers<void>();
+    let receivedSignal: AbortSignal | undefined;
+    let cleaned = false;
+    let settled = false;
+    registerSpeechOutputProvider({
+      id: providerId,
+      label: "Delayed TTS",
+      local: true,
+      async synthesize(input) {
+        receivedSignal = input.signal;
+        started.resolve();
+        await cleanup.promise;
+        cleaned = true;
+        if (ending === "error") throw new Error("private-provider-secret");
+        return { audio: Buffer.from("late audio"), mimeType: "audio/wav" };
+      },
+    });
+    t.after(() => {
+      cleanup.resolve();
+      unregisterSpeechOutputProvider(providerId);
+    });
+    const pending = synthesizeSpeechOutput("hello", { enabled: true, providerId }, controller.signal);
+    const rejected = assert.rejects(pending, (error: unknown) => error instanceof Error
+      && error.name === "AbortError" && error.message === "Speech synthesis was cancelled.");
+    void pending.then(() => { settled = true; }, () => { settled = true; });
+    await started.promise;
+    assert.equal(receivedSignal, controller.signal);
+    controller.abort(new Error("private-cancellation-secret"));
+    await Promise.resolve();
+    assert.equal(settled, false, "cancellation must join the provider rather than abandon its cleanup");
+    assert.equal(cleaned, false);
+    cleanup.resolve();
+    await rejected;
+    assert.equal(cleaned, true);
+  }
+});
+
+test("P12 speech checks cancellation again after a provider produces audio", async (t) => {
+  const providerId = "test.cancelled-after-tts";
+  const controller = new AbortController();
+  registerSpeechOutputProvider({
+    id: providerId,
+    label: "Late-cancelled TTS",
+    local: true,
+    async synthesize() {
+      controller.abort(new Error("private-cancellation-secret"));
+      return { audio: Buffer.from("must not publish"), mimeType: "audio/wav" };
+    },
+  });
+  t.after(() => unregisterSpeechOutputProvider(providerId));
+  await assert.rejects(synthesizeSpeechOutput("hello", { enabled: true, providerId }, controller.signal), {
+    name: "AbortError",
+    message: "Speech synthesis was cancelled.",
+  });
+});
+
+test("P12 local-only speech never calls a remote provider or falls back to another provider", async (t) => {
+  const calls: string[] = [];
+  for (const local of [false, true]) {
+    const providerId = local ? "test.local-only-local" : "test.local-only-remote";
+    registerSpeechOutputProvider({
+      id: providerId,
+      label: providerId,
+      local,
+      async synthesize() {
+        calls.push(providerId);
+        return { audio: Buffer.from("audio"), mimeType: "audio/wav" };
+      },
+    });
+    t.after(() => unregisterSpeechOutputProvider(providerId));
+  }
+  await assert.rejects(synthesizeSpeechOutput("hello", {
+    enabled: true,
+    providerId: "test.local-only-remote",
+    localOnly: true,
+  }), /requires a local provider/);
+  assert.deepEqual(calls, []);
+});

@@ -4,7 +4,7 @@ import { TelegramPollingController, type TelegramPollingTarget } from "./telegra
 import type { TelegramAdoptionResult } from "./telegramConnectionService";
 
 const target = (connectionId = 1): TelegramPollingTarget => ({ context: { userId: 1, organizationId: null, role: "internal_admin" }, connectionId });
-const adopted = (adoptedCount = 0): TelegramAdoptionResult => ({ kind: "adopted", adopted: adoptedCount, ignored: 0, duplicates: 0, nextOffset: 1 });
+const adopted = (adoptedCount = 0): TelegramAdoptionResult => ({ kind: "adopted", adopted: adoptedCount, edited: 0, ignored: 0, duplicates: 0, nextOffset: 1 });
 const settle = () => new Promise<void>(resolve => setImmediate(resolve));
 const instantSleep = (log: number[] = []) => async (ms: number, signal: AbortSignal) => { log.push(ms); await new Promise<void>(resolve => setImmediate(resolve)); return !signal.aborted; };
 
@@ -45,6 +45,25 @@ test("revoked authority is terminal and never retried; provider credential probl
     assert.equal(status.state, scenario === "authority" ? "refused" : "provider_blocked");
     assert.equal(JSON.stringify(status).includes("PRIVATE-DETAIL"), false);
   }
+});
+
+test("unattributable bot namespace stops once and exposes only the fixed reconnect classification", async () => {
+  let cycles = 0;
+  const controller = new TelegramPollingController({
+    isTerminalFailure: () => true,
+    cycle: async () => { cycles++; throw Object.assign(new Error("PRIVATE-TOKEN-DIAGNOSTIC"), { code: "namespace_reconnect_required" }); },
+    sleep: instantSleep(),
+  });
+  controller.start(target());
+  while (controller.status()[0]?.state === "polling") await settle();
+  assert.equal(cycles, 1);
+  assert.equal(controller.status()[0].state, "refused");
+  assert.equal(controller.status()[0].lastFailure, "namespace_reconnect_required");
+  assert.equal(JSON.stringify(controller.status()).includes("PRIVATE-TOKEN"), false);
+  controller.start(target());
+  await settle();
+  assert.equal(cycles, 1, "discovery cannot reset an unsafe namespace");
+  await controller.stop();
 });
 
 test("rate-limit hints and capped exponential backoff pace recoverable failures", async () => {

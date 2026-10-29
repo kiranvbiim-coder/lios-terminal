@@ -4384,5 +4384,16 @@
       ]
     }
   ],
+  "nestedAndWasmEvidence": {
+    "nestedCompilerAttribution": "nested-runtime-attribution.json",
+    "additionalVerbatimNotices": "nested-package-notices.txt",
+    "additionalNoticeSha256": "6711dd313c84c431894a24f64a6c05f3195b10601608ea4b72e34a14c73c26d6",
+    "wasmSourceNoticeIndex": "wasm-source-notice-index.json",
+    "wasmSourceNotices": "wasm-source-notices.txt",
+    "wasmSourceNoticeSha256": "8fa804d6b667ebcaec8c772549b025b718e2976da7f8f1c9b4753d32c3cdb96e",
+    "verifiedBashProvenance": "tree-sitter-bash-verified-provenance.json",
+    "verifiedNpmWasmProvenance": "wasm-npm-verified-provenance.json",
+    "scope": "Actual offline nested Canvas/Workboard graphs plus signed exact source/member identities. Exhaustive binary linked-object/toolchain and final runtime distribution clearance remain open."
+  },
   "distributionCleared": false
 }

@@ -246,6 +246,8 @@ The exact package versions are locked by `src/package-lock.json`. The upstream s
 
 LiOS adapts code from `openclaw/openclaw` (release `v2026.9.7`, commit `c074824a27c96d3983043f9eeb33823cd1772d8c`) under the MIT license below. The program, ownership boundaries and per-file import records are in `docs/technical/OPENCLAW_ASSIMILATION_BLUEPRINT.md` and `third_party/components.json` (`importedPaths` / `destinationPaths` / `modifications`). OpenClaw branding, logos and product UI are not part of LiOS.
 
+Selected standalone-runtime source/notice review evidence (not a bundled/qualified runtime declaration) is retained at `third_party/licenses/openclaw-service/selected-package-notice-index.json`, `nested-runtime-attribution.json`, `nested-package-notices.txt`, `wasm-source-notice-index.json` and `wasm-source-notices.txt`. The nested record binds actual Canvas/Workboard compiler inputs and exact verbatim additional notices; the WASM records bind cryptographically verified source/package/member identities and inherited engine/Unicode/ICU/libc texts. Omnibus notices do not assert every described component is embedded. No binary is bundled by these legal/provenance records; exact linked-object/toolchain and final distribution clearance remains required.
+
 Files currently imported:
 
 - `src/process/bounded-line-framer.ts` and `.test.ts` → `src/server/exec/bounded-line-framer.ts` and `.test.ts` (SI-06 supporting-service transport: complete byte-framing mechanism, provenance header only; both tests ported to `node:test`). `server/supportingServiceTransport.ts` is the LiOS-owned consumer, not copied donor source. It creates no service launch, channel permission, second Gateway or state authority; full service/provider/packaged acceptance remains open.

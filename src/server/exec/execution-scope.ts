@@ -15,6 +15,10 @@ interface ConversationExecutionScope {
   pending: Set<Promise<void>>;
   /** Server-owned source-release check inherited by nested work; never supplied by model/wire data. */
   beforeAiTransmission?: () => Promise<void>;
+  /** Optional server-only effect-admission fence, inherited by delegated work without granting any tool permission. */
+  beforeToolExecution?: () => Promise<void>;
+  /** Incoming-source private dispatch/call budget; applies to every actual descendant provider transmission. */
+  incomingAiDispatch?: () => Promise<void>;
 }
 
 /** A cancel hook that hangs cannot hold a run open forever; the join is bounded and says so. */
@@ -42,14 +46,24 @@ export async function withConversationExecutionScope<T>(
   requestId: string,
   execute: () => Promise<T>,
   beforeAiTransmission?: () => Promise<void>,
+  beforeToolExecution?: () => Promise<void>,
+  incomingAiDispatch?: () => Promise<void>,
 ): Promise<T> {
   const supervisor = getProcessSupervisor();
   const parentGuard = currentConversationTransmissionGuard();
+  const parentToolGuard = currentConversationToolExecutionGuard();
+  const parentIncomingDispatch = currentIncomingAiDispatchGuard();
   const scope: ConversationExecutionScope = {
     requestId, scopeKey: `conversation:${requestId}`, controller: new AbortController(), closed: false, detach: null, pending: new Set(),
     beforeAiTransmission: parentGuard
       ? async () => { await parentGuard(); await beforeAiTransmission?.(); }
       : beforeAiTransmission,
+    beforeToolExecution: parentToolGuard
+      ? async () => { await parentToolGuard(); await beforeToolExecution?.(); }
+      : beforeToolExecution,
+    incomingAiDispatch: parentIncomingDispatch
+      ? async () => { await parentIncomingDispatch(); await incomingAiDispatch?.(); }
+      : incomingAiDispatch,
   };
   const close = supervisor.acquireScopeCleanup(scope.scopeKey);
   return scopes.run(scope, async () => {
@@ -74,6 +88,28 @@ export function currentConversationTransmissionGuard(): (() => Promise<void>) | 
     if (scope.closed || scope.controller.signal.aborted) throw new Error("Conversation source release is closed.");
     await scope.beforeAiTransmission?.();
     if (scope.closed || scope.controller.signal.aborted) throw new Error("Conversation source release is closed.");
+  };
+}
+
+/** Canonical tool admission fence for the current scope; ordinary owner-authored runs leave it unset. */
+export function currentConversationToolExecutionGuard(): (() => Promise<void>) | undefined {
+  const scope = scopes.getStore();
+  if (!scope?.beforeToolExecution) return undefined;
+  return async () => {
+    if (scope.closed || scope.controller.signal.aborted) throw new Error("Conversation tool execution is closed.");
+    await scope.beforeToolExecution?.();
+    if (scope.closed || scope.controller.signal.aborted) throw new Error("Conversation tool execution is closed.");
+  };
+}
+
+/** Presence forces organization-classified, single-provider dispatch in the canonical BYOAI transport. */
+export function currentIncomingAiDispatchGuard(): (() => Promise<void>) | undefined {
+  const scope = scopes.getStore();
+  if (!scope?.incomingAiDispatch) return undefined;
+  return async () => {
+    if (scope.closed || scope.controller.signal.aborted) throw new Error("Incoming AI dispatch is closed.");
+    await scope.incomingAiDispatch?.();
+    if (scope.closed || scope.controller.signal.aborted) throw new Error("Incoming AI dispatch is closed.");
   };
 }
 

@@ -257,6 +257,13 @@ function savedMessageAttachments(message: ProjectChatMessage | LocalMessage): Sa
   });
 }
 
+function savedTelegramIngress(message: ProjectChatMessage | LocalMessage): Record<string, unknown> | null {
+  if (message.role !== "user" || !("metadata" in message)) return null;
+  const marker = message.metadata.channelIngress;
+  return marker && typeof marker === "object" && !Array.isArray(marker) &&
+    (marker as Record<string, unknown>).provider === "telegram" ? marker as Record<string, unknown> : null;
+}
+
 
 function formatAttachmentSize(bytes: number): string {
   if (bytes < 1024) return `${bytes} B`;
@@ -1442,10 +1449,14 @@ export default function ProjectExperienceShell({
     };
     const attachQuietly = () => { void attach().catch(() => {}); };
     const stopListening = gateway.onReady(attachQuietly);
+    const stopChanges = gateway.onEvent("data.invalidate", ({ topics }) => {
+      if (topics.includes("conversations")) attachQuietly();
+    });
     if (gateway.state === "ready") attachQuietly();
     return () => {
       abandoned = true;
       stopListening();
+      stopChanges();
     };
     // Re-evaluated when the open chat or the Gateway changes; the run's own events drive everything after attach.
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -2497,20 +2508,25 @@ export default function ProjectExperienceShell({
                     }}>Show {nextBatchCount} earlier message{nextBatchCount === 1 ? "" : "s"} · {hiddenMessageCount} hidden</button>
                   </div>
                 )}
-                {visibleMessages.map((message) => (
-                  <div key={message.id} className={message.role === "user" ? "flex justify-end" : "flex justify-start"}>
+                {visibleMessages.map((message) => {
+                  const channel = savedTelegramIngress(message);
+                  return (
+                  <div key={message.id} className={message.role === "user" && !channel ? "flex justify-end" : "flex justify-start"}>
                     <div data-lios-message={message.role}
                     role="group"
-                    aria-label={message.role === "assistant" ? "LiOS response" : message.role === "user" ? "Your message" : "System message"}
+                    aria-label={channel ? "Imported Telegram message" : message.role === "assistant" ? "LiOS response" : message.role === "user" ? "Your message" : "System message"}
                     className={`lios-conversation-message max-w-[85%] rounded-xl border px-4 py-3 ${
-                      message.role === "user"
+                      message.role === "user" && !channel
                         ? "border-amber-300/20 bg-amber-300/[0.05]"
                         : "border-border/60 bg-white/[0.018]"
                     }`}>
                       <div className="mb-1.5 flex items-center gap-1.5">
                         {message.role === "assistant" ? <Bot className="h-3 w-3 text-amber-300" /> : null}
-                        <span className="font-terminal text-[12px] uppercase tracking-wider text-muted-foreground">{message.role === "user" ? "YOU" : "LIOS"}</span>
+                        <span className="font-terminal text-[12px] uppercase tracking-wider text-muted-foreground">{channel ? "TELEGRAM" : message.role === "user" ? "YOU" : "LIOS"}</span>
                       </div>
+                      {channel && <p className="mb-2 font-ui text-xs text-muted-foreground" aria-label="Imported message provenance">
+                        External message · {typeof channel.senderRef === "string" && channel.senderRef.length <= 64 ? `sender ${channel.senderRef}` : "sender unavailable"}{channel.editedAt ? " · edited" : ""}. Not an owner approval.
+                      </p>}
                       {message.role === "assistant"
                         ? <ChatMarkdown text={message.content} sources={"metadata" in message ? savedMessageCitationSources(message.metadata) : undefined} />
                         : <div className="whitespace-pre-wrap font-ui text-[14px] leading-6 text-foreground">{message.content}</div>}
@@ -2557,7 +2573,7 @@ export default function ProjectExperienceShell({
                       )}
                     </div>
                   </div>
-                ))}
+                ); })}
                 {streaming && (
                   <div className="flex justify-start">
                     <div className="lios-conversation-message lios-conversation-stream max-w-[85%] rounded-xl border border-border/60 bg-white/[0.018] px-4 py-3" data-lios-message="assistant" role="group" aria-label="LiOS response in progress">

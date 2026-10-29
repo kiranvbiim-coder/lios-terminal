@@ -20,6 +20,9 @@ export type NormalizedTelegramUpdate = {
   eventType: string;
   conversationId: string | null;
   messageId: string | null;
+  messageFamily: "message" | "channel_post" | null;
+  /** Provider-observed author, never a forwarded/display-name identity. */
+  senderRef: string | null;
   occurredAt: string | null;
   editedAt: string | null;
   text: string | null;
@@ -109,6 +112,17 @@ function hasSeparateMessageNamespace(message: Record<string, unknown>): boolean 
   return Boolean(business || guest);
 }
 
+function senderRef(event: Record<string, unknown>): string | null {
+  // Anonymous administrators/channel authors carry sender_chat; never promote
+  // their compatibility `from` user, a forwarded author or a display name.
+  if (event.sender_chat !== undefined) {
+    const id = isRecord(event.sender_chat) ? event.sender_chat.id : null;
+    return typeof id === "number" && Number.isSafeInteger(id) && id !== 0 ? `chat:${id}` : null;
+  }
+  const id = isRecord(event.from) ? event.from.id : null;
+  return typeof id === "number" && Number.isSafeInteger(id) && id > 0 ? `user:${id}` : null;
+}
+
 function normalizeUpdate(payload: Record<string, unknown>, updateId: number): NormalizedTelegramUpdate {
   const keys = Object.keys(payload).filter(key => updateTypes.has(key));
   // Telegram specifies at most one optional Update field. Never pick a winner
@@ -116,8 +130,8 @@ function normalizeUpdate(payload: Record<string, unknown>, updateId: number): No
   if (keys.length > 1) invalid();
   const eventType = keys[0] ?? "unknown";
   const result: NormalizedTelegramUpdate = {
-    updateId, eventType, conversationId: null, messageId: null,
-    occurredAt: null, editedAt: null, text: null, payload,
+    updateId, eventType, conversationId: null, messageId: null, messageFamily: null,
+    occurredAt: null, editedAt: null, text: null, senderRef: null, payload,
   };
   if (eventType === "unknown") return result;
   const event = payload[eventType];
@@ -137,8 +151,13 @@ function normalizeUpdate(payload: Record<string, unknown>, updateId: number): No
     // unresolved until canonical routing models those scopes; no synthetic IDs.
     if (eventType !== "business_message" && eventType !== "edited_business_message" &&
         eventType !== "guest_message" && !hasSeparateMessageNamespace(event)) {
-      result.conversationId = conversationId;
-      result.messageId = messageId;
+      // Zero identifies a not-yet-sent scheduled message, not a durable logical message.
+      if (messageId !== "0") {
+        result.conversationId = conversationId;
+        result.messageId = messageId;
+        result.messageFamily = eventType === "channel_post" || eventType === "edited_channel_post" ? "channel_post" : "message";
+        result.senderRef = senderRef(event);
+      }
     }
   } else if (eventType === "callback_query") {
     if (event.message !== undefined) {

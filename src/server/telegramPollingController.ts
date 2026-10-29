@@ -119,7 +119,7 @@ export class TelegramPollingController {
         if (!current()) break;
         if (result.kind === "adopted") {
           stableSince ??= this.now();
-          if (result.adopted) status.lastAdoptedAt = new Date(this.now()).toISOString();
+          if (result.adopted || result.edited) status.lastAdoptedAt = new Date(this.now()).toISOString();
           if (this.now() - stableSince >= this.stableMs) status.consecutiveFailures = 0;
           status.lastFailure = null;
           if (!(await this.sleep(this.minCycleMs, entry.abort.signal))) break;
@@ -134,7 +134,12 @@ export class TelegramPollingController {
         if (!(await this.backoff(status, hinted, entry.abort.signal))) break;
       } catch (error) {
         if (!current()) break;
-        if (this.options.isTerminalFailure(error)) { status.state = "refused"; status.lastFailure = "authority_refused"; break; }
+        if (this.options.isTerminalFailure(error)) {
+          status.state = "refused";
+          status.lastFailure = error instanceof Error && "code" in error && error.code === "namespace_reconnect_required"
+            ? "namespace_reconnect_required" : "authority_refused";
+          break;
+        }
         stableSince = null;
         status.consecutiveFailures++;
         status.lastFailure = "cycle_failed";
