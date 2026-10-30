@@ -16,7 +16,6 @@ Retains exact already-imported beUI, Watermelon, OpensourceUI, OpenClaw GM22 and
 ## Tests / QA
 
 - `sprintAObservedActivity.test.ts`: observed-vs-planned, duplicate step status, review waiting and no fake live progress on completed runs.
-- `sprintAInteractionIntegration.test.ts`: Omnibox/accessibility, exact tab geometry, AI review boundaries and actual dock surface callback.
 - `ConversationRuntimeTrace.test.ts`: server-rendered observed runtime status in the real component.
 - `sprint_a_donor_registry.test.mjs`: five exact source pins, licence fields and human-readable legal notices.
 

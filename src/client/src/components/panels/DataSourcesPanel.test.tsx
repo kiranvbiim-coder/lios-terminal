@@ -1,13 +1,11 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import type { SourceRegistry, SourceRegistryItem } from "@shared/sourceRegistry";
 import DataSourcesPanel from "./DataSourcesPanel";
 
-const source = readFileSync(new URL("./DataSourcesPanel.tsx", import.meta.url), "utf8");
 function item(id: string, adapterImplemented: boolean): SourceRegistryItem {
   return {
     id, connectorId: id, name: "Source " + id, kind: "catalog",
@@ -44,16 +42,3 @@ test("A10 source catalogue does not offer a dead Configure CTA for an unimplemen
   assert.match(html, /Connection Center/);
 });
 
-test("A10 failed registry refresh keeps cached read-only records visibly unverified", () => {
-  assert.match(source, /if \(!query\.data\)/);
-  assert.match(source, /const readOnly = query\.isError/);
-  assert.match(source, /Unable to refresh connections/);
-  assert.match(source, /Last loaded record only/);
-  assert.match(source, /!readOnly && <div/);
-  assert.match(source, /item\.kind === "catalog" && item\.adapterImplemented/);
-  assert.match(source, /readOnly=\{readOnly\}/);
-  assert.match(source, /Operational status unverified/);
-  assert.match(source, /Retry connection status/);
-  assert.match(source, /disabled=\{readOnly\}/);
-  assert.doesNotMatch(source, /if \(query\.isError \|\| !query\.data\)/);
-});

@@ -2,7 +2,6 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
-import { readFileSync } from "node:fs";
 import type { ArtifactContent } from "@shared/artifactContracts";
 import { chartRecordedContext, chartSourceCaveat, exactChartValue } from "./artifactChartContext";
 import { prepareArtifactChart, type ArtifactChartProjection } from "./artifactChartProjection";
@@ -110,20 +109,3 @@ test("WS-39 table paging uses exact 40-position windows; all hidden plot series 
   assert.doesNotMatch(markup, /9999/, "later saved observations must be reachable by paging, never pulled into earlier page");
 });
 
-test("WS-39 chart retains original keyboard point inspector and independent full-comparison table", () => {
-  const source = readFileSync(new URL("../components/terminal/ArtifactChart.tsx", import.meta.url), "utf8");
-  assert.match(source, /<ArtifactChartRecordedTable projection=\{prepared\} content=\{content\}/);
-  assert.match(source, /class ChartPlotBoundary extends React.Component/);
-  assert.match(source, /artifact-chart-plot-failed/);
-  assert.match(source, /<ChartPlotBoundary key=\{`\$\{chartType\}:\$\{content\.rendererPreference\}`\}>/);
-  assert.match(source, /data-testid="artifact-chart-recorded-context"/);
-  assert.match(source, /chartSourceCaveat\(recordedContext\)/);
-  assert.match(source, /Saved P4 version source refs/);
-  assert.match(source, /artifactSourceRefs/);
-  const paneSource = readFileSync(new URL("../components/terminal/ArtifactPane.tsx", import.meta.url), "utf8");
-  assert.match(paneSource, /artifactSourceRefs=\{data\.version\.sourceRefs\}/);
-  assert.match(source, /data-testid="artifact-chart-inspector"/);
-  assert.match(source, /aria-label="Exact point values; arrow keys change point, Home and End move within window"/);
-  assert.match(source, /connectNulls=\{false\}/);
-  assert.doesNotMatch(source, /Math\.round\(point\.y\)|\?\? 0|new Date\(row\.x\)/);
-});

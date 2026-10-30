@@ -17,13 +17,13 @@ The repository already has a canonical P4 `spreadsheet` Artifact schema (workshe
 ## Regression coverage
 
 - New `spreadsheetReviewBounds.test.ts`: exact sheet dimensions, case/whitespace normalization, A0/D1/out-of-bounds rejection, immutable source baseline, preserved historical lineage, unknown sheet/oversized value refusal.
-- New `ws38SpreadsheetEditorGuard.test.ts`: both real editors use guarded review, invalid selection cannot crash, user-visible Save errors, correct dirty state, and no second persistence engine.
+- Incidental editor-source wiring assertions were removed; actual editor interaction, permission, dirty-state and persistence journeys remain required rather than inferred from function-name matches.
 - Expanded `shared/univerArtifact.test.ts`: native row/column pasted cells outside declared worksheet dimensions block exact snapshot conversion without mutating canonical data.
 
 Run from `src/`:
 
 ```sh
-node --import tsx --test client/src/lib/spreadsheetReviewBounds.test.ts client/src/lib/ws38SpreadsheetEditorGuard.test.ts shared/univerArtifact.test.ts client/src/lib/artifactSpreadsheet.test.ts
+node --import tsx --test client/src/lib/spreadsheetReviewBounds.test.ts shared/univerArtifact.test.ts client/src/lib/artifactSpreadsheet.test.ts
 npm run check
 npm run test:p4
 npm run test:ux

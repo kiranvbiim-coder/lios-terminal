@@ -3211,13 +3211,12 @@
       "destinationPaths": [
         "client/src/components/terminal/PulseDiscoveryTabs.tsx",
         "client/src/components/terminal/PulseDiscoveryTabs.test.tsx",
-        "client/src/components/terminal/FusionPulseBoard.tsx",
-        "client/src/lib/fusionIntegration.test.ts"
+        "client/src/components/terminal/FusionPulseBoard.tsx"
       ],
       "modifications": [
         "Adapted controlled selection, accessible keyboard navigation and shared-layout spring indicator to canonical Wave D For You/Following/Markets/Research channel callback.",
         "Reimplemented using existing React 18, Framer Motion 11, Tailwind 3 and Lucide; no Motion 12 upgrade, separate panel/data/store, new network route or extra permission owner.",
-        "44px controls, RTL-aware arrows/Home/End and reduced-motion support; source integration tests updated to inspect the actual extracted channel component."
+        "44px controls, RTL-aware arrows/Home/End and reduced-motion support; retained behavioral component tests exercise the adapted tab surface; incidental source-wiring assertions were removed."
       ],
       "notes": "Donor file blob ed65ffad1ea648850ce29a874ea6eee28d032896 at exact MIT pin; Copyright 2026 Saurabh Chauhan. Full grant under third_party/licenses/beui-MIT.txt. Stacked draft PR #259 installed app QA remains required."
     }

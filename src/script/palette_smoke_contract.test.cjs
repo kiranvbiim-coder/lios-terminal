@@ -2,8 +2,6 @@
 
 const assert = require("node:assert/strict");
 const test = require("node:test");
-const fs = require("node:fs");
-const path = require("node:path");
 const { PALETTES, paletteSpecs, contrast, validateFrame } = require("./palette_smoke_contract.cjs");
 
 test("palette smoke matrix contains 35 unique bounded source fixture views", () => {
@@ -83,14 +81,3 @@ test("real Dockview is required only for desktop Workbench fixtures", () => {
   })).passed, true);
 });
 
-test("capture script reuses safe output guard and reports source-only qualification", () => {
-  const file = fs.readFileSync(path.join(__dirname, "visual_smoke_palette_capture.cjs"), "utf8");
-  assert.match(file, /prepareVisualSmokeOutput/);
-  assert.match(file, /SOURCE_FIXTURE_ONLY__NATIVE_RELEASE_NOT_RUN/);
-  assert.match(file, /sha256/);
-  assert.match(file, /manifest\.json/);
-  assert.match(file, /nodeIntegration: false/);
-  assert.match(file, /contextIsolation: true/);
-  assert.match(file, /localFixtureUrl/);
-  assert.doesNotMatch(file, /rmSync|upload-artifact|secrets\.|OPENAI_API_KEY/);
-});

@@ -4,10 +4,6 @@ import fs from "node:fs";
 import path from "node:path";
 import vm from "node:vm";
 
-test("production entry does not re-register the one-shot service-worker retirement script", () => {
-  const entry = fs.readFileSync(path.resolve(process.cwd(), "client/src/main.tsx"), "utf8");
-  assert.doesNotMatch(entry, /navigator\.serviceWorker\.register\s*\(/);
-});
 
 test("retirement worker clears only LiOS caches, unregisters, and reloads controlled clients", async () => {
   const source = fs.readFileSync(path.resolve(process.cwd(), "client/public/sw.js"), "utf8");

@@ -18,7 +18,7 @@
 From `src/` at **exact PR head**:
 ```sh
 npm run check
-node --import tsx --test client/src/lib/sprintDIntegrationAcceptance.test.ts client/src/lib/sprintCVisualIntegration.test.ts client/src/lib/workspaceShellConvergence.test.ts
+node --import tsx --test client/src/lib/sprintDIntegrationAcceptance.test.ts client/src/lib/workspaceShellConvergence.test.ts
 node --test desktopPythonSidecar.test.cjs
 npm run test:offline
 npm run test:desktop

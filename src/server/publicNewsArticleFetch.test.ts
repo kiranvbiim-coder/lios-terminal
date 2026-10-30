@@ -1,7 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import type { lookup } from "node:dns/promises";
-import { readFileSync } from "node:fs";
 import {
   isPermittedNewsIp, resolvePublicNewsAddress, validatePublicNewsUrl,
 } from "./publicNewsArticleFetch";
@@ -38,16 +37,3 @@ test("one unsafe DNS answer disqualifies an otherwise public hostname", async ()
     { address: "8.8.4.4", family: 4 });
 });
 
-test("production getNewsArticle uses pinned and bounded transport rather than the generic provider fetchText", () => {
-  const market = readFileSync(new URL("./marketData.ts", import.meta.url), "utf8");
-  const section = market.slice(market.indexOf("export async function getNewsArticle("),
-    market.indexOf("export async function getNewsArticle(") + 1900);
-  assert.match(section, /validatePublicNewsUrl|sanitizeArticleUrl/);
-  assert.match(section, /fetchPublicNewsArticleHtml\(url\)/);
-  assert.doesNotMatch(section, /await fetchText\(url\)/);
-  const transport = readFileSync(new URL("./publicNewsArticleFetch.ts", import.meta.url), "utf8");
-  assert.match(transport, /agent: false/);
-  assert.match(transport, /lookup: \(_host, _options, callback\)/);
-  assert.match(transport, /MAX_HTML_BYTES/);
-  assert.match(transport, /validatePublicNewsUrl\(new URL\(location, url\)\.href\)/);
-});

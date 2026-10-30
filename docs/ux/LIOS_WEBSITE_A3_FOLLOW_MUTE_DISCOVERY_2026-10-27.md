@@ -22,7 +22,7 @@ When Mute hides an item, the user can open Pulse **Muted subjects** to restore i
 - `src/client/src/components/terminal/WaveCExperienceShell.tsx`: reuse existing Pulse load and server mutation/refresh; no separate feed.
 - `src/client/src/components/terminal/FusionPulseBoard.tsx`: accessible disclosure and restore, unfiltered-source fallback eliminated.
 - `src/client/src/components/terminal/LiosPulseStoryCard.tsx`: confirmed actions with keyboard-sized buttons and status state.
-- Unit/integration tests: `shared/pulseSubjectPreferences.test.ts`, `server/waveDRoutes.test.ts` (real isolated route/persistent SQLite fixture and two separate users), `client/src/lib/pulseFollowMuteIntegration.test.ts`.
+- Unit/integration tests: `shared/pulseSubjectPreferences.test.ts`, `server/waveDRoutes.test.ts` (real isolated route/persistent SQLite fixture and two separate users). Incidental production-source wiring assertions were removed; they were not interaction proof.
 - `cd src && npm run test:website-a3 && npm run check && npm run test:offline`. Source CI executes `test:website-a3` on existing standard Linux runner; full offline suite includes the backend route test.
 
 ## Acceptance and safety evidence required

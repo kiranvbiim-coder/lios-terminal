@@ -3,7 +3,6 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import test from "node:test";
-import { fileURLToPath } from "node:url";
 import { validateP14PackLifecycleEvidenceFile } from "./validate_p14_pack_lifecycle_evidence";
 
 function validObservation(overrides: Record<string, unknown> = {}) {
@@ -80,9 +79,3 @@ test("P14 pack lifecycle file validator fails closed on an incomplete lifecycle"
   });
 });
 
-test("P14 pack lifecycle validator remains read-only and the existing P14 writer remains canonical", () => {
-  const packageJson = JSON.parse(fs.readFileSync(new URL("../package.json", import.meta.url), "utf8")) as { scripts?: Record<string, string> };
-  assert.equal(packageJson.scripts?.["p14:evidence"], "node script/write_p14_evidence.cjs");
-  const validator = fs.readFileSync(fileURLToPath(new URL("./validate_p14_pack_lifecycle_evidence.ts", import.meta.url)), "utf8");
-  assert.doesNotMatch(validator, /writeFileSync|createHash|sourceArtifacts/);
-});

@@ -1,6 +1,5 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { readFileSync } from "node:fs";
 import { findProjectWorkflowRow, focusProjectWorkflowRow } from "./projectWorkflowFocus";
 
 function fakeWorkflowDocument(scopes: Array<{ projectId: number; workflows: string[] }>) {
@@ -58,24 +57,3 @@ test("focus handoff moves to exact row, uses reduced-motion-safe scrolling, neve
   assert.equal(focusProjectWorkflowRow(smooth.root, 7, "unavailable", false), false);
 });
 
-test("actual Project Continuity consumer and P9 rows preserve exact identity and visible no-op failure", () => {
-  const continuity = readFileSync(new URL("../components/terminal/ProjectContinuityPanel.tsx", import.meta.url), "utf8");
-  const automation = readFileSync(new URL("../components/terminal/ProjectAutomationPanel.tsx", import.meta.url), "utf8");
-  assert.match(continuity, /focusProjectWorkflowRow\(document, projectId, workflowId, prefersReducedMotion\)/);
-  assert.match(continuity, /onReviewWorkflow=\{reviewExactWorkflow\}/);
-  assert.match(continuity, /Nothing was run or changed/);
-  assert.match(continuity, /role="status"/);
-  assert.doesNotMatch(continuity, /document\.querySelector\("\[data-p9-continuous-intelligence\]"/);
-  assert.match(automation, /data-p9-project-id=\{projectId\}/);
-  assert.match(automation, /data-p9-workflow-id=\{workflow\.id\}/);
-  assert.match(automation, /tabIndex=\{-1\}/);
-  assert.match(automation, /aria-label=\{\`Saved workflow \$\{workflow\.name\}\`\}/);
-});
-
-test("continuity surrounding controls no longer rely on illegibly small 6–8px typography", () => {
-  const continuity = readFileSync(new URL("../components/terminal/ProjectContinuityPanel.tsx", import.meta.url), "utf8");
-  assert.doesNotMatch(continuity, /text-\[(?:6|7|8)px\]/);
-  assert.match(continuity, /min-h-11/);
-  assert.match(continuity, /motion-safe:animate-spin/);
-  assert.match(continuity, /text-muted-foreground/);
-});

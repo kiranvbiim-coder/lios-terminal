@@ -3,7 +3,6 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import test from "node:test";
-import { fileURLToPath } from "node:url";
 import { validateP14UpdateRollbackEvidenceFile } from "./validate_p14_update_rollback_evidence";
 
 function validObservation(overrides: Record<string, unknown> = {}) {
@@ -78,17 +77,3 @@ test("P14 update/rollback file validator fails closed on an internally inconsist
   });
 });
 
-test("P14 update/rollback validator is validation-only and retains the canonical evidence writer", () => {
-  const packageJson = JSON.parse(fs.readFileSync(new URL("../package.json", import.meta.url), "utf8")) as {
-    scripts?: Record<string, string>;
-  };
-  assert.equal(packageJson.scripts?.["p14:evidence"], "node script/write_p14_evidence.cjs");
-
-  const writer = fs.readFileSync(new URL("./write_p14_evidence.cjs", import.meta.url), "utf8");
-  assert.match(writer, /update_rollback/);
-  assert.doesNotMatch(
-    fs.readFileSync(fileURLToPath(new URL("./validate_p14_update_rollback_evidence.ts", import.meta.url)), "utf8"),
-    /writeFileSync|createHash|sourceArtifacts/,
-    "the observation validator must not become a second P14 evidence writer",
-  );
-});

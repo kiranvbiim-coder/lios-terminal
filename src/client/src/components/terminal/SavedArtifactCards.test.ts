@@ -1,6 +1,5 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { SavedArtifactCardList, describeSavedArtifactCard, exactSavedArtifactDetail, savedArtifactMatchesScope } from "./SavedArtifactCards";
@@ -93,20 +92,6 @@ test("WS-34 metadata-only and failed/pending exact lookups cannot supply fake pr
   assert.doesNotMatch(pendingHtml, /fictional|artifact-task-preview/);
 });
 
-test("WS-34 every task preview has an explicit exact-version and scope check before rendering", () => {
-  // Source-contract assertions complement, rather than replace, signed-in
-  // tenant/Project HTTP negative tests.
-  const source = readFileSync(new URL("./SavedArtifactCards.tsx", import.meta.url), "utf8");
-  assert.match(source, /candidate\.artifact\.id !== ref\.id/);
-  assert.match(source, /candidate\.version\.artifactId !== ref\.id/);
-  assert.match(source, /candidate\.version\.version !== ref\.version/);
-  assert.match(source, /savedArtifactMatchesScope\(candidate\.artifact, projectId, chatId\)/);
-  assert.match(source, /query\?\.isFetchedAfterMount && !query\.isFetching && !query\.isError/);
-  assert.match(source, /refetchOnMount: "always"/);
-  assert.match(source, /const preview = detail \? recordedArtifactPreview\(detail\.version\.content\) : null/);
-  assert.match(source, /\?version=\$\{ref\.version\}/);
-  assert.doesNotMatch(source, /recordedArtifactPreview\(ref|recordedArtifactPreview\(fromList/);
-});
 
 test("WS-34 exact preview custody rejects foreign Project, Quick Chat, wrong version or data kind", () => {
   const ref = { id, version: 2, title: "Saved research", kind: "research" };

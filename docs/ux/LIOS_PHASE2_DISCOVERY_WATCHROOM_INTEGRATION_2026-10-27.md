@@ -63,7 +63,6 @@ node --import tsx --test \
   client/src/components/terminal/ProjectChangeActivity.test.tsx \
   client/src/lib/intelligenceVisualSearch.test.ts \
   client/src/components/terminal/VisualIntelligenceSearch.test.tsx \
-  client/src/lib/phase2VisualSearchIntegration.test.ts \
   client/src/lib/phase2ProjectPresentation.test.ts \
   client/src/components/terminal/ProjectWatchroomDesk.test.tsx \
   client/src/lib/phase2ExperienceIntegration.test.ts \

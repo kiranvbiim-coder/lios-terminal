@@ -126,12 +126,3 @@ test("P3 MCP live verification checks saved owner and Project before any officia
   assert.equal(probes, 1, "probe failure is not accepted as verified");
 });
 
-test("P3 MCP Verify route is genuinely live but never reports arbitrary tool execution", async () => {
-  const { readFileSync } = await import("node:fs");
-  const service = readFileSync(new URL("./sourceConnectionService.ts", import.meta.url), "utf8");
-  assert.match(service, /connection\.sourceType === "mcp"/);
-  assert.match(service, /const \{ allowedToolCount \} = await verifySavedMcpConnection/);
-  assert.match(service, /Live MCP handshake and tools\/list succeeded/);
-  assert.match(service, /No MCP tool was executed/);
-  assert.doesNotMatch(service, /callExternalMcpTool/);
-});

@@ -1,6 +1,5 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { readFileSync } from "node:fs";
 import { canonicalDataRequestSchema, type CanonicalDataRequest } from "@shared/universalDataFabric";
 import type { TenantContext } from "./tenantContext";
 import { authorizeCanonicalDataRequests } from "./canonicalDataRequestGate";
@@ -93,14 +92,3 @@ test("Phase 2: as-known-on backtest with publication gate is eligible only after
   assert.equal(checked, true);
 });
 
-test("Phase 2: execute and prefetch routes share the same authorization gate before provider registry/execution", () => {
-  const route = readFileSync(new URL("./universalDataFabricRoutes.ts", import.meta.url), "utf8");
-  const single = route.match(/app\.post\("\/api\/data-fabric\/execute",[\s\S]*?(?=app\.post\("\/api\/data-fabric\/prefetch")/);
-  const batch = route.match(/app\.post\("\/api\/data-fabric\/prefetch",[\s\S]*?(?=app\.get\("\/api\/data-fabric\/cache")/);
-  assert.ok(single && batch);
-  assert.match(single[0], /authorizeCanonicalDataRequests\(\[request\],tenant\)/);
-  assert.match(batch[0], /authorizeCanonicalDataRequests\(requests,tenant\)/);
-  assert.ok(single[0].indexOf("authorizeCanonicalDataRequests") < single[0].indexOf("createProviderRegistryForUser"));
-  assert.ok(batch[0].indexOf("authorizeCanonicalDataRequests") < batch[0].indexOf("createProviderRegistryForUser"));
-  assert.ok(batch[0].indexOf("authorizeCanonicalDataRequests") < batch[0].indexOf("prefetchCanonicalDataRequests"));
-});

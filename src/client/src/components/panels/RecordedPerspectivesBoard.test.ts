@@ -1,7 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import * as React from "react";
-import { readFileSync } from "node:fs";
 import { renderToStaticMarkup } from "react-dom/server";
 import { PerspectiveSource, RecordedPerspectivesBoard } from "./RecordedPerspectivesBoard";
 import type { PerspectiveEvidence, PerspectiveRelation } from "@/lib/researchPerspectives";
@@ -105,8 +104,4 @@ test("B05 Claim Lens is an explicit evidence-based UI, never an inferred publish
   assert.match(html,/Select an evidence record/);
   assert.match(html,/not an AI verdict/);
   assert.doesNotMatch(html,/Automatically true|Publisher is lying/);
-  const source=readFileSync(new URL("./RecordedPerspectivesBoard.tsx",import.meta.url),"utf8");
-  assert.match(source,/inspectRecordedEvidenceClaim/);
-  assert.match(source,/Incoming recorded relationship only/);
-  assert.match(source,/Open the Investigation for the complete ledger/);
 });

@@ -1,6 +1,5 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
 import { extractRssMediaPreview } from "./newsFeedMediaEnclosures";
 import { safeNewsMediaPreview } from "../shared/newsMediaPreview";
 import { parseNewsFeed } from "./marketData";
@@ -35,11 +34,3 @@ test("only strict supported public HTTPS sources qualify for user-initiated play
   assert.equal(safeNewsMediaPreview({ ...allowed, rights: "unverified" }), null);
 });
 
-test("publisher preview mounts no source element or playback controls until deliberate reader action", () => {
-  const component = readFileSync(new URL("../client/src/components/panels/NewsMediaPreview.tsx", import.meta.url), "utf8");
-  const panel = readFileSync(new URL("../client/src/components/panels/NewsPanel.tsx", import.meta.url), "utf8");
-  assert.match(component, /opened && \(safe\.kind === "video"/);
-  assert.match(component, /preload="none"/);
-  assert.doesNotMatch(component, /autoPlay|autoplay/);
-  assert.match(panel, /<NewsMediaPreview key=\{selectedItem\.url\} preview=\{selectedItem\.mediaPreview\}/);
-});

@@ -9,7 +9,7 @@
   "controlledForkCount": 10,
   "sourceSnapshot": {
     "baselineSha": "ad77f2d53189a7d98583e9d9996d532b79e4686d",
-    "componentsSha": "ac21dab5bef926e1a4399b83d553b52abdde8e09",
+    "componentsSha": "50b6eb343cacbf650ed6784fb29f61b73211d163",
     "upstreamPinsSha": "1c25218f617efddd8ae9300aeb6aafb9809e8169",
     "controlledForkSha": "142ff14c5e6b5d6804b20a346d5e31435db2f33b"
   },

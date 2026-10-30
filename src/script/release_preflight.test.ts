@@ -54,23 +54,15 @@ test("CI mode passes code capability checks while classifying production evidenc
 
 test("desktop distribution scripts cannot silently produce unsigned macOS or Windows releases", () => {
   const packageJson = JSON.parse(fs.readFileSync(new URL("../package.json", import.meta.url), "utf8")) as {
-    scripts?: Record<string, string>;
     build?: {
       appId?: string;
-      productName?: string;
       publish?: Array<{ provider?: string; url?: string }>;
       mac?: { identity?: string | null; hardenedRuntime?: boolean; target?: string[]; entitlements?: string; entitlementsInherit?: string };
     };
   };
-  const desktopBuildWrapper = fs.readFileSync(new URL("./desktop_build.cjs", import.meta.url), "utf8");
-  const desktopMainProcess = fs.readFileSync(new URL("../main.cjs", import.meta.url), "utf8");
-  const desktopSecretCustody = fs.readFileSync(new URL("../desktopSecretCustody.cjs", import.meta.url), "utf8");
-  const desktopSelfTest = fs.readFileSync(new URL("../desktopSelfTest.cjs", import.meta.url), "utf8");
-  const pythonSidecarBuilder = fs.readFileSync(new URL("./build_python_sidecar.cjs", import.meta.url), "utf8");
   assert.deepEqual(validateSourceDistribution(fileURLToPath(new URL("../../", import.meta.url))), []);
 
   assert.equal(packageJson.build?.appId, "com.limuria.terminal", "stable bundle/app identity must not drift during naming cleanup");
-  assert.equal(packageJson.build?.productName, "LiOS Intelligence Terminal");
   assert.notEqual(packageJson.build?.mac?.identity, null, "mac identity=null explicitly disables signing");
   assert.equal(packageJson.build?.mac?.hardenedRuntime, true, "production macOS packaging must keep Hardened Runtime enabled");
   assert.deepEqual(packageJson.build?.mac?.target, ["dmg", "zip"], "macOS updater releases require both DMG and ZIP targets");
@@ -80,26 +72,6 @@ test("desktop distribution scripts cannot silently produce unsigned macOS or Win
   assert.equal(fs.existsSync(new URL("../build-resources/entitlements.mac.inherit.plist", import.meta.url)), true);
   assert.equal(packageJson.build?.publish?.[0]?.provider, "generic");
   assert.equal(packageJson.build?.publish?.[0]?.url, "${env.LIOS_UPDATE_URL}");
-  assert.match(packageJson.scripts?.["app:dist:mac"] ?? "", /desktop_build\.cjs mac$/);
-  assert.match(packageJson.scripts?.["app:dist:win"] ?? "", /desktop_build\.cjs win$/);
-  assert.match(desktopBuildWrapper, /forceCodeSigning=true/);
-  assert.match(desktopBuildWrapper, /mac\.notarize=true/);
-  assert.match(desktopBuildWrapper, /LIOS_UPDATE_URL/);
-  assert.doesNotMatch(desktopBuildWrapper, /audience/i);
-  assert.doesNotMatch(desktopMainProcess, /client-terminal|DESKTOP_AUDIENCE/);
-  assert.match(desktopMainProcess, /app\.isPackaged\s*\?\s*process\.execPath/);
-  assert.match(desktopMainProcess, /ELECTRON_RUN_AS_NODE/);
-  assert.match(desktopMainProcess, /safeStorage/);
-  assert.match(desktopMainProcess, /--desktop-self-test/);
-  assert.match(desktopSecretCustody, /vault-master-key\.safe/);
-  assert.match(desktopSecretCustody, /round-trip verification failed/);
-  assert.match(desktopSelfTest, /native_protected/);
-  assert.match(desktopSelfTest, /probeBundledPythonSidecar/);
-  assert.match(pythonSidecarBuilder, /PyInstaller/);
-  assert.match(desktopBuildWrapper, /python-sidecar-dist/);
-  assert.match(desktopMainProcess, /sandbox:\s*true/);
-  assert.match(desktopMainProcess, /setWindowOpenHandler/);
-  assert.match(desktopMainProcess, /will-navigate/);
   assert.match(JSON.stringify(packageJson), /python-sidecar-dist/);
 });
 

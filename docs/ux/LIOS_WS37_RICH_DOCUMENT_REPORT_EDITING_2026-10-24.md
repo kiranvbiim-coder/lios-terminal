@@ -15,12 +15,12 @@
 2. `fromTiptapDocumentProjection` now applies that section reconciliation during the shared decode against canonical P4 inputs. Deleted known blocks are removed from sections, preexisting unresolved refs are kept, and inserted IDs remain stable across repeated conversions/undo/reopen.
 3. `RichArtifactDocumentEditor` tracks the baseline P4 block IDs and separately reconciles **locally seeded** Tiptap insertions (because seeded IDs are otherwise already in its undo metadata). It retains the updated section list for successive edits and refreshes it when an external section-only update arrives. No second save system or editable provenance attrs.
 4. `ArtifactPane.DocumentEditor` rejects saving when `disabled` or native recovery is blocked; built-in fallback text areas, mode switching, Save and Advanced JSON controls are disabled in read-only/blocked states. Existing base-version conflict, pending state, recoverable local edits, P4 create-version API and encrypted recovery remain.
-5. The original `richArtifactDocument.test.ts` insertion expectation was updated to require its new inserted block in the saved report section; added cross-section, deletion/unresolved refs, overflow, exact provenance and round-trip tests. New `ws37RichDocumentGuard.test.ts` checks the mounted editor/guard contracts, P4 version-save call and plain-text paste.
+5. `richArtifactDocument.test.ts` covers the inserted block in its saved report section, cross-section reconciliation, deletion/unresolved refs, overflow, exact provenance and round-trip behavior. Incidental mounted-source/guard/P4-call string assertions were removed; actual UI/permission journeys remain required.
 
 ## Target tests from `src/`
 
 ```sh
-node --import tsx --test shared/richArtifactDocument.test.ts client/src/lib/ws37RichDocumentGuard.test.ts
+node --import tsx --test shared/richArtifactDocument.test.ts
 npm run check
 npm run test:p4
 npm run test:ux

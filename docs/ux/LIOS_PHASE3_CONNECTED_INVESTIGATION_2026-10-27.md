@@ -49,7 +49,6 @@ cd src
 node --import tsx --test \
   client/src/lib/phase3InvestigationPresentation.test.ts \
   client/src/components/terminal/ProjectInvestigationDesk.test.tsx \
-  client/src/lib/phase3InvestigationIntegration.test.ts \
   client/src/lib/graphExplorerPresentation.test.ts \
   client/src/lib/researchPerspectives.test.ts \
   client/src/lib/scenarioInputComparison.test.ts \

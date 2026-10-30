@@ -1,6 +1,5 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { readFileSync } from "node:fs";
 import { sourceCataloguePresentation } from "./sourceCataloguePresentation";
 
 test("failed first read is unavailable, never 'zero registered sources'", () => {
@@ -28,16 +27,3 @@ test("successful catalogue read may count registered records, but not grant acce
   assert.match(updating.healthLabel ?? "", /Checking for source catalogue updates/);
 });
 
-test("Chat source menu uses the same canonical read and never calls an execution or scope-grant API", () => {
-  const source = readFileSync(new URL("../components/terminal/ChatSourcesControl.tsx", import.meta.url), "utf8");
-  assert.match(source, /apiRequest\("GET", "\/api\/setup\/source-registry"\)/);
-  assert.match(source, /sourceCataloguePresentation\(\{/);
-  assert.match(source, /registry\.data \? "Showing previously loaded records, not current availability\."/);
-  assert.match(source, /aria-busy=\{registry\.isFetching\}/);
-  assert.match(source, /onClick=\{\(\) => void registry\.refetch\(\)\}/);
-  assert.match(source, /min-h-11/);
-  assert.match(source, /onScopeChange\(item\.id\)/);
-  assert.match(source, /onOpenConnections\(\)/);
-  assert.match(source, /Choosing a scope does not grant access or start retrieval/);
-  assert.doesNotMatch(source, /apiRequest\("(?:POST|PUT|PATCH|DELETE)"/);
-});

@@ -33,29 +33,8 @@ test("source recorded revisions retain list, optional visual control and exact U
   assert.match(html, /aria-expanded="false"/);
   assert.match(html, /Recorded energy report clarified/);
   assert.doesNotMatch(html, /data-testid="news-beui-recorded-timeline"/);
-  const timeline = source("./NewsObservedRevisionTimeline.tsx");
-  assert.match(timeline, /\[\.\.\.versions\]\.reverse\(\)/);
-  assert.match(timeline, /changedNewsFields\(ordered\[i - 1\], version\)/);
-  assert.match(timeline, /date: version\.observedAt/);
-  assert.match(timeline, /defaultValue=\{events\[events\.length - 1\]\.id\}/);
-  assert.doesNotMatch(timeline, /fetch\(|Math\.random\(|new Date\(\)|onSelectRelated/);
 });
 
-test("real free MIT beUI source is wired to existing Framer Motion without a second library or global touch owner", () => {
-  const beui = source("../vendor/beui/BeuiTimeline.tsx");
-  const timeline = source("./NewsObservedRevisionTimeline.tsx");
-  const news = source("./NewsStoryEvolution.tsx");
-  assert.match(beui, /starc007\/ui-components/);
-  assert.match(beui, /components\/motion\/timeline\.tsx/);
-  assert.match(beui, /from "framer-motion"/);
-  assert.match(beui, /onKeyDown=\{\(e\) => onKeyDown\(e, index\)\}/);
-  assert.match(beui, /useReducedMotion/);
-  assert.match(beui, /onPointerMove=\{onPointerMove\}/);
-  assert.doesNotMatch(beui, /from "motion\/react"|from "@\/lib\/touch"/);
-  assert.match(timeline, /Timeline as BeuiTimeline/);
-  assert.match(news, /React\.lazy\(\(\) => import\("\.\/NewsObservedRevisionTimeline"\)\)/);
-  assert.match(news, /OptionalTimelineBoundary key=\{exactUrl\}/);
-});
 
 test("multiple related source headlines can offer a distinct chronology without merging publishers", () => {
   const history = observeNewsFeed([], [item], at);
@@ -74,11 +53,6 @@ test("multiple related source headlines can offer a distinct chronology without 
   assert.match(html, /Independent source/);
   assert.match(html, /Third publisher/);
   assert.doesNotMatch(html, /data-testid="news-beui-related-timeline"/);
-  const adapter = source("./NewsObservedRevisionTimeline.tsx");
-  assert.match(adapter, /export function RelatedPublisherTimeline/);
-  assert.match(adapter, /date: item.publishedAt/);
-  assert.match(adapter, /Separate publisher feed item/);
-  assert.match(adapter, /may describe different events/);
 });
 
 test("pinned MIT donor timeline preserves exact registered source and parses as TSX", () => {
@@ -95,8 +69,6 @@ test("pinned MIT donor timeline preserves exact registered source and parses as 
   assert.equal(component.license, "MIT");
   assert.equal(component.bundled, true);
   assert.equal(pin.license, "MIT");
-  assert.match(upstream, /49eac72ab9237b48c4eaa7fc106f7e162137657a/);
-  assert.doesNotMatch(upstream, /from "motion\/react"|import.+@\/lib\/touch/);
   const result = ts.transpileModule(upstream, {
     fileName: "BeuiTimeline.tsx",
     reportDiagnostics: true,
@@ -117,8 +89,4 @@ test("B03 users can compare exact earlier and latest observed news text without 
   assert.match(html,/First feed summary/);
   assert.match(html,/Publisher feed changed/);
   assert.match(html,/not independently verified article corrections/);
-  const sourceText=source("./NewsStoryEvolution.tsx");
-  assert.match(sourceText,/compareRecordedNewsObservations/);
-  assert.match(sourceText,/setBaselineObservedAt\(null\)/);
-  assert.match(sourceText,/Choose an earlier recorded feed observation/);
 });

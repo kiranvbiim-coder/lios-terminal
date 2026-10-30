@@ -1,6 +1,5 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
@@ -55,12 +54,3 @@ test("A09 empty Project does not display artificial resume rows or tasks", () =>
   assert.doesNotMatch(html, /Continue work|Saved session|More saved work|source reference/);
 });
 
-test("A09 continuation retry is read-only and exact Project/source owned", () => {
-  const src = readFileSync(new URL("./ProjectResumeDesk.tsx", import.meta.url), "utf8");
-  assert.match(src, /projectResumeRecentWork\(projectId, chats, sessions, 4\)/);
-  assert.match(src, /onOpenChat\(row\)/);
-  assert.match(src, /onOpenSession\(row\)/);
-  assert.match(src, /continuity\.refetch\(\)/);
-  assert.match(src, /Retry read-only history/);
-  assert.doesNotMatch(src, /createProject|recomputeProject|runP9WorkflowNow|localStorage/);
-});

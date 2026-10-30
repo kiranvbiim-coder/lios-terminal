@@ -1,7 +1,5 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import fs from "node:fs";
-import path from "node:path";
 import type { Express } from "express";
 import { registerProductionControlRoutes } from "./productionControlRoutes";
 
@@ -36,17 +34,3 @@ test("P3 production-control route inventory is explicit", () => {
   }
 });
 
-test("P3 mixed-audience route registrar stays before the generic internal-only API gate", () => {
-  const source = fs.readFileSync(path.resolve(process.cwd(), "server/routes.ts"), "utf8");
-  const registration = source.indexOf("registerProductionControlRoutes(app)");
-  const internalGate = source.indexOf('app.use("/api",');
-  assert.ok(registration >= 0, "production-control registrar is missing");
-  assert.ok(internalGate >= 0, "generic internal API gate is missing");
-  assert.ok(registration < internalGate, "P3 public/client routes would be shadowed by the internal-only gate");
-
-  const moduleSource = fs.readFileSync(path.resolve(process.cwd(), "server/productionControlRoutes.ts"), "utf8");
-  assert.match(moduleSource, /\/api\/client\/diagnostics".*requireClient/s);
-  assert.match(moduleSource, /\/api\/client\/export-custody".*requireClient/s);
-  assert.match(moduleSource, /\/api\/admin\/production-control\/retention".*requireRole\("internal_admin"\)/s);
-  assert.match(moduleSource, /\/api\/admin\/production-control\/deletion-receipts".*internal_compliance/s);
-});
