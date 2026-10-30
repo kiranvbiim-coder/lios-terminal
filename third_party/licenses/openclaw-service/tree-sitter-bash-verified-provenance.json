@@ -1,0 +1,174 @@
+{
+  "verificationCommand": "gh attestation verify <actual cached tree-sitter-bash.wasm> --repo tree-sitter/tree-sitter-bash --source-digest 801326684a26ffc4e749bb016c50c6c30bdfa345 --signer-workflow tree-sitter/workflows/.github/workflows/release.yml --signer-digest 67eb38f65e3a08dc2851fa8575ced44ff2857705 --deny-self-hosted-runners --format json",
+  "actualSha256": "8292919c88a0f7d3fb31d0cd0253ca5a9531bc1ede82b0537f2c63dd8abe6a7a",
+  "signatureVerification": "passed",
+  "binaryCompositionCleared": false,
+  "verified": [
+    {
+      "attestation": {
+        "bundle": {
+          "mediaType": "application/vnd.dev.sigstore.bundle.v0.3+json",
+          "verificationMaterial": {
+            "certificate": {
+              "rawBytes": "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"
+            },
+            "tlogEntries": [
+              {
+                "logIndex": "736865616",
+                "logId": {
+                  "keyId": "wNI9atQGlz+VWfO6LRygH4QUfY/8W4RFwiT5i5WRgB0="
+                },
+                "kindVersion": {
+                  "kind": "dsse",
+                  "version": "0.0.1"
+                },
+                "integratedTime": "1764694825",
+                "inclusionPromise": {
+                  "signedEntryTimestamp": "MEUCIG4eo969mJpX2HEyp3/pNS76fbnj2xpZ+8dqohcZiIY4AiEA8QikomYshoTP+aMlV1pkfnFWtjWaFCWA0EvXG35KoxQ="
+                },
+                "inclusionProof": {
+                  "logIndex": "614961354",
+                  "rootHash": "9yey/IAO4dighcJ/888j0tmlITh130t9/XoOrfg0I2Y=",
+                  "treeSize": "614961356",
+                  "hashes": [
+                    "ffU2v+qR9qzxyxPJkaVhk+j8tcbxjqw+Jcq6qS91v3U=",
+                    "j43PPB/f2l/J+pTPw0ls3jTUXbiER1SkVH+cNwuTrw4=",
+                    "guUM26bNEu+8Ixj4jWOnaCUjo1h1+M3JanjiRR24AwU=",
+                    "y6DjEJd1cnWbmONEQ4nLOGGvztakcAWIhtVdoWK7g18=",
+                    "dmO7Xk5Y/HTSEZwe4gN0ZxGLFTyYgRpL9/PbIlaMHuY=",
+                    "5to90KQul3J5kg4EYZ+8SuWASSxIFl35xUGOFStrWV0=",
+                    "RQVjuSOqk6vmYg6aLm/e40Wtt4prZhYs7plISAGrtLQ=",
+                    "IAqzefsBvUnk+ZJLc+Xl2s8Qtg3awOOQQWXFXWEofW8=",
+                    "q4DOvOIs2+4gSfjR1Tp22oOE7/DRN49mdcyPzsRW7Gg=",
+                    "qJa55BgNHt6854lliiL9fdCauqaLNHcOIkNYHz0kBkQ=",
+                    "Wf0Z+YbBL8mPn9AeMCdcxxuSxc7DuhUVP1iFflyC/hc=",
+                    "huaH1ZSkRyP4+vpmGtpmkkL845lhcmN9io8MIe6Sob0=",
+                    "ZmUkYkHBy1B723JrEgiKvepTdHYrP6y2a4oODYvi5VY=",
+                    "T4DqWD42hAtN+vX8jKCWqoC4meE4JekI9LxYGCcPy1M="
+                  ],
+                  "checkpoint": {
+                    "envelope": "rekor.sigstore.dev - 1193050959916656506\n614961356\n9yey/IAO4dighcJ/888j0tmlITh130t9/XoOrfg0I2Y=\n\n— rekor.sigstore.dev wNI9ajBFAiAiZI3X086lSjuE29g+tf/1jrPgTSrAMI1TOT0LktL03AIhAMWhHYa7QC1b4sbcaQ7cDbY+CQNxLR4i2lL0WFMlL+Ir\n"
+                  }
+                },
+                "canonicalizedBody": "eyJhcGlWZXJzaW9uIjoiMC4wLjEiLCJraW5kIjoiZHNzZSIsInNwZWMiOnsiZW52ZWxvcGVIYXNoIjp7ImFsZ29yaXRobSI6InNoYTI1NiIsInZhbHVlIjoiNTlkOTFkMTI2ZTZlMjc0ZjBhOGQ2ZGY1NDNhYWFjNjgzYTdlZTEyMDRkNTY4N2Y2YjExNjhkY2ExMGY5Yzk0ZCJ9LCJwYXlsb2FkSGFzaCI6eyJhbGdvcml0aG0iOiJzaGEyNTYiLCJ2YWx1ZSI6IjQzMmVmY2E3NDBkMmE1ZGJkYjA1MWNlZTAyNDAyYmM4ZDk3YjExOGMzZTViZjQxMWViNDkwYmE1OGRlZmY3YjMifSwic2lnbmF0dXJlcyI6W3sic2lnbmF0dXJlIjoiTUVVQ0lEM3R5RE5zS2Zva1BYcVdlQmlrZWZXU0RDejB0dVB2TkNudVF2MkFTdWNWQWlFQTV2STl6RUhvNVdQUC9oSmVEL3pLSmdjYllROWJEYVhRMXcwZTdRc25JOTg9IiwidmVyaWZpZXIiOiJMUzB0TFMxQ1JVZEpUaUJEUlZKVVNVWkpRMEZVUlMwdExTMHRDazFKU1VjMWVrTkRRbTAyWjBGM1NVSkJaMGxWV0VWM2EybzRiakY2UzBsaU1FeGhTR3BaZEhOSk9YWjFiRVJqZDBObldVbExiMXBKZW1vd1JVRjNUWGNLVG5wRlZrMUNUVWRCTVZWRlEyaE5UV015Ykc1ak0xSjJZMjFWZFZwSFZqSk5ValIzU0VGWlJGWlJVVVJGZUZaNllWZGtlbVJIT1hsYVV6RndZbTVTYkFwamJURnNXa2RzYUdSSFZYZElhR05PVFdwVmVFMXFRWGxOVkdOM1RVUkpNRmRvWTA1TmFsVjRUV3BCZVUxVVkzaE5SRWt3VjJwQlFVMUdhM2RGZDFsSUNrdHZXa2w2YWpCRFFWRlpTVXR2V2tsNmFqQkVRVkZqUkZGblFVVlZNekkzT1ZZMlRscEdMMjF3WVRsUk1tWnBhMHRQUkRCMlNVeFhiVVphZFRCekwxRUthVmQ1V2tOREszcGpUeTh6YjFsRGNVVndVVVJKTkdKQ2FtUkphWEpxT1haclNVTklRVmh2ZVdOdVltWldibGxzZWpaUFEwSlpNSGRuWjFkS1RVRTBSd3BCTVZWa1JIZEZRaTkzVVVWQmQwbElaMFJCVkVKblRsWklVMVZGUkVSQlMwSm5aM0pDWjBWR1FsRmpSRUY2UVdSQ1owNVdTRkUwUlVablVWVlZZVTFqQ25JMWVVOU9kMUZyYzJaTVpFTnFjMGR3YTFNd05sQnZkMGgzV1VSV1VqQnFRa0puZDBadlFWVXpPVkJ3ZWpGWmEwVmFZalZ4VG1wd1MwWlhhWGhwTkZrS1drUTRkMXBCV1VSV1VqQlNRVkZJTDBKR2IzZFhTVnBYWVVoU01HTklUVFpNZVRsdVlWaFNiMlJYU1hWWk1qbDBURE5TZVZwWFZYUmpNbXd3WkVkV2VRcE1NMlIyWTIxMGJXSkhPVE5qZVRoMVdqSnNNR0ZJVm1sTU0yUjJZMjEwYldKSE9UTmplVGw1V2xkNGJGbFlUbXhNYm14MFlrVkNlVnBYV25wTU1taHNDbGxYVW5wTU1qRm9ZVmMwZDA5UldVdExkMWxDUWtGSFJIWjZRVUpCVVZGeVlVaFNNR05JVFRaTWVUa3dZakowYkdKcE5XaFpNMUp3WWpJMWVreHRaSEFLWkVkb01WbHVWbnBhV0VwcVlqSTFNRnBYTlRCTWJVNTJZbFJCVTBKbmIzSkNaMFZGUVZsUEwwMUJSVU5DUVZKM1pGaE9iMDFFV1VkRGFYTkhRVkZSUWdwbk56aDNRVkZOUlV0RVozZE5WRTE1VG1wWk5FNUhSWGxPYlZwdFdYcFNiRTU2VVRWWmJVbDNUVlJhYWs1VVFtcE9iVTE2VFVkS2ExcHRSWHBPUkZWM0NraG5XVXRMZDFsQ1FrRkhSSFo2UVVKQ1FWRlJWVWhXYVdKSGJIcGhRMEozV1ZkT2NsbFhaR3hqZWtGeFFtZHZja0puUlVWQldVOHZUVUZGUmtKQ2VEQUtZMjFXYkV4WVRuQmtTRkpzWTJrNU1HTnRWbXhNV0U1d1pFaFNiR05wTVdsWldFNXZUVUk0UjBOcGMwZEJVVkZDWnpjNGQwRlJXVVZGV0Vwc1dtNU5kZ3BrUjBadVkzazVNazFETkhsT1V6UjRUVVJ6UjBOcGMwZEJVVkZDWnpjNGQwRlJaMFZNVVhkeVlVaFNNR05JVFRaTWVUa3dZakowYkdKcE5XaFpNMUp3Q21JeU5YcE1iV1J3WkVkb01WbHVWbnBhV0VwcVlqSTFNRnBYTlRCTWJVNTJZbFJDYlVKbmIzSkNaMFZGUVZsUEwwMUJSVXBDUm1kTlZtMW9NR1JJUW5vS1QyazRkbG95YkRCaFNGWnBURzFPZG1KVE9UQmpiVlpzVEZoT2NHUklVbXhqYVRrellqTktjbHB0ZUhaa00wMTJURzFrY0dSSGFERlphVGt6WWpOS2NncGFiWGgyWkROTmRtTnRWbk5hVjBaNldsTTFOV0pYZUVGamJWWnRZM2s1YjFwWFJtdGplVGwwV1Zkc2RVMUVaMGREYVhOSFFWRlJRbWMzT0hkQlVXOUZDa3RuZDI5T2FtUnNXV3BOTkZwcVdURmFWRTVvVFVSb2ExbDZTVFJPVkVadFdWUm5NVTU2Vm1wYVYxRXdUa2RhYlUxcVp6Rk9lbU4zVGxSQlpFSm5iM0lLUW1kRlJVRlpUeTlOUVVWTVFrRTRUVVJYWkhCa1IyZ3hXV2t4YjJJelRqQmFWMUYzVUhkWlMwdDNXVUpDUVVkRWRucEJRa1JCVVhoRVF6bHZaRWhTZHdwamVtOTJUREprY0dSSGFERlphVFZxWWpJd2RtUklTbXhhVXpGNllWaFNNRnBZU1haa1NFcHNXbE14ZW1GWVVqQmFXRWwwV1cxR2VtRkVRVFJDWjI5eUNrSm5SVVZCV1U4dlRVRkZUa0pEYjAxTFJHZDNUVlJOZVU1cVdUUk9SMFY1VG0xYWJWbDZVbXhPZWxFMVdXMUpkMDFVV21wT1ZFSnFUbTFOZWsxSFNtc0tXbTFGZWs1RVZYZEpVVmxMUzNkWlFrSkJSMFIyZWtGQ1JHZFJWRVJDUm5sYVYxcDZURE5TYUZvelRYWmtha0YxVFdwVmRVMVVRVmxDWjI5eVFtZEZSUXBCV1U4dlRVRkZVRUpCYjAxRFJHc3pUV3BqTUU5RVNYaE5RelJIUTJselIwRlJVVUpuTnpoM1FWSkJSVWxCZDJWaFNGSXdZMGhOTmt4NU9XNWhXRkp2Q21SWFNYVlpNamwwVEROU2VWcFhWWFJqTW13d1pFZFdlVTFDWjBkRGFYTkhRVkZSUW1jM09IZEJVa1ZGUTJkM1NVMVVZM2xOUkUweFRWUkpkMkozV1VzS1MzZFpRa0pCUjBSMmVrRkNSV2RTYUVSR09XOWtTRkozWTNwdmRrd3laSEJrUjJneFdXazFhbUl5TUhaa1NFcHNXbE14ZW1GWVVqQmFXRWwyWkVoS2JBcGFVekY2WVZoU01GcFlTWFJaYlVaNllVTTRkVm95YkRCaFNGWnBURE5rZG1OdGRHMWlSemt6WTNrNWQyUlhTbk5oV0U1dlRHNXNkR0pGUW5sYVYxcDZDa3d6VW1oYU0wMTJaR3BCZFUxcVZYVk5WRUUwUW1kdmNrSm5SVVZCV1U4dlRVRkZWRUpEYjAxTFJHZDNUVlJOZVU1cVdUUk9SMFY1VG0xYWJWbDZVbXdLVG5wUk5WbHRTWGROVkZwcVRsUkNhazV0VFhwTlIwcHJXbTFGZWs1RVZYZEdRVmxMUzNkWlFrSkJSMFIyZWtGQ1JrRlJSMFJCVW5ka1dFNXZUVWROUndwRGFYTkhRVkZSUW1jM09IZEJVbFZGVmxGNFZHRklVakJqU0UwMlRIazVibUZZVW05a1YwbDFXVEk1ZEV3elVubGFWMVYwWXpKc01HUkhWbmxNTTFKNUNscFhWWFJqTW13d1pFZFdlVXhYU21oak1tZDJXVmRPTUdGWE9YVmplVGw1WkZjMWVreDZSVFZQUkZreVRucE5NMDlFVVRGTU1rWXdaRWRXZEdOSVVub0tUSHBGZDBabldVdExkMWxDUWtGSFJIWjZRVUpHWjFGSlJFRmFkMlJYU25OaFYwMTNaMWxyUjBOcGMwZEJVVkZDTVc1clEwSkJTVVZsZDFJMVFVaGpRUXBrVVVSa1VGUkNjWGh6WTFKTmJVMWFTR2g1V2xwNlkwTnZhM0JsZFU0ME9ISm1LMGhwYmt0QlRIbHVkV3BuUVVGQlduSm5RV2hsYWtGQlFVVkJkMEpIQ2sxRlVVTkpSV1kwVjJ0WVQxQkRiak5hZFRkdlFtdzBNa2xyV0dWb2RWUmtkRGwwYkRKblUzVkNka0pTZVc5SmNVRnBRVzVRTTNOUVZIaGlTRVE1V2xNS1dESkljVWRQVTJ3eU1VZHVLMUJNY3pOSmQyZExWV1pFWW1sME1rOUVRVXRDWjJkeGFHdHFUMUJSVVVSQmQwNXVRVVJDYTBGcVFqSTNZVkYxVVd0TlNRcDRUMEpITkRObmFtbEROMU5TTDJRNGRreFRTV1JRUWxjeVIxbDRhR3RpVUd4MFYwRTJSalp6YldoS1FrNXRiemt3UW5VMllVODBRMDFGUkZKWVVGTm9Da1JTU1hwRGNEZENaRFZXWm5aelVFWnpkRGxVTDB0Wk5qVTBLMlYzYTNOSlNsSjRkR2hMYVZoYU5YZ3pLeTlyWnpoeFYxWnFhMDVMYjJjOVBRb3RMUzB0TFVWT1JDQkRSVkpVU1VaSlEwRlVSUzB0TFMwdENnPT0ifV19fQ=="
+              }
+            ],
+            "timestampVerificationData": {}
+          },
+          "dsseEnvelope": {
+            "payload": "eyJfdHlwZSI6Imh0dHBzOi8vaW4tdG90by5pby9TdGF0ZW1lbnQvdjEiLCJzdWJqZWN0IjpbeyJuYW1lIjoidHJlZS1zaXR0ZXItYmFzaC50YXIuZ3oiLCJkaWdlc3QiOnsic2hhMjU2IjoiYmQwZDcyODE0YzY1MTJkZTE5MDQzOWNlNjU2MjYzNWM2OWNlMjdmYThiYzU5ZWFmMzgxZDQ0MjYzNTc5ZGYzNiJ9fSx7Im5hbWUiOiJ0cmVlLXNpdHRlci1iYXNoLndhc20iLCJkaWdlc3QiOnsic2hhMjU2IjoiODI5MjkxOWM4OGEwZjdkM2ZiMzFkMGNkMDI1M2NhNWE5NTMxYmMxZWRlODJiMDUzN2YyYzYzZGQ4YWJlNmE3YSJ9fV0sInByZWRpY2F0ZVR5cGUiOiJodHRwczovL3Nsc2EuZGV2L3Byb3ZlbmFuY2UvdjEiLCJwcmVkaWNhdGUiOnsiYnVpbGREZWZpbml0aW9uIjp7ImJ1aWxkVHlwZSI6Imh0dHBzOi8vYWN0aW9ucy5naXRodWIuaW8vYnVpbGR0eXBlcy93b3JrZmxvdy92MSIsImV4dGVybmFsUGFyYW1ldGVycyI6eyJ3b3JrZmxvdyI6eyJyZWYiOiJyZWZzL3RhZ3MvdjAuMjUuMSIsInJlcG9zaXRvcnkiOiJodHRwczovL2dpdGh1Yi5jb20vdHJlZS1zaXR0ZXIvdHJlZS1zaXR0ZXItYmFzaCIsInBhdGgiOiIuZ2l0aHViL3dvcmtmbG93cy9wdWJsaXNoLnltbCJ9fSwiaW50ZXJuYWxQYXJhbWV0ZXJzIjp7ImdpdGh1YiI6eyJldmVudF9uYW1lIjoicHVzaCIsInJlcG9zaXRvcnlfaWQiOiI5NzI3NDgyMSIsInJlcG9zaXRvcnlfb3duZXJfaWQiOiIxNzIwMzUxMiIsInJ1bm5lcl9lbnZpcm9ubWVudCI6ImdpdGh1Yi1ob3N0ZWQifX0sInJlc29sdmVkRGVwZW5kZW5jaWVzIjpbeyJ1cmkiOiJnaXQraHR0cHM6Ly9naXRodWIuY29tL3RyZWUtc2l0dGVyL3RyZWUtc2l0dGVyLWJhc2hAcmVmcy90YWdzL3YwLjI1LjEiLCJkaWdlc3QiOnsiZ2l0Q29tbWl0IjoiODAxMzI2Njg0YTI2ZmZjNGU3NDliYjAxNmM1MGM2YzMwYmRmYTM0NSJ9fV19LCJydW5EZXRhaWxzIjp7ImJ1aWxkZXIiOnsiaWQiOiJodHRwczovL2dpdGh1Yi5jb20vdHJlZS1zaXR0ZXIvd29ya2Zsb3dzLy5naXRodWIvd29ya2Zsb3dzL3JlbGVhc2UueW1sQHJlZnMvaGVhZHMvbWFpbiJ9LCJtZXRhZGF0YSI6eyJpbnZvY2F0aW9uSWQiOiJodHRwczovL2dpdGh1Yi5jb20vdHJlZS1zaXR0ZXIvdHJlZS1zaXR0ZXItYmFzaC9hY3Rpb25zL3J1bnMvMTk4NjY3Mzc4NDUvYXR0ZW1wdHMvMSJ9fX19",
+            "payloadType": "application/vnd.in-toto+json",
+            "signatures": [
+              {
+                "sig": "MEUCID3tyDNsKfokPXqWeBikefWSDCz0tuPvNCnuQv2ASucVAiEA5vI9zEHo5WPP/hJeD/zKJgcbYQ9bDaXQ1w0e7QsnI98="
+              }
+            ]
+          }
+        },
+        "bundle_url": "",
+        "initiator": ""
+      },
+      "verificationResult": {
+        "mediaType": "application/vnd.dev.sigstore.verificationresult+json;version=0.1",
+        "signature": {
+          "certificate": {
+            "certificateIssuer": "CN=sigstore-intermediate,O=sigstore.dev",
+            "subjectAlternativeName": "https://github.com/tree-sitter/workflows/.github/workflows/release.yml@refs/heads/main",
+            "issuer": "https://token.actions.githubusercontent.com",
+            "githubWorkflowTrigger": "push",
+            "githubWorkflowSHA": "801326684a26ffc4e749bb016c50c6c30bdfa345",
+            "githubWorkflowName": "Publish packages",
+            "githubWorkflowRepository": "tree-sitter/tree-sitter-bash",
+            "githubWorkflowRef": "refs/tags/v0.25.1",
+            "buildSignerURI": "https://github.com/tree-sitter/workflows/.github/workflows/release.yml@refs/heads/main",
+            "buildSignerDigest": "67eb38f65e3a08dc2851fa8575ced44ff2857705",
+            "runnerEnvironment": "github-hosted",
+            "sourceRepositoryURI": "https://github.com/tree-sitter/tree-sitter-bash",
+            "sourceRepositoryDigest": "801326684a26ffc4e749bb016c50c6c30bdfa345",
+            "sourceRepositoryRef": "refs/tags/v0.25.1",
+            "sourceRepositoryIdentifier": "97274821",
+            "sourceRepositoryOwnerURI": "https://github.com/tree-sitter",
+            "sourceRepositoryOwnerIdentifier": "17203512",
+            "buildConfigURI": "https://github.com/tree-sitter/tree-sitter-bash/.github/workflows/publish.yml@refs/tags/v0.25.1",
+            "buildConfigDigest": "801326684a26ffc4e749bb016c50c6c30bdfa345",
+            "buildTrigger": "push",
+            "runInvocationURI": "https://github.com/tree-sitter/tree-sitter-bash/actions/runs/19866737845/attempts/1",
+            "sourceRepositoryVisibilityAtSigning": "public"
+          }
+        },
+        "verifiedTimestamps": [
+          {
+            "type": "Tlog",
+            "uri": "https://rekor.sigstore.dev",
+            "timestamp": "2025-12-02T22:30:25+05:30"
+          }
+        ],
+        "verifiedIdentity": {
+          "subjectAlternativeName": {
+            "subjectAlternativeName": "",
+            "regexp": "^https://github\\.com/tree-sitter/workflows/\\.github/workflows/release\\.yml"
+          },
+          "issuer": {
+            "issuer": "",
+            "regexp": ".*"
+          },
+          "runnerEnvironment": "github-hosted"
+        },
+        "statement": {
+          "_type": "https://in-toto.io/Statement/v1",
+          "subject": [
+            {
+              "name": "tree-sitter-bash.tar.gz",
+              "digest": {
+                "sha256": "bd0d72814c6512de190439ce6562635c69ce27fa8bc59eaf381d44263579df36"
+              }
+            },
+            {
+              "name": "tree-sitter-bash.wasm",
+              "digest": {
+                "sha256": "8292919c88a0f7d3fb31d0cd0253ca5a9531bc1ede82b0537f2c63dd8abe6a7a"
+              }
+            }
+          ],
+          "predicateType": "https://slsa.dev/provenance/v1",
+          "predicate": {
+            "buildDefinition": {
+              "buildType": "https://actions.github.io/buildtypes/workflow/v1",
+              "externalParameters": {
+                "workflow": {
+                  "path": ".github/workflows/publish.yml",
+                  "ref": "refs/tags/v0.25.1",
+                  "repository": "https://github.com/tree-sitter/tree-sitter-bash"
+                }
+              },
+              "internalParameters": {
+                "github": {
+                  "event_name": "push",
+                  "repository_id": "97274821",
+                  "repository_owner_id": "17203512",
+                  "runner_environment": "github-hosted"
+                }
+              },
+              "resolvedDependencies": [
+                {
+                  "digest": {
+                    "gitCommit": "801326684a26ffc4e749bb016c50c6c30bdfa345"
+                  },
+                  "uri": "git+https://github.com/tree-sitter/tree-sitter-bash@refs/tags/v0.25.1"
+                }
+              ]
+            },
+            "runDetails": {
+              "builder": {
+                "id": "https://github.com/tree-sitter/workflows/.github/workflows/release.yml@refs/heads/main"
+              },
+              "metadata": {
+                "invocationId": "https://github.com/tree-sitter/tree-sitter-bash/actions/runs/19866737845/attempts/1"
+              }
+            }
+          }
+        }
+      }
+    }
+  ]
+}

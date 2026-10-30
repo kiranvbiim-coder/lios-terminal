@@ -15,6 +15,48 @@ test("ordinary and edited messages retain exact provider identity and text", () 
   assert.equal(result.updates[1].editedAt, "2023-11-14T22:15:00.000Z");
 });
 
+test("both channel families retain native logical identity without requiring sender or username", () => {
+  const result = ok([
+    { update_id: 10, channel_post: message({ chat: { id: -100123, type: "channel", title: "Private channel" }, text: undefined, caption: "caption" }) },
+    { update_id: 11, edited_channel_post: message({ chat: { id: -100123, type: "channel" }, text: undefined, edit_date: 1_700_000_200 }) },
+  ]);
+  assert.equal(result.kind, "updates");
+  if (result.kind !== "updates") return;
+  assert.deepEqual(result.updates.map(update => [update.eventType, update.messageFamily, update.conversationId, update.messageId, update.text]), [
+    ["channel_post", "channel_post", "-100123", "9", "caption"],
+    ["edited_channel_post", "channel_post", "-100123", "9", null],
+  ]);
+  assert.equal(result.updates[1].occurredAt, result.updates[0].occurredAt, "original provider date is not replaced by edit_date");
+  assert.equal(result.updates[1].editedAt, "2023-11-14T22:16:40.000Z");
+});
+
+test("incoming execution identity uses the observed author, never forwarded or compatibility identities", () => {
+  const result = ok([
+    { update_id: 1, message: message({ from: { id: 42 } }) },
+    { update_id: 2, message: message({ from: { id: 42 }, sender_chat: { id: -100123 } }) },
+    { update_id: 3, message: message({ from: { id: 42 }, sender_chat: { id: "invalid" } }) },
+    { update_id: 4, message: message({ forward_origin: { type: "user", sender_user: { id: 42 } } }) },
+    { update_id: 5, channel_post: message({ chat: { id: -100123 } }) },
+    { update_id: 6, business_message: message({ from: { id: 42 } }) },
+    { update_id: 7, message: message({ from: { id: Number.MAX_SAFE_INTEGER + 1 } }) },
+  ]);
+  assert.equal(result.kind, "updates");
+  if (result.kind !== "updates") return;
+  assert.deepEqual(result.updates.map(update => update.senderRef),
+    ["user:42", "chat:-100123", null, null, null, null, null]);
+});
+
+test("zero unsent message IDs and independent business/guest namespaces cannot become durable anchors", () => {
+  const result = ok([
+    { update_id: 1, message: message({ message_id: 0 }) },
+    { update_id: 2, edited_channel_post: message({ guest_query_id: "guest", edit_date: 1_700_000_100 }) },
+    { update_id: 3, edited_message: message({ business_connection_id: "business", edit_date: 1_700_000_100 }) },
+  ]);
+  assert.equal(result.kind, "updates");
+  if (result.kind !== "updates") return;
+  for (const update of result.updates) assert.deepEqual([update.conversationId, update.messageId, update.messageFamily], [null, null, null]);
+});
+
 test("business, guest, inline callback and unknown updates never receive invented identities", () => {
   const result = ok([
     { update_id: 1, business_message: message() },

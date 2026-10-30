@@ -3,6 +3,7 @@ import {
   isTerminalTelegramFailure, listEnabledTelegramPollingTargets, purgeExpiredTelegramMessages, runTelegramPollCycle,
 } from "./telegramConnectionService";
 
+import { startTelegramAutoRunsAfterAdoption } from "./telegramAutoRunRuntime";
 const RECONCILE_MS = 60_000;
 const RETENTION_MS = 60 * 60_000;
 let activeController: TelegramPollingController | null = null;
@@ -20,7 +21,13 @@ export function telegramPollingStatus(connectionId: number) {
  */
 export function startTelegramPollingRuntime(): () => Promise<void> {
   const controller = new TelegramPollingController({
-    cycle: (target, signal) => runTelegramPollCycle(target, signal),
+    cycle: async (target, signal) => {
+      const adopted = await runTelegramPollCycle(target, signal);
+      // Adoption has committed and released its source/Chat locks before canonical run admission.
+      // Discovery failure must not turn an already-durable import into a provider polling failure.
+      await startTelegramAutoRunsAfterAdoption(target.connectionId, signal).catch(() => undefined);
+      return adopted;
+    },
     isTerminalFailure: isTerminalTelegramFailure,
   });
   activeController = controller;

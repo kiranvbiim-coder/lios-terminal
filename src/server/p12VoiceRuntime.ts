@@ -42,7 +42,7 @@ export interface SpeechOutputProvider {
   id: string;
   label: string;
   local: boolean;
-  synthesize(input: { text: string; voiceId: string | null; rate: number }): Promise<{
+  synthesize(input: { text: string; voiceId: string | null; rate: number; signal?: AbortSignal }): Promise<{
     audio: Uint8Array;
     mimeType: string;
     voiceId?: string | null;
@@ -141,10 +141,20 @@ export function listSpeechOutputProviders(): Array<{ id: string; label: string; 
     .sort((a, b) => a.id.localeCompare(b.id));
 }
 
+function assertSpeechOutputActive(signal?: AbortSignal): void {
+  if (!signal?.aborted) return;
+  // Never project caller-owned cancellation reasons (which can contain secrets).
+  const error = new Error("Speech synthesis was cancelled.");
+  error.name = "AbortError";
+  throw error;
+}
+
 export async function synthesizeSpeechOutput(
   text: string,
   preferenceInput: SpeechOutputPreference,
+  signal?: AbortSignal,
 ): Promise<SpeechOutputResult | null> {
+  assertSpeechOutputActive(signal);
   const preference = speechOutputPreferenceSchema.parse(preferenceInput);
   if (!preference.enabled) return null;
   if (!preference.providerId) throw new Error("Speech output is enabled but no provider is selected.");
@@ -156,19 +166,27 @@ export async function synthesizeSpeechOutput(
   const normalized = text.trim();
   if (!normalized) return null;
   if (normalized.length > 50_000) throw new Error("Speech output text exceeds the P12 safety limit.");
-  const result = await provider.synthesize({
-    text: normalized,
-    voiceId: preference.voiceId,
-    rate: preference.rate,
-  });
-  return speechOutputResultSchema.parse({
-    providerId: provider.id,
-    voiceId: result.voiceId ?? preference.voiceId,
-    mimeType: result.mimeType,
-    byteLength: result.audio.byteLength,
-    audio: result.audio,
-    local: provider.local,
-  });
+  try {
+    // Await the provider even after cancellation: its process/temporary-file cleanup must join.
+    const result = await provider.synthesize({
+      text: normalized,
+      voiceId: preference.voiceId,
+      rate: preference.rate,
+      signal,
+    });
+    assertSpeechOutputActive(signal);
+    return speechOutputResultSchema.parse({
+      providerId: provider.id,
+      voiceId: result.voiceId ?? preference.voiceId,
+      mimeType: result.mimeType,
+      byteLength: result.audio.byteLength,
+      audio: result.audio,
+      local: provider.local,
+    });
+  } catch (error) {
+    assertSpeechOutputActive(signal);
+    throw error;
+  }
 }
 
 function rethrowWhisperCppError(error: unknown): never {

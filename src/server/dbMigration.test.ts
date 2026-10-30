@@ -655,3 +655,53 @@ test("repair migration restores ledger tables skipped by a divergent historical 
     { column_name: "project_id", is_nullable: "YES" },
   ]);
 });
+
+test("0087 preserves ambiguous legacy content/custody without guessing namespaces and enforces logical anchors", async t => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), "lios-ingress-identity-migration-"));
+  const migrationsFolder = path.resolve(process.cwd(), "migrations");
+  const legacyFolder = path.join(root, "through-0086");
+  fs.cpSync(migrationsFolder, legacyFolder, { recursive: true });
+  const journalPath = path.join(legacyFolder, "meta", "_journal.json");
+  const journal = JSON.parse(fs.readFileSync(journalPath, "utf8")) as { entries: Array<{ idx: number }> };
+  fs.writeFileSync(journalPath, JSON.stringify({ ...journal, entries: journal.entries.filter(entry => entry.idx < 87) }));
+  const client = new PGlite(path.join(root, "pg"));
+  t.after(async () => { await client.close(); fs.rmSync(root, { recursive: true, force: true }); });
+  const db = drizzle(client, { schema });
+  await migrate(db, { migrationsFolder: legacyFolder });
+  const [user] = await db.insert(schema.users).values({ email: "legacy-ingress@example.test", name: "Legacy owner", passwordHash: "test-hash", role: "internal_admin" }).returning();
+  const [project] = await db.insert(schema.projects).values({ ownerUserId: user.id, name: "Legacy Project" }).returning();
+  const [chat] = await db.insert(schema.projectChats).values({ ownerUserId: user.id, projectId: project.id, scope: "project", title: "Legacy Chat" }).returning();
+  const [source] = await db.insert(schema.sourceConnections).values({ userId: user.id, connectorId: "telegram", sourceType: "private_api", name: "Legacy Telegram", config: {}, credentialRef: "vault:legacy" }).returning();
+  const rows = await db.insert(schema.projectChatMessages).values(["ambiguous retained A", "ambiguous retained B"].map(content => ({
+    chatId: chat.id, role: "user", content,
+    metadata: { channelIngress: { provider: "telegram", sourceConnectionId: source.id, conversationId: "123", messageId: "1", aiTransmissionAllowed: false } },
+  }))).returning();
+  for (const [index, message] of [...rows, null].entries()) await client.query(
+    "insert into channel_ingress_updates (source_connection_id,update_id,event_type,fingerprint,disposition,chat_message_id) values ($1,$2,'message',$3,'adopted',$4)",
+    [source.id, 10 + index, "a".repeat(64), message?.id ?? null],
+  );
+  await client.query("insert into channel_ingress_cursors (source_connection_id,provider,next_offset) values ($1,'telegram',13)", [source.id]);
+
+  await migrate(db, { migrationsFolder });
+  const retained = await client.query<{ content: string }>("select content from project_chat_messages where chat_id=$1 order by id", [chat.id]);
+  assert.deepEqual(retained.rows.map(row => row.content), ["ambiguous retained A", "ambiguous retained B"]);
+  const receipts = await client.query<{ provider_bot_id: string | null; conversation_id: string | null; provider_message_id: string | null; message_anchor: boolean; chat_message_id: number | null }>(
+    "select provider_bot_id,conversation_id,provider_message_id,message_anchor,chat_message_id from channel_ingress_updates where source_connection_id=$1 order by update_id", [source.id],
+  );
+  assert.deepEqual(receipts.rows.map(row => [row.provider_bot_id, row.conversation_id, row.provider_message_id, row.message_anchor, row.chat_message_id]),
+    [[null, null, null, false, rows[0].id], [null, null, null, false, rows[1].id], [null, null, null, false, null]]);
+  const cursor = await client.query<{ next_offset: number; provider_bot_id: string | null; token_fingerprint: string | null }>(
+    "select next_offset,provider_bot_id,token_fingerprint from channel_ingress_cursors where source_connection_id=$1", [source.id],
+  );
+  assert.deepEqual(cursor.rows.map(row => [Number(row.next_offset), row.provider_bot_id, row.token_fingerprint]), [[13, null, null]]);
+  await assert.rejects(client.query("update channel_ingress_cursors set provider_bot_id='123456' where source_connection_id=$1", [source.id]), /channel_ingress_cursors_namespace_ck/);
+  await assert.rejects(client.query("update channel_ingress_updates set message_anchor=true where source_connection_id=$1", [source.id]), /channel_ingress_update_logical_ck/);
+  await client.query(
+    "insert into channel_ingress_updates (source_connection_id,provider_bot_id,update_id,event_type,fingerprint,disposition,reason,conversation_id,provider_message_id,message_family,provider_occurred_at,message_anchor) values ($1,'123456',20,'message',$2,'ignored','no_text','123','7','message','2026-10-29',true)",
+    [source.id, "b".repeat(64)],
+  );
+  await assert.rejects(client.query(
+    "insert into channel_ingress_updates (source_connection_id,provider_bot_id,update_id,event_type,fingerprint,disposition,reason,conversation_id,provider_message_id,message_family,provider_occurred_at,message_anchor) values ($1,'123456',21,'channel_post',$2,'ignored','no_text','123','7','channel_post','2026-10-29',true)",
+    [source.id, "c".repeat(64)],
+  ), /channel_ingress_message_anchor_unique/, "family changes cannot create a second logical anchor");
+});

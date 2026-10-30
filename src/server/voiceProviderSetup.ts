@@ -130,6 +130,7 @@ function registerMacSayProvider(): void {
     label: "LiOS Local Voice (macOS)",
     local: true,
     async synthesize(input) {
+      input.signal?.throwIfAborted();
       const stamp = `${process.pid}-${Date.now()}-${crypto.randomUUID()}`;
       const aiffPath = path.join(os.tmpdir(), `lios-speak-${stamp}.aiff`);
       const wavPath = path.join(os.tmpdir(), `lios-speak-${stamp}.wav`);
@@ -138,17 +139,29 @@ function registerMacSayProvider(): void {
         const sayArgs = ["-o", aiffPath, "-r", String(rateWpm)];
         if (input.voiceId) sayArgs.push("-v", input.voiceId);
         sayArgs.push(input.text);
-        await runCommand({ argv: [sayBin, ...sayArgs], timeoutMs: 30_000, maxOutputChars: 64 * 1024 });
+        await runCommand({
+          argv: [sayBin, ...sayArgs],
+          timeoutMs: 30_000,
+          maxOutputChars: 64 * 1024,
+          signal: input.signal,
+        });
+        input.signal?.throwIfAborted();
         await runCommand({
           argv: [afconvertBin, "-f", "WAVE", "-d", "LEI16@22050", "-c", "1", aiffPath, wavPath],
           timeoutMs: 30_000,
           maxOutputChars: 64 * 1024,
+          signal: input.signal,
         });
+        input.signal?.throwIfAborted();
         const audio = fs.readFileSync(wavPath);
-        return { audio: new Uint8Array(audio), mimeType: "audio/wav", voiceId: input.voiceId ?? null };
+        return { audio, mimeType: "audio/wav", voiceId: input.voiceId ?? null };
       } finally {
-        fs.rmSync(aiffPath, { force: true });
-        fs.rmSync(wavPath, { force: true });
+        // runCommand joins native extinction before this owned-file cleanup.
+        try {
+          fs.rmSync(aiffPath, { force: true });
+        } finally {
+          fs.rmSync(wavPath, { force: true });
+        }
       }
     },
   };

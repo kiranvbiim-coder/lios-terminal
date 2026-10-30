@@ -55,3 +55,19 @@ test("P9 notification hint invalidates every cached Project notification view, b
   assert.equal(reconnected.getQueryState(ownerProject)?.isInvalidated, true,
     "a reconnect must reconcile notifications that arrived while disconnected");
 });
+
+test("background conversation hints refresh retained messages and source counts without rerunning unrelated Project work", () => {
+  const client = new QueryClient();
+  const changed = [
+    ["/api/project-chats", 4, "messages"], ["/api/quick-chats"], ["/api/setup/telegram-connections"],
+    ["/api/projects"], ["/api/projects", 3, "home"], ["/api/projects", 3, "chats"],
+  ];
+  const unrelated = [
+    ["/api/projects", 3, "resources"], ["/api/projects", 3, "automation", "workflows"],
+    ["/api/artifacts", "retained-report"], ["/api/unrelated"],
+  ];
+  for (const key of [...changed, ...unrelated]) client.setQueryData(key, { current: true });
+  invalidateTopics(client, ["conversations"]);
+  for (const key of changed) assert.equal(client.getQueryState(key)?.isInvalidated, true, JSON.stringify(key));
+  for (const key of unrelated) assert.equal(client.getQueryState(key)?.isInvalidated, false, JSON.stringify(key));
+});

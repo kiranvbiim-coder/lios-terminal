@@ -3,8 +3,24 @@ import { z } from "zod";
 export const TELEGRAM_CONNECTOR_ID = "telegram" as const;
 export const TELEGRAM_CONNECTION_CONSENT_VERSION = "telegram-channel-data/1";
 export const TELEGRAM_OUTBOUND_CONSENT_VERSION = "telegram-reviewed-outbound/1";
+export const TELEGRAM_EXECUTION_CONSENT_VERSION = "telegram-incoming-execution/1";
 const uuid = z.string().uuid();
 const conversationId = z.string().regex(/^-?[1-9][0-9]{0,19}$/);
+
+/** Limits constrain canonical incoming work; they do not grant tool effects or outbound permission. */
+export const telegramAutoRunPolicySchema = z.object({
+  enabled: z.boolean(),
+  allowedSenderRefs: z.array(z.string().regex(/^(?:user:[1-9][0-9]{0,19}|chat:-?[1-9][0-9]{0,19})$/)).max(100),
+  maxRunsPerHour: z.number().int().min(1).max(12).default(2),
+  maxRunsPerDay: z.number().int().min(1).max(100).default(10),
+  maxAiCalls: z.number().int().min(1).max(4).default(2),
+  maxSteps: z.number().int().min(1).max(8).default(4),
+  maxDurationMs: z.number().int().min(1_000).max(120_000).default(60_000),
+}).strict().superRefine((policy, ctx) => {
+  if (policy.enabled && policy.allowedSenderRefs.length === 0) ctx.addIssue({ code: "custom", path: ["allowedSenderRefs"], message: "Explicit allowed actors are required." });
+  if (new Set(policy.allowedSenderRefs).size !== policy.allowedSenderRefs.length) ctx.addIssue({ code: "custom", path: ["allowedSenderRefs"], message: "Entries must be unique." });
+});
+export type TelegramAutoRunPolicy = z.infer<typeof telegramAutoRunPolicySchema>;
 
 /** Source-connection metadata only; neither this policy nor a worker message grants execution or AI rights. */
 export const telegramConnectionPolicySchema = z.object({
@@ -19,10 +35,13 @@ export const telegramConnectionPolicySchema = z.object({
   // Additional current source/AI and exact-operation checks remain mandatory before transmission/effects.
   allowAiTransmission: z.boolean().default(false),
   allowOutbound: z.boolean().default(false),
+  // Absent in legacy policies: never inferred from import, AI visibility or outbound permission.
+  autoRun: telegramAutoRunPolicySchema.optional(),
 }).strict().superRefine((policy, ctx) => {
   for (const key of ["allowedConversationIds", "allowedUpdateTypes"] as const) {
     if (new Set(policy[key]).size !== policy[key].length) ctx.addIssue({ code: "custom", path: [key], message: "Entries must be unique." });
   }
+  if (policy.autoRun?.enabled && !policy.allowAiTransmission) ctx.addIssue({ code: "custom", path: ["allowAiTransmission"], message: "Incoming AI execution requires AI transmission permission." });
 });
 export type TelegramConnectionPolicy = z.infer<typeof telegramConnectionPolicySchema>;
 
@@ -53,6 +72,9 @@ export function telegramConsentScope(accountBindingId: string): string {
 export function telegramOutboundConsentScope(accountBindingId: string): string {
   return `channel:telegram:${uuid.parse(accountBindingId)}:outbound`;
 }
+export function telegramExecutionConsentScope(accountBindingId: string): string {
+  return `channel:telegram:${uuid.parse(accountBindingId)}:execution`;
+}
 
 /** Adoption-time AI opt-in is necessary, not sufficient: Home must also admit current source/consent/work policy. */
 export function channelMessageExcludedFromAi(metadata: unknown): boolean {
@@ -76,10 +98,16 @@ export const telegramConnectInputSchema = z.object({
   allowAiTransmission: z.boolean().default(false),
   allowOutbound: z.boolean().default(false),
   outboundConsent: z.boolean().optional(),
+  autoRun: telegramAutoRunPolicySchema.optional(),
+  autoRunConsent: z.boolean().optional(),
   // Explicit, versioned data-use consent: Telegram content imported into this Chat, optionally AI-visible per policy.
   consent: z.literal(true),
 }).strict().superRefine((value, ctx) => {
   if (value.allowOutbound && value.outboundConsent !== true) ctx.addIssue({ code: "custom", path: ["outboundConsent"], message: "Reviewed outbound use requires explicit consent." });
+  if (value.autoRun?.enabled) {
+    if (!value.allowAiTransmission) ctx.addIssue({ code: "custom", path: ["allowAiTransmission"], message: "Incoming AI execution requires AI transmission permission." });
+    if (value.autoRunConsent !== true) ctx.addIssue({ code: "custom", path: ["autoRunConsent"], message: "Incoming AI execution requires separate explicit consent." });
+  }
 });
 export type TelegramConnectInput = z.infer<typeof telegramConnectInputSchema>;
 

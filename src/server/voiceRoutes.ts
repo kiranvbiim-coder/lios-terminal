@@ -113,26 +113,44 @@ export function registerVoiceRoutes(app: Express): void {
   });
 
   app.post("/api/voice/speak", requireAuth, async (req: Request, res: Response) => {
-    let body: z.infer<typeof speakBodySchema>;
+    const controller = new AbortController();
+    const abort = () => controller.abort();
+    const onClose = () => {
+      if (!res.writableEnded) abort();
+    };
+    const onTimeout = () => {
+      abort();
+      if (!res.destroyed && !res.writableEnded) res.destroy();
+    };
+    // IncomingMessage "close" also fires on normal request-body completion.
+    // Only a request abort or a prematurely closed response revokes synthesis.
+    req.once("aborted", abort);
+    res.once("close", onClose);
+    res.once("timeout", onTimeout);
+    const canRespond = () => !controller.signal.aborted && !req.aborted
+      && !res.destroyed && !res.writableEnded && !res.headersSent;
     try {
-      body = speakBodySchema.parse(req.body);
-    } catch (error) {
-      res.status(400).json({ error: error instanceof Error ? error.message : "Invalid request." });
-      return;
-    }
-    const defaultProviderId = body.preference?.providerId ?? listSpeechOutputProviders()[0]?.id ?? null;
-    if (!defaultProviderId) {
-      res.status(404).json({ error: "No speech output provider is registered." });
-      return;
-    }
-    try {
+      if (!canRespond()) return;
+      let body: z.infer<typeof speakBodySchema>;
+      try {
+        body = speakBodySchema.parse(req.body);
+      } catch (error) {
+        res.status(400).json({ error: error instanceof Error ? error.message : "Invalid request." });
+        return;
+      }
+      const defaultProviderId = body.preference?.providerId ?? listSpeechOutputProviders()[0]?.id ?? null;
+      if (!defaultProviderId) {
+        res.status(404).json({ error: "No speech output provider is registered." });
+        return;
+      }
       const result = await synthesizeSpeechOutput(body.text, {
         enabled: true,
         providerId: defaultProviderId,
         voiceId: body.preference?.voiceId ?? null,
         rate: body.preference?.rate ?? 1,
         localOnly: body.preference?.localOnly ?? false,
-      });
+      }, controller.signal);
+      if (!canRespond()) return;
       if (!result) {
         res.status(404).json({ error: "No speech output provider is registered." });
         return;
@@ -140,9 +158,12 @@ export function registerVoiceRoutes(app: Express): void {
       res.setHeader("Content-Type", result.mimeType);
       res.setHeader("Content-Length", String(result.byteLength));
       res.send(Buffer.from(result.audio));
-    } catch (error) {
-      const message = error instanceof Error ? error.message : "Speech synthesis failed.";
-      res.status(422).json({ error: message });
+    } catch {
+      if (canRespond()) res.status(422).json({ error: "Speech synthesis failed." });
+    } finally {
+      req.removeListener("aborted", abort);
+      res.removeListener("close", onClose);
+      res.removeListener("timeout", onTimeout);
     }
   });
 }

@@ -824,3 +824,24 @@ test("each routed provider call rechecks its conversation source release before 
     restoreEnv("OPENAI_API_KEY", previousKey);
   }
 });
+
+test("incoming execution forbids fallback and shares its physical dispatch ceiling with nested direct calls", async () => {
+  await withProviderKeys(async contacted => {
+    let admitted = 0;
+    const budget = async () => {
+      if (admitted >= 1) throw new AIProviderError("policy_denied", "Incoming dispatch limit reached.");
+      admitted++;
+    };
+    await withConversationExecutionScope(crypto.randomUUID(), async () => {
+      await assert.rejects(invokeAIRoutedCompletion({
+        preferredProvider: "openai", fallback: "configured", maxAttempts: 3, messages: question,
+      }), error => assertProviderError(error, "rate_limited").provider === "openai");
+      await withConversationExecutionScope(crypto.randomUUID(), async () => {
+        await assert.rejects(invokeAIProvider({ provider: "gemini", messages: question }),
+          error => assertProviderError(error, "policy_denied").code === "policy_denied");
+      });
+    }, undefined, undefined, budget);
+    assert.equal(admitted, 1);
+    assert.deepEqual(contacted, ["openai"], "neither connected fallback nor a delegated direct call can bypass incoming limits");
+  });
+});

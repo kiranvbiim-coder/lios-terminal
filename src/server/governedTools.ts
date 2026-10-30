@@ -24,6 +24,7 @@ import type { RuntimePermissionClass, RuntimePermissionDecision } from "@shared/
 import { assertNotAborted } from "./conversationRuntimeCore";
 import { consumeGovernedToolAuthorization, snapshotGovernedToolInput } from "./conversationGrantStore";
 import type { ConsumedGovernedToolAuthorization } from "./conversationGrantStore";
+import { currentConversationToolExecutionGuard } from "./exec/execution-scope";
 
 export type ToolAccessClass = "read" | "write";
 export type ToolSideEffect = "none" | "internal_write" | "external";
@@ -357,6 +358,9 @@ export class GovernedToolRegistry<TKind extends string, TResult> {
       });
     }
     assertNotAborted(signal);
+    const scopeGuard = currentConversationToolExecutionGuard();
+    if (scopeGuard) await scopeGuard();
+    assertNotAborted(signal);
     let authorized: ConsumedGovernedToolAuthorization | null = null;
     if (tool.permissionClass !== "safe_auto") {
       if (!call.authorization || call.userId === undefined || call.projectId === undefined || call.chatId === undefined
@@ -393,12 +397,15 @@ export class GovernedToolRegistry<TKind extends string, TResult> {
         await call.beforeExternalDispatch!();
         // A cancellation observed here is provably pre-effect: tool.invoke has not been entered.
         try {
+          if (scopeGuard) await scopeGuard();
           assertNotAborted(invocationSignal);
         } catch (error) {
           await call.markExternalDispatchNoEffect?.();
           throw error;
         }
       }
+      if (!externalDispatch && scopeGuard) await scopeGuard();
+      assertNotAborted(invocationSignal);
       const result = await tool.invoke(parsedInput, invocationSignal, call);
       assertNotAborted(invocationSignal);
       if (authorized) authorized.authorization.lease.assertCurrent(authorized.currentPolicy(), call.nowMs);
@@ -417,9 +424,11 @@ export class GovernedToolRegistry<TKind extends string, TResult> {
           }
         }
         if (externalDispatch) await call.afterExternalDispatchCommitted!();
+        if (scopeGuard) await scopeGuard();
         return parsed.data;
       }
       if (externalDispatch) await call.afterExternalDispatchCommitted!();
+      if (scopeGuard) await scopeGuard();
       return result;
     } finally {
       lease?.close();

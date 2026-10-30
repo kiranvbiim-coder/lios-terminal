@@ -483,10 +483,14 @@ export const channelIngressCursors = pgTable("channel_ingress_cursors", {
   sourceConnectionId: integer("source_connection_id").primaryKey().references(() => sourceConnections.id, { onDelete: "cascade" }),
   provider: text("provider").notNull(),
   nextOffset: bigint("next_offset", { mode: "number" }).notNull().default(0),
+  // Null only for pre-namespace migrations; never infer a legacy bot from today's credential.
+  providerBotId: text("provider_bot_id"),
+  tokenFingerprint: text("token_fingerprint"),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 }, (table) => [
   check("channel_ingress_cursors_provider_ck", sql`${table.provider} = 'telegram'`),
   check("channel_ingress_cursors_offset_ck", sql`${table.nextOffset} >= 0 AND ${table.nextOffset} <= 9007199254740991`),
+  check("channel_ingress_cursors_namespace_ck", sql`(${table.providerBotId} IS NULL AND ${table.tokenFingerprint} IS NULL) OR (${table.providerBotId} IS NOT NULL AND ${table.tokenFingerprint} IS NOT NULL AND ${table.providerBotId} ~ '^[1-9][0-9]{0,19}$' AND ${table.tokenFingerprint} ~ '^[a-f0-9]{64}$')`),
 ]);
 
 // Replay custody that survives Chat clearing: identity, content fingerprint and minimal disposition only.
@@ -500,14 +504,39 @@ export const channelIngressUpdates = pgTable("channel_ingress_updates", {
   disposition: text("disposition").notNull(),
   reason: text("reason"),
   chatMessageId: integer("chat_message_id").references(() => projectChatMessages.id, { onDelete: "set null" }),
+  providerBotId: text("provider_bot_id"),
+  conversationId: text("conversation_id"),
+  providerMessageId: text("provider_message_id"),
+  messageFamily: text("message_family"),
+  providerOccurredAt: timestamp("provider_occurred_at"),
+  providerEditedAt: timestamp("provider_edited_at"),
+  // One immutable origin receipt survives clear/retention with a null canonical message FK.
+  messageAnchor: boolean("message_anchor").notNull().default(false),
+  // Permanent admission tombstone. Clearing Chat content never clears or reassigns an execution claim.
+  executionRequestId: text("execution_request_id"),
+  executionInputSha256: text("execution_input_sha256"),
+  executionChatId: integer("execution_chat_id").references(() => projectChats.id, { onDelete: "set null" }),
+  executionClaimedAt: timestamp("execution_claimed_at"),
+  executionSettledAt: timestamp("execution_settled_at"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
 }, (table) => [
   uniqueIndex("channel_ingress_update_identity_unique").on(table.sourceConnectionId, table.updateId),
   index("channel_ingress_update_message_idx").on(table.chatMessageId),
-  check("channel_ingress_update_disposition_ck", sql`${table.disposition} IN ('adopted','ignored')`),
+  uniqueIndex("channel_ingress_message_anchor_unique").on(table.sourceConnectionId, table.providerBotId, table.conversationId, table.providerMessageId).where(sql`${table.messageAnchor} = true`),
+  index("channel_ingress_logical_message_idx").on(table.sourceConnectionId, table.providerBotId, table.conversationId, table.providerMessageId),
+  uniqueIndex("channel_ingress_execution_request_unique").on(table.executionRequestId).where(sql`${table.executionRequestId} IS NOT NULL`),
+  uniqueIndex("channel_ingress_execution_source_inflight_unique").on(table.sourceConnectionId).where(sql`${table.executionRequestId} IS NOT NULL AND ${table.executionSettledAt} IS NULL`),
+  uniqueIndex("channel_ingress_execution_chat_inflight_unique").on(table.executionChatId).where(sql`${table.executionRequestId} IS NOT NULL AND ${table.executionSettledAt} IS NULL`),
+  index("channel_ingress_execution_budget_idx").on(table.sourceConnectionId, table.executionClaimedAt),
+  check("channel_ingress_update_disposition_ck", sql`${table.disposition} IN ('adopted','edited','ignored')`),
   check("channel_ingress_update_fingerprint_ck", sql`length(${table.fingerprint}) = 64`),
   check("channel_ingress_update_id_ck", sql`${table.updateId} >= 0 AND ${table.updateId} < 9007199254740991`),
-  check("channel_ingress_update_adopted_ck", sql`${table.disposition} <> 'adopted' OR ${table.reason} IS NULL`),
+  check("channel_ingress_update_adopted_ck", sql`${table.disposition} NOT IN ('adopted','edited') OR ${table.reason} IS NULL`),
+  check("channel_ingress_update_namespace_ck", sql`${table.providerBotId} IS NULL OR ${table.providerBotId} ~ '^[1-9][0-9]{0,19}$'`),
+  check("channel_ingress_update_logical_ck", sql`(${table.conversationId} IS NULL AND ${table.providerMessageId} IS NULL AND ${table.messageFamily} IS NULL AND ${table.providerOccurredAt} IS NULL AND ${table.providerEditedAt} IS NULL AND ${table.messageAnchor} = false) OR (${table.providerBotId} IS NOT NULL AND ${table.conversationId} IS NOT NULL AND ${table.providerMessageId} IS NOT NULL AND ${table.messageFamily} IS NOT NULL AND ${table.conversationId} ~ '^-?[1-9][0-9]{0,19}$' AND ${table.providerMessageId} ~ '^[1-9][0-9]{0,19}$' AND ${table.messageFamily} IN ('message','channel_post') AND ${table.providerOccurredAt} IS NOT NULL)`),
+  check("channel_ingress_update_anchor_ck", sql`${table.messageAnchor} = false OR ${table.eventType} IN ('message','channel_post')`),
+  check("channel_ingress_execution_claim_ck", sql`(${table.executionRequestId} IS NULL AND ${table.executionInputSha256} IS NULL AND ${table.executionClaimedAt} IS NULL AND ${table.executionChatId} IS NULL AND ${table.executionSettledAt} IS NULL) OR (${table.executionRequestId} IS NOT NULL AND ${table.executionInputSha256} IS NOT NULL AND ${table.executionClaimedAt} IS NOT NULL AND ${table.disposition} = 'adopted' AND ${table.messageAnchor} = true AND ${table.executionRequestId} ~ '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$' AND ${table.executionInputSha256} ~ '^[a-f0-9]{64}$')`),
+  check("channel_ingress_execution_settlement_ck", sql`${table.executionSettledAt} IS NULL OR (${table.executionClaimedAt} IS NOT NULL AND ${table.executionSettledAt} >= ${table.executionClaimedAt})`),
 ]);
 export type ChannelIngressUpdate = typeof channelIngressUpdates.$inferSelect;
 // Hosted credentials are tenant-scoped encrypted records. The ciphertext is

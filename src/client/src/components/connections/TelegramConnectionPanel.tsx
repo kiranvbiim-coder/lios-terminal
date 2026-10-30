@@ -3,6 +3,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
 import { useProjectChats, useProjects } from "@/lib/useProjects";
 import { buildTelegramConnectRequest, type TelegramConnectForm } from "@/lib/telegramConnectionForm";
+import type { TelegramAutoRunPolicy } from "@shared/telegramConnection";
 
 interface TelegramConnectionSummary {
   connectionId: number;
@@ -14,6 +15,9 @@ interface TelegramConnectionSummary {
   retentionDays: number;
   allowAiTransmission: boolean;
   allowOutbound: boolean;
+  autoRun: TelegramAutoRunPolicy | null;
+  autoRunConsentActive: boolean;
+  autoRunCounts: { claimedLastHour: number; claimedLastDay: number; unsettled: number };
   consentActive: boolean;
   credentialPresent: boolean;
   nextOffset: number;
@@ -24,12 +28,18 @@ const QUERY_KEY = ["/api/setup/telegram-connections"];
 const EMPTY: TelegramConnectForm = {
   name: "", botToken: "", projectId: null, chatId: null, conversationIds: "", retentionDays: "30",
   allowAiTransmission: false, consent: false, allowOutbound: false, outboundConsent: false,
+  autoRunEnabled: false, autoRunSenderRefs: "", autoRunMaxRunsPerHour: "2", autoRunMaxRunsPerDay: "10",
+  autoRunMaxAiCalls: "2", autoRunMaxSteps: "4", autoRunMaxDurationSeconds: "60", autoRunConsent: false,
 };
 const field = "mt-1 block min-h-11 w-full rounded-md border border-border bg-background px-3 py-2 font-ui text-sm text-foreground focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary";
 
 function state(connection: TelegramConnectionSummary): { label: string; tone: string } {
   if (!connection.enabled) return { label: "Disconnected", tone: "text-muted-foreground" };
   if (!connection.consentActive || !connection.credentialPresent) return { label: "Needs attention", tone: "text-amber-300" };
+  if (connection.polling?.lastFailure === "namespace_reconnect_required") return {
+    label: "Stopped — the bot identity cannot safely reuse this message history. Disconnect and create a new named connection; existing imported messages remain.",
+    tone: "text-rose-300",
+  };
   switch (connection.polling?.state) {
     case "polling": return { label: "Connected — importing", tone: "text-emerald-400" };
     case "backoff": return { label: "Connected — retrying after a temporary problem", tone: "text-amber-300" };
@@ -68,11 +78,11 @@ export default function TelegramConnectionPanel() {
     try {
       await apiRequest("POST", "/api/setup/telegram-connections", built.request);
       setForm(EMPTY);
-      setNotice({ ok: true, text: "Saved. Home imports allowed messages shortly. Sending is available only if explicitly enabled and separately approved for the exact message in Chat." });
+      setNotice({ ok: true, text: "Saved. Home imports allowed messages shortly. Incoming AI work runs only with its separate opt-in and limits. Sending still requires approval for the exact message in Chat." });
       await qc.invalidateQueries({ queryKey: QUERY_KEY });
-    } catch (error) {
-      // The server returns a sanitized sentence only; the token is never echoed.
-      setNotice({ ok: false, text: error instanceof Error ? error.message.replace(/^\d+:\s*/, "") : "The Telegram connection could not be saved." });
+    } catch {
+      // Never display arbitrary transport/provider errors: they may contain submitted credential material.
+      setNotice({ ok: false, text: "The Telegram connection could not be saved. Check the input and protected credential store, then retry." });
     } finally {
       setForm(current => ({ ...current, botToken: "" }));
       setBusy(false);
@@ -85,7 +95,7 @@ export default function TelegramConnectionPanel() {
     try {
       await apiRequest("DELETE", `/api/setup/telegram-connections/${id}`);
       setConfirmId(null);
-      setNotice({ ok: true, text: "Disconnected. Polling stopped, consent was revoked and the bot token was deleted. Imported messages stay in your Chat." });
+      setNotice({ ok: true, text: "Disconnected. Polling stopped, import, incoming execution and outbound consent were revoked, and the bot token was deleted. Imported messages stay in your Chat." });
       await qc.invalidateQueries({ queryKey: QUERY_KEY });
     } catch {
       setNotice({ ok: false, text: "The connection could not be disconnected. It remains listed; retry." });
@@ -126,6 +136,12 @@ export default function TelegramConnectionPanel() {
                 <div><dt className="inline">Retention: </dt><dd className="inline text-foreground">imported messages older than {connection.retentionDays} days are removed hourly</dd></div>
                 <div><dt className="inline">AI can read imported text: </dt><dd className="inline text-foreground">{connection.allowAiTransmission ? "Yes" : "No"}</dd></div>
                 <div><dt className="inline">Replies to Telegram: </dt><dd className="inline text-foreground">{connection.allowOutbound ? "Exact message approval required in this Project Chat" : "Off"}</dd></div>
+                <div><dt className="inline">Automatic incoming AI work: </dt><dd className="inline text-foreground">{connection.autoRun?.enabled ? (connection.enabled && connection.consentActive && connection.autoRunConsentActive && connection.credentialPresent ? "Opted in — current authority and limits still checked per message" : "Opted in, unavailable until current authority/consent is restored") : "Off (default)"}</dd></div>
+                {connection.autoRun?.enabled && <>
+                  <div><dt className="inline">Allowed actors: </dt><dd className="inline text-foreground">{connection.autoRun.allowedSenderRefs.join(", ")}</dd></div>
+                  <div><dt className="inline">Incoming limits: </dt><dd className="inline text-foreground">{connection.autoRun.maxRunsPerHour}/rolling hour · {connection.autoRun.maxRunsPerDay}/rolling day · {connection.autoRun.maxAiCalls} AI calls · {connection.autoRun.maxSteps} steps · {connection.autoRun.maxDurationMs / 1_000}s/run</dd></div>
+                  <div><dt className="inline">Admitted/claimed attempts: </dt><dd className="inline text-foreground">{connection.autoRunCounts.claimedLastHour} this rolling hour · {connection.autoRunCounts.claimedLastDay} this rolling day · {connection.autoRunCounts.unsettled} unsettled (may be interrupted; not proof of live AI or a result)</dd></div>
+                </>}
               </dl>
               {connection.enabled && (!connection.consentActive || !connection.credentialPresent) && (
                 <p role="alert" className="mt-2 text-sm text-amber-200">This connection is not importing: {connection.consentActive ? "its bot token is missing" : "its data-use consent was revoked"}. Disconnect and reconnect to repair it.</p>
@@ -156,6 +172,29 @@ export default function TelegramConnectionPanel() {
         <label className="flex min-h-11 items-start gap-2 font-ui text-sm text-muted-foreground">
           <input type="checkbox" className="mt-1" checked={form.allowAiTransmission} onChange={event => update({ allowAiTransmission: event.target.checked })} />
           <span>Let LiOS include imported messages in AI model context (off by default; sends text to your AI provider).</span></label>
+        <fieldset className="space-y-2 rounded-md border border-border p-3">
+          <legend className="px-1 font-ui text-sm font-medium text-foreground">Automatic incoming AI work — off by default</legend>
+          <p className="font-ui text-sm text-muted-foreground">Importing, AI execution and sending are separate permissions. Eligible new original messages from explicit actors can start bounded work in this Project Chat. This uses your configured AI provider and may incur provider usage charges; limits are not a currency quote. Consequential tools and external sends still need exact approval. Edits do not start new work; claimed or interrupted messages are not automatically replayed.</p>
+          <p className="font-ui text-sm text-muted-foreground">Default limits if enabled: 2 runs per rolling hour, 10 per rolling day, 2 AI calls, 4 steps and 60 seconds per run. No actors are allowed until you explicitly enter them.</p>
+          <label className="flex min-h-11 items-start gap-2 font-ui text-sm text-muted-foreground">
+            <input type="checkbox" className="mt-1" checked={form.autoRunEnabled} onChange={event => update({ autoRunEnabled: event.target.checked, autoRunConsent: false })} />
+            <span>Enable automatic incoming AI work for this connection.</span></label>
+          {form.autoRunEnabled && <>
+            <label className="block"><span className="font-ui text-sm text-muted-foreground">Explicit allowed actors (comma separated: user:123 or chat:-456)</span>
+              <input className={field} value={form.autoRunSenderRefs} maxLength={3_000} onChange={event => update({ autoRunSenderRefs: event.target.value })} /></label>
+            <p className="font-ui text-sm text-muted-foreground">user: matches that sender; chat: matches a sending chat/channel identity, not every participant in that conversation. The message must also pass the connection’s allowed chat IDs.</p>
+            <div className="grid gap-2 sm:grid-cols-2">
+              <label className="block"><span className="font-ui text-sm text-muted-foreground">Runs per rolling hour (1–12)</span><input type="number" min={1} max={12} step={1} className={field} value={form.autoRunMaxRunsPerHour} onChange={event => update({ autoRunMaxRunsPerHour: event.target.value })} /></label>
+              <label className="block"><span className="font-ui text-sm text-muted-foreground">Runs per rolling day (1–100)</span><input type="number" min={1} max={100} step={1} className={field} value={form.autoRunMaxRunsPerDay} onChange={event => update({ autoRunMaxRunsPerDay: event.target.value })} /></label>
+              <label className="block"><span className="font-ui text-sm text-muted-foreground">AI calls per run (1–4)</span><input type="number" min={1} max={4} step={1} className={field} value={form.autoRunMaxAiCalls} onChange={event => update({ autoRunMaxAiCalls: event.target.value })} /></label>
+              <label className="block"><span className="font-ui text-sm text-muted-foreground">Steps per run (1–8)</span><input type="number" min={1} max={8} step={1} className={field} value={form.autoRunMaxSteps} onChange={event => update({ autoRunMaxSteps: event.target.value })} /></label>
+              <label className="block"><span className="font-ui text-sm text-muted-foreground">Duration per run, seconds (1–120)</span><input type="number" min={1} max={120} step={1} className={field} value={form.autoRunMaxDurationSeconds} onChange={event => update({ autoRunMaxDurationSeconds: event.target.value })} /></label>
+            </div>
+            <label className="flex min-h-11 items-start gap-2 font-ui text-sm text-foreground">
+              <input type="checkbox" className="mt-1" checked={form.autoRunConsent} onChange={event => update({ autoRunConsent: event.target.checked })} />
+              <span>I separately consent to incoming AI execution for these actors under these limits, including sending eligible text to my configured AI provider and its usage charges. This does not consent to automatic replies, external sends or consequential tools. Disconnecting revokes incoming execution permission.</span></label>
+          </>}
+        </fieldset>
         <label className="flex min-h-11 items-start gap-2 font-ui text-sm text-muted-foreground">
           <input type="checkbox" className="mt-1" checked={form.allowOutbound} onChange={event => update({ allowOutbound: event.target.checked, outboundConsent: false })} />
           <span>Allow reviewed text messages to these Telegram chat IDs from this Project Chat. Each exact recipient, text and reply/topic still requires approval; no automatic responses.</span></label>

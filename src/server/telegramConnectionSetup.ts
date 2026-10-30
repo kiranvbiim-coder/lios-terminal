@@ -1,15 +1,16 @@
 import crypto from "node:crypto";
-import { and, eq, inArray, isNull } from "drizzle-orm";
+import { and, eq, inArray, isNull, sql } from "drizzle-orm";
 import { telegramConnectInputSchema } from "@shared/telegramConnection";
 import { telegramPollingStatus } from "./telegramPollingRuntime";
+import { telegramIngressNamespaceReadiness } from "./telegramConnectionService";
 import {
-  channelIngressCursors, projectChats, projects, sourceConnections, userDataConsents,
+  channelIngressCursors, channelIngressUpdates, projectChats, projects, sourceConnections, userDataConsents,
   type SourceConnection, type User,
 } from "@shared/schema";
 import {
-  TELEGRAM_CONNECTION_CONSENT_VERSION, TELEGRAM_OUTBOUND_CONSENT_VERSION, parseTelegramSourceConfig, telegramConnectionPolicySchema,
-  telegramConsentScope, telegramOutboundConsentScope, telegramCredentialName, telegramSourceConfig,
-  type TelegramConnectionPolicy,
+  TELEGRAM_CONNECTION_CONSENT_VERSION, TELEGRAM_OUTBOUND_CONSENT_VERSION, TELEGRAM_EXECUTION_CONSENT_VERSION, parseTelegramSourceConfig, telegramConnectionPolicySchema,
+  telegramConsentScope, telegramOutboundConsentScope, telegramExecutionConsentScope, telegramCredentialName, telegramSourceConfig,
+  type TelegramAutoRunPolicy, type TelegramConnectionPolicy,
 } from "@shared/telegramConnection";
 import { getDb } from "./db";
 import { auditActor, recordAuditEvent } from "./auditEvents";
@@ -40,6 +41,9 @@ export interface TelegramConnectionSummary {
   retentionDays: number;
   allowAiTransmission: boolean;
   allowOutbound: boolean;
+  autoRun: TelegramAutoRunPolicy | null;
+  autoRunConsentActive: boolean;
+  autoRunCounts: { claimedLastHour: number; claimedLastDay: number; unsettled: number };
   consentActive: boolean;
   credentialPresent: boolean;
   nextOffset: number;
@@ -101,6 +105,7 @@ export async function connectTelegram(user: SetupUser, rawInput: unknown): Promi
     version: "lios-telegram-connection/1", accountBindingId, enabled: true, projectId: project.id, chatId: chat.id,
     allowedConversationIds: input.allowedConversationIds, allowedUpdateTypes: input.allowedUpdateTypes,
     retentionDays: input.retentionDays, allowAiTransmission: input.allowAiTransmission, allowOutbound: input.allowOutbound,
+    autoRun: input.autoRun,
   });
   await storeToken(user, credentialName, input.botToken);
   try {
@@ -114,6 +119,9 @@ export async function connectTelegram(user: SetupUser, rawInput: unknown): Promi
       });
       if (policy.allowOutbound) await tx.insert(userDataConsents).values({
         userId: user.id, scope: telegramOutboundConsentScope(accountBindingId), consentVersion: TELEGRAM_OUTBOUND_CONSENT_VERSION,
+      });
+      if (policy.autoRun?.enabled) await tx.insert(userDataConsents).values({
+        userId: user.id, scope: telegramExecutionConsentScope(accountBindingId), consentVersion: TELEGRAM_EXECUTION_CONSENT_VERSION,
       });
       return row as SourceConnection;
     });
@@ -129,22 +137,38 @@ export async function connectTelegram(user: SetupUser, rawInput: unknown): Promi
   }
 }
 
-async function summarize(user: Pick<User, "organizationId">, source: SourceConnection, consentActive: boolean): Promise<TelegramConnectionSummary> {
+async function summarize(user: SetupUser, source: SourceConnection, consentActive: boolean): Promise<TelegramConnectionSummary> {
   const policy = parseTelegramSourceConfig(source.config);
   const [cursor] = await getDb().select().from(channelIngressCursors).where(eq(channelIngressCursors.sourceConnectionId, source.id)).limit(1);
   const live = policy.enabled ? telegramPollingStatus(source.id) : null;
+  const protectedCredentialPresent = await credentialPresent(user, telegramCredentialName(source.userId, policy.accountBindingId));
+  const namespace = policy.enabled && consentActive && protectedCredentialPresent
+    ? await telegramIngressNamespaceReadiness(tenantContext(user), source.id).catch(() => null) : null;
+  const namespaceRefused = namespace?.reason === "namespace_reconnect_required";
   const [outboundConsent] = policy.allowOutbound ? await getDb().select({ id: userDataConsents.id }).from(userDataConsents).where(and(
     eq(userDataConsents.userId, source.userId), eq(userDataConsents.scope, telegramOutboundConsentScope(policy.accountBindingId)),
     eq(userDataConsents.consentVersion, TELEGRAM_OUTBOUND_CONSENT_VERSION), isNull(userDataConsents.revokedAt),
   )).limit(1) : [];
+  const [executionConsent] = policy.autoRun?.enabled ? await getDb().select({ id: userDataConsents.id }).from(userDataConsents).where(and(
+    eq(userDataConsents.userId, source.userId), eq(userDataConsents.scope, telegramExecutionConsentScope(policy.accountBindingId)),
+    eq(userDataConsents.consentVersion, TELEGRAM_EXECUTION_CONSENT_VERSION), isNull(userDataConsents.revokedAt),
+  )).limit(1) : [];
+  const [claims] = await getDb().select({
+    claimedLastHour: sql<number>`count(*) filter (where ${channelIngressUpdates.executionClaimedAt} >= now() - interval '1 hour')::integer`,
+    claimedLastDay: sql<number>`count(*) filter (where ${channelIngressUpdates.executionClaimedAt} >= now() - interval '1 day')::integer`,
+    unsettled: sql<number>`count(*) filter (where ${channelIngressUpdates.executionClaimedAt} is not null and ${channelIngressUpdates.executionSettledAt} is null)::integer`,
+  }).from(channelIngressUpdates).where(eq(channelIngressUpdates.sourceConnectionId, source.id));
   return {
     connectionId: source.id, name: source.name, enabled: policy.enabled, projectId: policy.projectId, chatId: policy.chatId,
     allowedConversationIds: policy.allowedConversationIds, allowedUpdateTypes: policy.allowedUpdateTypes,
     retentionDays: policy.retentionDays, allowAiTransmission: policy.allowAiTransmission, allowOutbound: policy.enabled && consentActive && policy.allowOutbound && Boolean(outboundConsent),
-    consentActive, credentialPresent: await credentialPresent(user, telegramCredentialName(source.userId, policy.accountBindingId)),
+    consentActive, credentialPresent: protectedCredentialPresent,
+    autoRun: policy.autoRun ?? null, autoRunConsentActive: Boolean(executionConsent),
+    autoRunCounts: claims ?? { claimedLastHour: 0, claimedLastDay: 0, unsettled: 0 },
     nextOffset: cursor?.nextOffset ?? 0, updatedAt: source.updatedAt.toISOString(),
     polling: policy.enabled
-      ? { state: live?.state ?? "waiting", consecutiveFailures: live?.consecutiveFailures ?? 0, lastFailure: live?.lastFailure ?? null, lastAdoptedAt: live?.lastAdoptedAt ?? null }
+      ? { state: namespaceRefused ? "refused" : live?.state ?? "waiting", consecutiveFailures: live?.consecutiveFailures ?? 0,
+          lastFailure: namespaceRefused ? "namespace_reconnect_required" : live?.lastFailure ?? null, lastAdoptedAt: live?.lastAdoptedAt ?? null }
       : null,
   };
 }
@@ -182,7 +206,7 @@ export async function disconnectTelegram(user: SetupUser, connectionId: number):
       config: telegramSourceConfig({ ...policy, enabled: false }), status: "configured", updatedAt: now,
     }).where(eq(sourceConnections.id, source.id)).returning();
     await tx.update(userDataConsents).set({ revokedAt: now }).where(and(
-      eq(userDataConsents.userId, user.id), inArray(userDataConsents.scope, [telegramConsentScope(policy.accountBindingId), telegramOutboundConsentScope(policy.accountBindingId)]), isNull(userDataConsents.revokedAt),
+      eq(userDataConsents.userId, user.id), inArray(userDataConsents.scope, [telegramConsentScope(policy.accountBindingId), telegramOutboundConsentScope(policy.accountBindingId), telegramExecutionConsentScope(policy.accountBindingId)]), isNull(userDataConsents.revokedAt),
     ));
     return { source: updated as SourceConnection, policy };
   });

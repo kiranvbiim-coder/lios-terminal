@@ -241,10 +241,13 @@ export async function retainTerminalNavigationMessages(ctx: TenantContext, chatI
 }
 
 export async function clearProjectChatMessages(ctx: TenantContext, chatId: number): Promise<void> {
-  const chat = await getProjectChat(ctx, chatId);
-  await getDb().transaction(async (tx) => {
+  const chat = await getDb().transaction(async (tx) => {
+    // Match channel adoption's Chat-before-message order. Clear never takes a source lock.
+    const [locked] = await tx.select().from(projectChats).where(and(ownedChatFilter(ctx, chatId), isNull(projectChats.trashedAt))).for("update").limit(1);
+    if (!locked) throw new ProjectChatAccessDeniedError();
     await tx.delete(projectChatMessages).where(eq(projectChatMessages.chatId, chatId));
     await tx.update(projectChats).set({ attachmentManifest: [] }).where(ownedChatFilter(ctx, chatId));
+    return locked;
   });
   try {
     await (await import("./projectAttachmentService")).cleanupQuickChatAttachmentBlobs(ctx, chatId, chat.attachmentManifest);

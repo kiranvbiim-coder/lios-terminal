@@ -58,6 +58,7 @@ export const projectChatMessages = pgTable("project_chat_messages", {
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
 }, (table) => [
   index("project_chat_messages_chat_idx").on(table.chatId, table.createdAt),
+  uniqueIndex("project_chat_messages_ingress_result_unique").on(sql`(${table.metadata}->>'channelIngressExecutionId')`).where(sql`${table.role} = 'assistant' AND ${table.metadata}->>'channelIngressExecutionId' IS NOT NULL`),
   check("project_chat_messages_role_ck", sql`${table.role} IN ('user','assistant','system')`),
 ]);
 

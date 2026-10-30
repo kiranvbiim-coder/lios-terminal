@@ -15,7 +15,7 @@ import { assertCurrentCredentialSnapshot, resolveCredential } from "./credential
 import { isTransientBYOAIFailure } from "./openclawByoaiFailover";
 import { recordConnectorVerification } from "./connectorVerification";
 import { getRequestIdentity } from "./requestContext";
-import { currentConversationTransmissionGuard } from "./exec/execution-scope";
+import { currentConversationTransmissionGuard, currentIncomingAiDispatchGuard } from "./exec/execution-scope";
 import { getStoredEnterprisePolicy } from "./enterprisePolicyService";
 import { evaluateEnterpriseAiProvider } from "@shared/enterpriseContracts";
 import { readBoundedText } from "./sourceConnectionPolicy";
@@ -456,7 +456,9 @@ const VERIFIABLE_CONNECTOR_PROVIDERS = new Set<AIProviderType>(AI_PROVIDERS.map(
 export async function invokeAIProvider(request: AICompletionRequest): Promise<AICompletionResult> {
   const provider = typeof request.provider === "string" ? normalizeProviderId(request.provider) : null;
   if (!provider) throw new AIProviderError("invalid_provider", "AI provider is not registered.");
-  const canonicalRequest: AICompletionRequest = { ...request, provider };
+  const incomingDispatch = currentIncomingAiDispatchGuard();
+  const canonicalRequest: AICompletionRequest = { ...request, provider,
+    ...(incomingDispatch ? { dataClassification: "organization" as const } : {}) };
   validateRequest(canonicalRequest, provider);
   const config = getProviderConfig(provider);
   if (!config) throw new AIProviderError("invalid_provider", "AI provider is not registered.");
@@ -477,6 +479,7 @@ export async function invokeAIProvider(request: AICompletionRequest): Promise<AI
     throw new AIProviderError("policy_denied", "Conversation source permission changed; provider transmission was refused.", { provider });
   }
   await canonicalRequest.beforeTransmission?.();
+  if (incomingDispatch) await incomingDispatch();
   if (scopeRelease || canonicalRequest.beforeTransmission || localCredential !== undefined) {
     // Source-release checks await mutable state. Bind the enterprise revision and re-evaluate the complete policy last.
     const releaseRevision = await enforceEnterpriseAiPolicy(canonicalRequest, config, resolvedModel);
@@ -547,6 +550,7 @@ function routedProviderCandidates(request: AIRoutedCompletionRequest): AIProvide
 }
 
 export async function invokeAIRoutedCompletion(request: AIRoutedCompletionRequest): Promise<AICompletionResult> {
+  if (currentIncomingAiDispatchGuard()) request = { ...request, fallback: "none", maxAttempts: 1, dataClassification: "organization" };
   const preferredProvider = normalizeRequestedProvider(request.preferredProvider, "preferredProvider");
   const preferredModel = normalizeRequestedModel(request.preferredModel, "preferredModel");
   const requestModel = normalizeRequestedModel(request.model, "model");

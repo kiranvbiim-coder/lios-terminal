@@ -1,0 +1,235 @@
+{
+  "schemaVersion": 1,
+  "scope": "Pinned source notice custody associated with cryptographically verified package/source identities. Omnibus notices are retained verbatim without asserting every listed component is embedded.",
+  "combinedNoticeFile": "wasm-source-notices.txt",
+  "combinedNoticeSha256": "8fa804d6b667ebcaec8c772549b025b718e2976da7f8f1c9b4753d32c3cdb96e",
+  "sources": [
+    {
+      "repo": "quickjs-ng/quickjs",
+      "pin": "6d46d07d04041b40f4f49eaa7fdebe44c314c699",
+      "path": "LICENSE",
+      "url": "https://raw.githubusercontent.com/quickjs-ng/quickjs/6d46d07d04041b40f4f49eaa7fdebe44c314c699/LICENSE",
+      "sourceSha256": "96f73f9d2a16c21a36b418f06073be26e7d6d5e7c1bc99756b21a4f2c74ef171",
+      "retainedSha256": "96f73f9d2a16c21a36b418f06073be26e7d6d5e7c1bc99756b21a4f2c74ef171",
+      "retainedRange": "entire file"
+    },
+    {
+      "repo": "quickjs-ng/quickjs",
+      "pin": "6d46d07d04041b40f4f49eaa7fdebe44c314c699",
+      "path": "quickjs.c",
+      "url": "https://raw.githubusercontent.com/quickjs-ng/quickjs/6d46d07d04041b40f4f49eaa7fdebe44c314c699/quickjs.c",
+      "sourceSha256": null,
+      "retainedSha256": "77a32089c3bd0606744efab3cf03243e02ccf277bfcf5dba91ea4e5f7e255be4",
+      "retainedRange": "first complete source block comment"
+    },
+    {
+      "repo": "quickjs-ng/quickjs",
+      "pin": "6d46d07d04041b40f4f49eaa7fdebe44c314c699",
+      "path": "dtoa.c",
+      "url": "https://raw.githubusercontent.com/quickjs-ng/quickjs/6d46d07d04041b40f4f49eaa7fdebe44c314c699/dtoa.c",
+      "sourceSha256": null,
+      "retainedSha256": "450801b4e1613417b2e97da12c2c16cd219b092abcae2b4460445946c816a215",
+      "retainedRange": "first complete source block comment"
+    },
+    {
+      "repo": "quickjs-ng/quickjs",
+      "pin": "6d46d07d04041b40f4f49eaa7fdebe44c314c699",
+      "path": "libregexp.c",
+      "url": "https://raw.githubusercontent.com/quickjs-ng/quickjs/6d46d07d04041b40f4f49eaa7fdebe44c314c699/libregexp.c",
+      "sourceSha256": null,
+      "retainedSha256": "bc5974fe7de8f9f529e0f9b2857edeee3d045d169cb7fb46868f46e66e2e67f8",
+      "retainedRange": "first complete source block comment"
+    },
+    {
+      "repo": "quickjs-ng/quickjs",
+      "pin": "6d46d07d04041b40f4f49eaa7fdebe44c314c699",
+      "path": "libunicode.c",
+      "url": "https://raw.githubusercontent.com/quickjs-ng/quickjs/6d46d07d04041b40f4f49eaa7fdebe44c314c699/libunicode.c",
+      "sourceSha256": null,
+      "retainedSha256": "2482d28b35648f52415f2b479fe63cd3d0643c81c57dfd847a570a331a927b21",
+      "retainedRange": "first complete source block comment"
+    },
+    {
+      "repo": "quickjs-ng/quickjs",
+      "pin": "6d46d07d04041b40f4f49eaa7fdebe44c314c699",
+      "path": "libunicode-table.h",
+      "url": "https://raw.githubusercontent.com/quickjs-ng/quickjs/6d46d07d04041b40f4f49eaa7fdebe44c314c699/libunicode-table.h",
+      "sourceSha256": null,
+      "retainedSha256": "0e514a6e4dd2127e3e7201db6d315f6914993c3e738ceca75b314eec3de13839",
+      "retainedRange": "complete Unicode LicenseV3 source block"
+    },
+    {
+      "repo": "WebAssembly/wasi-libc",
+      "pin": "2fc32bc81b9f07f8d9525edea59bfbaf760c06d6",
+      "path": "LICENSE",
+      "url": "https://raw.githubusercontent.com/WebAssembly/wasi-libc/2fc32bc81b9f07f8d9525edea59bfbaf760c06d6/LICENSE",
+      "sourceSha256": "2711a8b5a5cdfef0e639f96c1aca12ae23d7d64a02d0507f1bdf14d2b27bbc3a",
+      "retainedSha256": "2711a8b5a5cdfef0e639f96c1aca12ae23d7d64a02d0507f1bdf14d2b27bbc3a",
+      "retainedRange": "entire file"
+    },
+    {
+      "repo": "WebAssembly/wasi-libc",
+      "pin": "2fc32bc81b9f07f8d9525edea59bfbaf760c06d6",
+      "path": "LICENSE-MIT",
+      "url": "https://raw.githubusercontent.com/WebAssembly/wasi-libc/2fc32bc81b9f07f8d9525edea59bfbaf760c06d6/LICENSE-MIT",
+      "sourceSha256": "23f18e03dc49df91622fe2a76176497404e46ced8a715d9d2b67a7446571cca3",
+      "retainedSha256": "23f18e03dc49df91622fe2a76176497404e46ced8a715d9d2b67a7446571cca3",
+      "retainedRange": "entire file"
+    },
+    {
+      "repo": "WebAssembly/wasi-libc",
+      "pin": "2fc32bc81b9f07f8d9525edea59bfbaf760c06d6",
+      "path": "libc-top-half/musl/COPYRIGHT",
+      "url": "https://raw.githubusercontent.com/WebAssembly/wasi-libc/2fc32bc81b9f07f8d9525edea59bfbaf760c06d6/libc-top-half/musl/COPYRIGHT",
+      "sourceSha256": "f9bc4423732350eb0b3f7ed7e91d530298476f8fec0c6c427a1c04ade22655af",
+      "retainedSha256": "f9bc4423732350eb0b3f7ed7e91d530298476f8fec0c6c427a1c04ade22655af",
+      "retainedRange": "entire file"
+    },
+    {
+      "repo": "WebAssembly/wasi-libc",
+      "pin": "2fc32bc81b9f07f8d9525edea59bfbaf760c06d6",
+      "path": "libc-bottom-half/cloudlibc/LICENSE",
+      "url": "https://raw.githubusercontent.com/WebAssembly/wasi-libc/2fc32bc81b9f07f8d9525edea59bfbaf760c06d6/libc-bottom-half/cloudlibc/LICENSE",
+      "sourceSha256": "c8b789cf5a746611e6300a0cc7750dbf92b61912a709d04e639245f7290656d0",
+      "retainedSha256": "c8b789cf5a746611e6300a0cc7750dbf92b61912a709d04e639245f7290656d0",
+      "retainedRange": "entire file"
+    },
+    {
+      "repo": "WebAssembly/wasi-libc",
+      "pin": "2fc32bc81b9f07f8d9525edea59bfbaf760c06d6",
+      "path": "libc-top-half/musl/src/math/sin.c",
+      "url": "https://raw.githubusercontent.com/WebAssembly/wasi-libc/2fc32bc81b9f07f8d9525edea59bfbaf760c06d6/libc-top-half/musl/src/math/sin.c",
+      "sourceSha256": "24e53a9d85f196f66919cc19247be5480bb607ef38844b1a24bc47c4fe4974ef",
+      "retainedSha256": "421d333a961cbe6d0a8586bc90ad996363ea529b912c90ab80983f3f5d9ad95e",
+      "retainedRange": "leading origin comment plus complete Sun copyright/permission block"
+    },
+    {
+      "repo": "WebAssembly/wasi-libc",
+      "pin": "2fc32bc81b9f07f8d9525edea59bfbaf760c06d6",
+      "path": "libc-top-half/musl/src/stdlib/qsort.c",
+      "url": "https://raw.githubusercontent.com/WebAssembly/wasi-libc/2fc32bc81b9f07f8d9525edea59bfbaf760c06d6/libc-top-half/musl/src/stdlib/qsort.c",
+      "sourceSha256": null,
+      "retainedSha256": "67f1f2f3c0447c68be581010fee98dca1c7ea1edf8fbfc61c7e5ee6ad9f99de4",
+      "retainedRange": "first complete source block comment"
+    },
+    {
+      "repo": "llvm/llvm-project",
+      "pin": "4434dabb69916856b824f68a64b029c67175e532",
+      "path": "compiler-rt/LICENSE.TXT",
+      "url": "https://raw.githubusercontent.com/llvm/llvm-project/4434dabb69916856b824f68a64b029c67175e532/compiler-rt/LICENSE.TXT",
+      "sourceSha256": "1a8f1058753f1ba890de984e48f0242a3a5c29a6a8f2ed9fd813f36985387e8d",
+      "retainedSha256": "1a8f1058753f1ba890de984e48f0242a3a5c29a6a8f2ed9fd813f36985387e8d",
+      "retainedRange": "entire file"
+    },
+    {
+      "repo": "tree-sitter/tree-sitter",
+      "pin": "6070dbfefd326bd735e5683eb128cc1b57dad0c0",
+      "path": "lib/src/unicode/LICENSE",
+      "url": "https://raw.githubusercontent.com/tree-sitter/tree-sitter/6070dbfefd326bd735e5683eb128cc1b57dad0c0/lib/src/unicode/LICENSE",
+      "sourceSha256": "6a18c5fac70d7860b57f5b72b4e2c9a1ba6b3d2741eef7ff9767c5379364f10d",
+      "retainedSha256": "6a18c5fac70d7860b57f5b72b4e2c9a1ba6b3d2741eef7ff9767c5379364f10d",
+      "retainedRange": "entire file"
+    },
+    {
+      "repo": "tree-sitter/tree-sitter",
+      "pin": "6070dbfefd326bd735e5683eb128cc1b57dad0c0",
+      "path": "lib/src/unicode/utf8.h",
+      "url": "https://raw.githubusercontent.com/tree-sitter/tree-sitter/6070dbfefd326bd735e5683eb128cc1b57dad0c0/lib/src/unicode/utf8.h",
+      "sourceSha256": null,
+      "retainedSha256": "450f06257a4e9a59505e48746ad435f27e830d99d51aa68e1adb0af21c98a35d",
+      "retainedRange": "first complete source block comment"
+    },
+    {
+      "repo": "tree-sitter/tree-sitter",
+      "pin": "6070dbfefd326bd735e5683eb128cc1b57dad0c0",
+      "path": "lib/src/unicode/utf16.h",
+      "url": "https://raw.githubusercontent.com/tree-sitter/tree-sitter/6070dbfefd326bd735e5683eb128cc1b57dad0c0/lib/src/unicode/utf16.h",
+      "sourceSha256": null,
+      "retainedSha256": "5221dec9a03e3d659506fea26636a77fe256928ffc1f562820e6b6059dd7e8fd",
+      "retainedRange": "first complete source block comment"
+    },
+    {
+      "repo": "emscripten-core/emscripten",
+      "pin": "09f52557f0d48b65b8c724853ed8f4e8bf80e669",
+      "path": "LICENSE",
+      "url": "https://raw.githubusercontent.com/emscripten-core/emscripten/09f52557f0d48b65b8c724853ed8f4e8bf80e669/LICENSE",
+      "sourceSha256": "620a78084fc7ca97c0b5dea9abf891f3ffcadfdbf305276f099c9c4e12fc1d86",
+      "retainedSha256": "620a78084fc7ca97c0b5dea9abf891f3ffcadfdbf305276f099c9c4e12fc1d86",
+      "retainedRange": "entire file"
+    },
+    {
+      "repo": "emscripten-core/emscripten",
+      "pin": "09f52557f0d48b65b8c724853ed8f4e8bf80e669",
+      "path": "system/lib/libc/musl/COPYRIGHT",
+      "url": "https://raw.githubusercontent.com/emscripten-core/emscripten/09f52557f0d48b65b8c724853ed8f4e8bf80e669/system/lib/libc/musl/COPYRIGHT",
+      "sourceSha256": "f9bc4423732350eb0b3f7ed7e91d530298476f8fec0c6c427a1c04ade22655af",
+      "retainedSha256": "f9bc4423732350eb0b3f7ed7e91d530298476f8fec0c6c427a1c04ade22655af",
+      "retainedRange": "entire file"
+    },
+    {
+      "repo": "emscripten-core/emscripten",
+      "pin": "09f52557f0d48b65b8c724853ed8f4e8bf80e669",
+      "path": "system/lib/compiler-rt/LICENSE.TXT",
+      "url": "https://raw.githubusercontent.com/emscripten-core/emscripten/09f52557f0d48b65b8c724853ed8f4e8bf80e669/system/lib/compiler-rt/LICENSE.TXT",
+      "sourceSha256": "1a8f1058753f1ba890de984e48f0242a3a5c29a6a8f2ed9fd813f36985387e8d",
+      "retainedSha256": "1a8f1058753f1ba890de984e48f0242a3a5c29a6a8f2ed9fd813f36985387e8d",
+      "retainedRange": "entire file"
+    }
+  ],
+  "selectedAssets": [
+    {
+      "package": "quickjs-wasi@3.6.2",
+      "path": "package/extensions/encoding/encoding.so",
+      "bytes": 7715,
+      "sha256": "d501aa2a8410ee07c196103f0d169b226ec61c922883713510fd723fe14036c3"
+    },
+    {
+      "package": "quickjs-wasi@3.6.2",
+      "path": "package/quickjs.wasm",
+      "bytes": 637405,
+      "sha256": "d4c9375f2b1ca4dc95f72c8aa2982a7a9951ac8011490d79c6582df732b4bbd9"
+    },
+    {
+      "package": "web-tree-sitter@0.27.0",
+      "path": "package/web-tree-sitter.wasm",
+      "bytes": 209613,
+      "sha256": "c03bccdc3b448a32848f5ae327e209c982bbb0840d43eec8bc2d5759544a1ed3"
+    },
+    {
+      "package": "tree-sitter-bash@0.25.1",
+      "path": "tree-sitter-bash.wasm",
+      "sha256": "8292919c88a0f7d3fb31d0cd0253ca5a9531bc1ede82b0537f2c63dd8abe6a7a"
+    }
+  ],
+  "provenanceFiles": [
+    "tree-sitter-bash-verified-provenance.json",
+    "wasm-npm-verified-provenance.json"
+  ],
+  "composition": {
+    "quickjs": {
+      "source": "vercel-labs/quickjs-wasi@5a7a0eeda87c99542f8cf3095b6d61ecfa755977",
+      "engine": "quickjs-ng/quickjs@6d46d07d04041b40f4f49eaa7fdebe44c314c699",
+      "recipe": {
+        "wasiSdk": "32.0",
+        "wasiSdkSource": "249054e5427023344c1906afde0e9073714d1930",
+        "wasiLibc": "2fc32bc81b9f07f8d9525edea59bfbaf760c06d6",
+        "llvm": "4434dabb69916856b824f68a64b029c67175e532",
+        "binaryen": "130.0.0"
+      },
+      "encoding": "encoding.c only; wasm-ld shared/allow-undefined with host QuickJS/libc imports. URL/crypto/headers/structured-clone are separate outputs and are not the selected root assets.",
+      "remaining": "Actual consumed SDK archive digest and exact main-WASM linked objects/source-specific notice closure; source provenance and recipe are verified, not an exhaustive link manifest."
+    },
+    "treeSitter": {
+      "runtimeSource": "6070dbfefd326bd735e5683eb128cc1b57dad0c0",
+      "emscriptenRecipe": "4.0.15",
+      "emscriptenSource": "09f52557f0d48b65b8c724853ed8f4e8bf80e669",
+      "unicodeHeadersSource": "ICU552b01f61127d30d6589aa4bf99468224979b661",
+      "grammarSource": "801326684a26ffc4e749bb016c50c6c30bdfa345",
+      "grammarCompleteSourceArchiveSha256": "bd0d72814c6512de190439ce6562635c69ce27fa8bc59eaf381d44263579df36",
+      "grammarWorkflow": "tree-sitter/workflows@67eb38f65e3a08dc2851fa8575ced44ff2857705",
+      "remaining": "Historical grammar CLI/Emscripten override resolution, actual compiler/container identities and main-runtime linked-object inventory. Published source map deliberately excludes toolchain sources."
+    },
+    "compilerRuntimeException": "Compiler-rt Apache2 WITH LLVM-exception object-code embedding waives Apache sections4(a),4(b),4(d) in the stated case; compiler presence alone does not prove particular objects are embedded or impose all compiler licenses."
+  },
+  "distributionCleared": false
+}

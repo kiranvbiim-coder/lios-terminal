@@ -226,6 +226,8 @@ export interface ConversationRuntimeInput {
   agentLoop?: AgentLoopRuntimeOptions;
   /** Cancellation owned by the run registry (SI-02.07). The runtime links its own controller to it. */
   signal?: AbortSignal;
+  /** Canonical registry signal for exact approval identity when execution has an additional deadline signal. */
+  runSignal?: AbortSignal;
 }
 
 export interface AgentLoopRuntimeOptions {
@@ -4912,7 +4914,7 @@ async function executeAgentLoop(
             },
           } : {}),
           ...(releasing
-            ? { authorization: releasing.authorization, planHash: releasing.state.planSha256, runSignal: input.signal ?? signal }
+            ? { authorization: releasing.authorization, planHash: releasing.state.planSha256, runSignal: input.runSignal ?? input.signal ?? signal }
             : {}),
         });
         const result = await invokeConversationTool(step.toolId, step.input, signal, callFor);

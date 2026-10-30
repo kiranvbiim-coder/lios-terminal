@@ -125,7 +125,7 @@
     "doctor": "tsx script/lios_doctor.ts",
     "acceptance:p11": "tsx script/validate_p11_engine_fabric_acceptance.ts",
     "acceptance:p11:platform": "tsx script/validate_p11_platform_lifecycle.ts",
-    "test:p12": "node --import tsx --test shared/multimodalContracts.test.ts server/p12VoiceRuntime.test.ts server/voiceProviderSetup.test.ts server/p12VoicePack.test.ts server/p12Multimodal.test.ts server/projectAttachmentContent.test.ts server/projectAttachmentService.test.ts server/projectAttachmentRestart.test.ts server/projectAttachmentRoutes.test.ts server/runtimeFoundation.test.ts server/runtimeProviders.test.ts server/runtimeMode.test.ts",
+    "test:p12": "node --import tsx --test shared/multimodalContracts.test.ts server/p12VoiceRuntime.test.ts server/voiceProviderSetup.test.ts server/voiceRoutes.test.ts server/p12VoicePack.test.ts server/p12Multimodal.test.ts server/projectAttachmentContent.test.ts server/projectAttachmentService.test.ts server/projectAttachmentRestart.test.ts server/projectAttachmentRoutes.test.ts server/runtimeFoundation.test.ts server/runtimeProviders.test.ts server/runtimeMode.test.ts",
     "acceptance:p12": "tsx script/validate_p12_voice_multimodal_acceptance.ts",
     "benchmark:p12:whisper": "tsx script/benchmark_p12_whisper_cpp.ts",
     "test:ux": "node --import tsx --test client/src/lib/visualEnvironment.test.ts client/src/lib/terminalUxPreferences.test.ts client/src/lib/terminalThemeLock.test.ts client/src/lib/firstUseJourney.test.ts client/src/lib/dockviewWorkspaceState.test.ts client/src/lib/terminalConvergenceContract.test.ts shared/projectContracts.test.ts shared/conversationRuntime.test.ts",

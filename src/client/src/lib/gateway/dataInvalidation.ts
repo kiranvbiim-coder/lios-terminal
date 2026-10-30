@@ -11,11 +11,18 @@ export const INVALIDATION_QUERY_KEYS: Record<Exclude<GatewayInvalidationTopic, "
   // Project IDs are the second segment, so no single static query prefix
   // can select only P9 notifications without invalidating unrelated pages.
   notifications: [],
+  conversations: [["/api/project-chats"], ["/api/quick-chats"], ["/api/setup/telegram-connections"]],
 };
 
 export function invalidateTopics(queryClient: QueryClient, topics: readonly GatewayInvalidationTopic[]): void {
   for (const topic of topics) {
     if (topic === "quantlab") continue; // Quant Lab keeps its own local state and subscribes to the event directly.
+    if (topic === "conversations") {
+      void queryClient.invalidateQueries({
+        predicate: ({ queryKey }) => queryKey[0] === "/api/projects" &&
+          (queryKey.length === 1 || queryKey[2] === "chats" || queryKey[2] === "home"),
+      });
+    }
     if (topic === "notifications") {
       void queryClient.invalidateQueries({
         predicate: ({ queryKey }) => queryKey[0] === "/api/automation/notifications" || (queryKey[0] === "/api/projects"
