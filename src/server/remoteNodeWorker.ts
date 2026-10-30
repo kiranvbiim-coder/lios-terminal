@@ -1,4 +1,5 @@
 import os from "node:os";
+import fs from "node:fs";
 import { setTimeout as sleep } from "node:timers/promises";
 import { REMOTE_DIAGNOSIS_CAPABILITY, REMOTE_FINANCE_CAPABILITY, remoteOperationBindingSchema, remoteDiagnosisReportSchema, remoteNodeMethods, type RemoteOperationOutcome, type RemoteFinanceSource } from "@shared/remoteNode";
 import { GatewayClient } from "../client/src/lib/gateway/gatewayClient";
@@ -6,13 +7,26 @@ import type { DeviceIdentity } from "../client/src/lib/gateway/deviceIdentity";
 import { createPinnedDeviceSocket } from "./pinnedDeviceSocket";
 import { executeNodeLocalFinanceSnapshot, loadNodeLocalFinanceSource, type NodeLocalFinanceConfiguration } from "./remoteNodeFinance";
 
-/** Actual closed executor. No command text, filesystem reads, environment,
- * network providers, child processes, model inference or GPU claims. */
+/** Adapted fixed-home-volume statfs mechanism: OpenClaw c074824a src/node-host/host-stats.ts and src/infra/disk-space.ts (MIT). */
+function readHomeVolumeCapacity() {
+  try {
+    const stats = fs.statfsSync(os.homedir(), { bigint: true });
+    if (stats.bsize <= 0n || stats.blocks < 0n || stats.bavail < 0n) return null;
+    const total = stats.bsize * stats.blocks;
+    const available = stats.bsize * stats.bavail;
+    if (available > total || total > BigInt(Number.MAX_SAFE_INTEGER)) return null;
+    return { scope: "node-home-volume" as const, totalBytes: Number(total), availableBytes: Number(available) };
+  } catch { return null; }
+}
+
+/** Closed OS/volume-metadata executor. No file contents/listing, caller paths,
+ * environment disclosure, network providers, child processes, inference or GPU claims. */
 export function readNodeRuntimeDiagnosis() {
   return remoteDiagnosisReportSchema.parse({
     platform: os.platform(), architecture: os.arch(), nodeVersion: process.version,
     logicalCpuCount: os.cpus().length, totalMemoryBytes: os.totalmem(), freeMemoryBytes: os.freemem(),
-    observedAt: new Date().toISOString(), execution: "synchronous-node-os-read-no-subprocess",
+    diskHomeVolume: readHomeVolumeCapacity(),
+    observedAt: new Date().toISOString(), execution: "synchronous-node-os-volume-read-no-subprocess",
   });
 }
 
@@ -27,7 +41,7 @@ export function startRemoteNodeWorker(options: {
 }) {
   const client = new GatewayClient({
     url: options.url, WebSocketImpl: createPinnedDeviceSocket(options.fingerprint), scopes: ["read"],
-    clientInfo: { id: "lios-closed-read-node-worker", version: "1", platform: process.platform, mode: "service" },
+    clientInfo: { id: "lios-closed-read-node-worker", version: "2", platform: process.platform, mode: "service" },
     device: { identity: options.identity, capabilities: options.finance ? [REMOTE_DIAGNOSIS_CAPABILITY, REMOTE_FINANCE_CAPABILITY] : [REMOTE_DIAGNOSIS_CAPABILITY], commands: options.finance ? [REMOTE_DIAGNOSIS_CAPABILITY, REMOTE_FINANCE_CAPABILITY] : [REMOTE_DIAGNOSIS_CAPABILITY] },
   });
   const controller = new AbortController();

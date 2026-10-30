@@ -1,7 +1,7 @@
 import { z } from "zod";
 
 /** These two closed reads do not admit shell, inference or remote subprocesses. */
-export const REMOTE_DIAGNOSIS_CAPABILITY = "node.runtime-diagnosis.v1" as const;
+export const REMOTE_DIAGNOSIS_CAPABILITY = "node.runtime-diagnosis.v2" as const;
 export const REMOTE_FINANCE_CAPABILITY = "node.personal-finance-snapshot.v1" as const;
 export const REMOTE_OPERATION_TIMEOUT_MS = 10_000;
 const id = z.string().min(1).max(200);
@@ -13,11 +13,18 @@ export const remoteDiagnosisBindingSchema = bindingBase.extend({ capability: z.l
 export const remoteFinanceBindingSchema = bindingBase.extend({ capability: z.literal(REMOTE_FINANCE_CAPABILITY), source: remoteFinanceSourceSchema });
 export const remoteOperationBindingSchema = z.discriminatedUnion("capability", [remoteDiagnosisBindingSchema, remoteFinanceBindingSchema]);
 export type RemoteOperationBinding = z.infer<typeof remoteOperationBindingSchema>;
+const homeVolumeCapacitySchema = z.object({
+  scope: z.literal("node-home-volume"),
+  totalBytes: z.number().int().nonnegative().safe(),
+  availableBytes: z.number().int().nonnegative().safe(),
+}).strict().refine(value => value.availableBytes <= value.totalBytes, "Available storage cannot exceed total storage.");
 export const remoteDiagnosisReportSchema = z.object({
   platform: z.enum(["aix", "darwin", "freebsd", "linux", "openbsd", "sunos", "win32", "android", "netbsd", "cygwin", "haiku"]),
   architecture: z.string().min(1).max(32), nodeVersion: z.string().min(1).max(64),
   logicalCpuCount: z.number().int().min(0).max(65536), totalMemoryBytes: z.number().int().nonnegative().safe(), freeMemoryBytes: z.number().int().nonnegative().safe(),
-  observedAt: z.string().datetime(), execution: z.literal("synchronous-node-os-read-no-subprocess"),
+  /** Null is an unavailable observation, never zero capacity or a Home-host fallback. No paths leave the node. */
+  diskHomeVolume: homeVolumeCapacitySchema.nullable(),
+  observedAt: z.string().datetime(), execution: z.literal("synchronous-node-os-volume-read-no-subprocess"),
 }).strict();
 export const remoteFinanceReportSchema = z.object({
   source: remoteFinanceSourceSchema,

@@ -120,7 +120,6 @@ test("two processes: signed pinned worker executes actual OS read and Home durab
   assert.equal(result.independentHardwareVerification, false);
   const report = remoteDiagnosisReportSchema.parse(result.report);
   assert.equal(report.nodeVersion, process.version);
-  assert.equal(report.execution, "synchronous-node-os-read-no-subprocess");
   const record = await home.journal.read(requestId, { userId: 1, projectId: null, chatId: null });
   assert.equal(record?.status, "completed");
   assert.equal(record?.exitCode, null);
@@ -129,6 +128,38 @@ test("two processes: signed pinned worker executes actual OS read and Home durab
   assert.match(record!.stdout, new RegExp(selection.policyHash));
   assert.ok(result.binding.placementDigest);
   await assert.rejects(requester.client.requestRaw("node.diagnosis.run", { ...target, requestId }), /The request failed/);
+});
+
+test("diagnosis refuses old capability, caller paths and malformed capacity while preserving an unknown observation", { timeout: 20000 }, async t => {
+  const home = await fixture(t);
+  const requester = await home.connect();
+  const worker = await home.connect();
+  await assert.rejects(worker.client.requestRaw("node.operation.poll", { capability: "node.runtime-diagnosis.v1" }), /Parameters do not match/);
+  await worker.client.requestRaw("node.operation.poll", { capability: REMOTE_DIAGNOSIS_CAPABILITY });
+  const target = await discover(requester.client);
+  const requestId = randomUUID();
+  await assert.rejects(requester.client.requestRaw("node.diagnosis.run", { ...target, requestId, path: "/caller-selected" }), /Parameters do not match/);
+  const result = requester.client.requestRaw("node.diagnosis.run", { ...target, requestId });
+  const poll = await receiveOperation(worker.client);
+  assert.ok(poll.operation);
+  const report = readNodeRuntimeDiagnosis();
+  for (const diskHomeVolume of [
+    { scope: "node-home-volume", totalBytes: 100, availableBytes: 101 },
+    { scope: "node-home-volume", totalBytes: -1, availableBytes: 0 },
+    { scope: "node-home-volume", totalBytes: Number.MAX_SAFE_INTEGER + 1, availableBytes: 0 },
+    { scope: "workspace", totalBytes: 100, availableBytes: 50 },
+    { scope: "node-home-volume", totalBytes: 100, availableBytes: 50, path: "/private-home" },
+    undefined,
+  ]) {
+    await assert.rejects(worker.client.requestRaw("node.operation.result", {
+      binding: poll.operation, report: { ...report, diskHomeVolume },
+    }), /Parameters do not match/);
+  }
+  await worker.client.requestRaw("node.operation.result", { binding: poll.operation, report: { ...report, diskHomeVolume: null } });
+  const outcome = remoteNodeMethods["node.diagnosis.run"].result.parse(await result);
+  assert.equal(outcome.status, "completed");
+  assert.equal(outcome.outcome, "remote-reported");
+  assert.equal(remoteDiagnosisReportSchema.parse(outcome.report).diskHomeVolume, null);
 });
 
 test("disconnect after dispatch persists unknown outcome, rejects stale generation and never replays", { timeout: 20000 }, async (t) => {
