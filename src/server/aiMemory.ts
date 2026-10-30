@@ -21,6 +21,7 @@ import {
 import { getRequestIdentity, type RequestIdentity } from "./requestContext";
 import { getDb, type DrizzleDb } from "./db";
 import { stateDir } from "./dataRoot";
+import { escapeLikeTerm, extractMemoryQueryTerms, hasCjk } from "./memoryQueryTerms";
 
 const MAX_CONTENT_CHARS = 200_000;
 const DEFAULT_CONTEXT_LIMIT = 10;
@@ -314,13 +315,24 @@ export async function listDurableMemories(input: { projectId?: number | null; li
   if (input.query !== undefined && !query) throw new Error("Durable memory query cannot be empty.");
   // Query current canonical rows directly; do not create another memory/index store or invoke an embedding provider.
   const vector = sql`to_tsvector('simple', ${durableMemories.content})`;
+  // Contiguous CJK has no word boundaries for the 'simple' parser, so those queries also match literal bigrams.
+  const terms = query && hasCjk(query) ? extractMemoryQueryTerms(query) : null;
+  const cjkMatches = terms ? terms.cjk.map(term => sql`${durableMemories.content} ILIKE ${`%${escapeLikeTerm(term)}%`} ESCAPE '\\'`) : [];
   const anyTermQuery = input.matchAnyTerm && query
-    ? query.match(/[\p{L}\p{N}_-]+/gu)?.slice(0, 32).map(term => `"${term}"`).join(" OR ") ?? ""
+    ? terms
+      ? terms.words.map(term => `"${term}"`).join(" OR ")
+      : query.match(/[\p{L}\p{N}_-]+/gu)?.slice(0, 32).map(term => `"${term}"`).join(" OR ") ?? ""
     : null;
-  if (input.matchAnyTerm && !anyTermQuery) return [];
-  const parsedQuery = query ? anyTermQuery
+  if (input.matchAnyTerm && !anyTermQuery && cjkMatches.length === 0) return [];
+  const parsedQuery = query && anyTermQuery
     ? sql`websearch_to_tsquery('simple', ${anyTermQuery})`
-    : sql`plainto_tsquery('simple', ${query})` : null;
+    : query && !terms ? sql`plainto_tsquery('simple', ${query})`
+    : query && terms && terms.words.length ? sql`websearch_to_tsquery('simple', ${terms.words.map(term => `"${term}"`).join(" OR ")})` : null;
+  if (query && terms && !parsedQuery && cjkMatches.length === 0) return [];
+  const textMatch = parsedQuery || cjkMatches.length
+    ? sql`(${sql.join([...(parsedQuery ? [sql`${vector} @@ ${parsedQuery}`] : []), ...cjkMatches], sql` OR `)})`
+    : undefined;
+  const cjkScore = cjkMatches.length ? sql`(${sql.join(cjkMatches.map(match => sql`(${match})::int`), sql` + `)})` : null;
 
   return getDb().select().from(durableMemories)
     .where(and(ownerFilter(identity), eq(durableMemories.state, "active"), memoryScopeFilter(projectId),
@@ -329,9 +341,10 @@ export async function listDurableMemories(input: { projectId?: number | null; li
         SELECT 1 FROM jsonb_array_elements_text(${durableMemories.sourceRefs}) AS refs(ref)
         WHERE NOT starts_with(ref, ${durableMemories.memoryKey} || '@r') OR ref !~ '@r[1-9][0-9]*$'
       )`) : undefined,
-      parsedQuery ? sql`${vector} @@ ${parsedQuery}` : undefined))
+      textMatch))
     .orderBy(
       ...(parsedQuery ? [sql`ts_rank_cd(${vector}, ${parsedQuery}) DESC`] : []),
+      ...(cjkScore ? [sql`${cjkScore} DESC`] : []),
       sql`${durableMemories.observedAt} DESC NULLS LAST`, sql`${durableMemories.createdAt} DESC`,
     )
     .limit(limit);

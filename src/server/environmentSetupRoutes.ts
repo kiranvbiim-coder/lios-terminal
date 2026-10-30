@@ -205,6 +205,7 @@ export function registerEnvironmentSetupRoutes(app: Express, lifecycleDependenci
         code: providerError.code,
         ...auditActor(req.user!),
       });
+      if (providerError.retryAfterMs) res.set("Retry-After", String(Math.ceil(providerError.retryAfterMs / 1000)));
       res.status(aiVerificationStatus(providerError)).json({
         ok: false,
         error: providerError.toJSON(),

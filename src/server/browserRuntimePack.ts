@@ -19,6 +19,25 @@ const MAX_NETWORK_REQUESTS = 64;
 const MAX_PENDING_COMMANDS = 4;
 const WORKER_READY_TIMEOUT_MS = 15_000;
 const WORKER_CLOSE_TIMEOUT_MS = 5_000;
+/**
+ * Host-side transport watchdog adapted from OpenClaw extensions/browser/src/browser/act-policy.ts
+ * (c074824a27c96d3983043f9eeb33823cd1772d8c, MIT): the worker's own execution budget plus one transport slack, so a wedged
+ * renderer fails this command promptly instead of consuming the whole run budget. Never retried or replayed.
+ */
+const BROWSER_ACTION_TRANSPORT_SLACK_MS = 5_000;
+const BROWSER_NAVIGATION_MIN_MS = 1_000;
+const BROWSER_NAVIGATION_MAX_MS = 120_000;
+const BROWSER_CLICK_BUDGET_MS = 8_000 + 250;
+const BROWSER_EXTRACT_BUDGET_MS = 5_000;
+
+export function workerCommandDeadlineMs(method: string, payload: Record<string, unknown>): number {
+  if (method === "navigate") {
+    const requested = typeof payload.timeoutMs === "number" && Number.isFinite(payload.timeoutMs) ? payload.timeoutMs : 20_000;
+    return Math.min(Math.max(Math.trunc(requested), BROWSER_NAVIGATION_MIN_MS), BROWSER_NAVIGATION_MAX_MS) + BROWSER_ACTION_TRANSPORT_SLACK_MS;
+  }
+  if (method === "click") return BROWSER_CLICK_BUDGET_MS + BROWSER_ACTION_TRANSPORT_SLACK_MS;
+  return BROWSER_EXTRACT_BUDGET_MS + BROWSER_ACTION_TRANSPORT_SLACK_MS;
+}
 
 const safeCodeSchema = z.string().regex(/^[a-z0-9_]{1,80}$/);
 const workerFrameSchema = z.discriminatedUnion("kind", [
@@ -60,6 +79,8 @@ export interface BrowserRuntimePackDependencies {
   requestPinned?: PinnedRequester;
   readyTimeoutMs?: number;
   closeTimeoutMs?: number;
+  /** Test hook: replaces the computed per-command deadline. */
+  commandTimeoutMs?: number;
 }
 
 export class BrowserRuntimePackUnavailableError extends Error {
@@ -293,7 +314,14 @@ class BrowserRuntimePackAdapter implements BrowserAutomationAdapter {
     this.commands.set(requestId, completion);
     try {
       await this.session.writeInput(jsonLine({ protocol: PROTOCOL, kind: "command", requestId, method, ...payload }));
-      return await completion.promise;
+      if (method === "shutdown") return await completion.promise;
+      // A wedged worker fails closed: cancel the session (which rejects every pending command) and refuse to continue.
+      const deadline = this.dependencies.commandTimeoutMs && this.dependencies.commandTimeoutMs > 0
+        ? this.dependencies.commandTimeoutMs : workerCommandDeadlineMs(method, payload);
+      return await waitBounded(completion.promise, deadline, () => {
+        this.session?.cancel("overall-timeout");
+        this.finish(new BrowserRuntimePackUnavailableError(`Browser ${method} did not respond within its deadline; the isolated worker was stopped.`));
+      });
     } finally {
       this.commands.delete(requestId);
     }

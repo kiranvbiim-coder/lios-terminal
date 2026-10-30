@@ -364,6 +364,39 @@ export function classifyProviderFailure(body: string): "insufficient_quota" | "i
   return null;
 }
 
+const RETRY_AFTER_MAX_MS = 300_000;
+/**
+ * Retry-After semantics adapted from OpenClaw packages/retry/src/index.ts (c074824a, MIT): a server hint is a lower
+ * bound, never an authority to retry. Only the integer-seconds or HTTP-date header is read, clamped to 0..5 minutes.
+ */
+export function parseRetryAfterMs(value: string | null | undefined, now = Date.now()): number | undefined {
+  const text = value?.trim();
+  if (!text) return undefined;
+  const ms = /^\d{1,9}$/.test(text) ? Number(text) * 1000
+    : /^[A-Za-z]{3}, \d{1,2} [A-Za-z]{3} \d{4} \d{2}:\d{2}:\d{2} GMT$/.test(text) ? Date.parse(text) - now : Number.NaN;
+  if (!Number.isFinite(ms)) return undefined;
+  return Math.min(Math.max(Math.round(ms), 0), RETRY_AFTER_MAX_MS);
+}
+
+// Bounded in-memory ordering hint only: per request owner and provider, it can move a cooling provider later among
+// ALREADY permitted candidates. It never admits a provider, never blocks a sole candidate and never delays or replays.
+const providerCooldowns = new Map<string, number>();
+const MAX_COOLDOWNS = 256;
+export function noteProviderCooldown(provider: AIProviderType, ms: number, now = Date.now()): void {
+  const owner = getRequestIdentity()?.userId;
+  if (owner == null || ms <= 0) return;
+  for (const [key, until] of providerCooldowns) if (until <= now) providerCooldowns.delete(key);
+  if (providerCooldowns.size >= MAX_COOLDOWNS) providerCooldowns.delete(providerCooldowns.keys().next().value!);
+  providerCooldowns.set(`${owner}:${provider}`, now + ms);
+}
+export function orderByCooldown(candidates: AIProviderType[], now = Date.now()): AIProviderType[] {
+  const owner = getRequestIdentity()?.userId;
+  if (owner == null || candidates.length < 2) return candidates;
+  const cooling = (provider: AIProviderType) => (providerCooldowns.get(`${owner}:${provider}`) ?? 0) > now;
+  return [...candidates.filter(p => !cooling(p)), ...candidates.filter(cooling)];
+}
+export function resetProviderCooldownsForTest(): void { providerCooldowns.clear(); }
+
 function responseError(config: AIProviderConfig, provider: AIProviderType, response: Response, body: string): AIProviderError {
   const reason = classifyProviderFailure(body);
   if (reason === "insufficient_quota") {
@@ -382,7 +415,12 @@ function responseError(config: AIProviderConfig, provider: AIProviderType, respo
       { provider, status: response.status },
     );
   }
-  return new AIProviderError(response.status === 429 ? "rate_limited" : "upstream_error", response.status === 429 ? `${config.name} rate limit exceeded.` : `${config.name} request failed with HTTP ${response.status}.`, { provider, status: response.status });
+  if (response.status === 429) {
+    const retryAfterMs = parseRetryAfterMs(response.headers.get("retry-after"));
+    const wait = retryAfterMs && retryAfterMs > 0 ? ` Retry in about ${Math.max(1, Math.ceil(retryAfterMs / 1000))}s.` : "";
+    return new AIProviderError("rate_limited", `${config.name} rate limit exceeded.${wait}`, { provider, status: 429, ...(retryAfterMs !== undefined ? { retryAfterMs } : {}) });
+  }
+  return new AIProviderError("upstream_error", `${config.name} request failed with HTTP ${response.status}.`, { provider, status: response.status });
 }
 
 function validateRequest(request: AICompletionRequest, provider: AIProviderType): void {
@@ -556,7 +594,9 @@ export async function invokeAIRoutedCompletion(request: AIRoutedCompletionReques
   const requestModel = normalizeRequestedModel(request.model, "model");
   const maxAttempts = request.maxAttempts ?? 2;
   if (!Number.isInteger(maxAttempts) || maxAttempts < 1 || maxAttempts > 3) throw new AIProviderError("invalid_request", "AI provider attempts must be an integer from 1 to 3.");
-  const candidates = routedProviderCandidates(request);
+  // The chosen (or default) provider always answers first; a cooldown hint only reorders the fallbacks behind it.
+  const routed = routedProviderCandidates(request);
+  const candidates = routed.length < 2 ? routed : [routed[0]!, ...orderByCooldown(routed.slice(1))];
   if (candidates.length === 0) {
     throw new AIProviderError("not_configured", "No configured AI providers are available.");
   }
@@ -593,6 +633,7 @@ export async function invokeAIRoutedCompletion(request: AIRoutedCompletionReques
       return attempts.length ? { ...answered, fallback: { attempts } } : answered;
     } catch (error) {
       if (!(error instanceof AIProviderError)) throw error;
+      if (error.code === "rate_limited") noteProviderCooldown(provider, error.retryAfterMs ?? 30_000);
       failures.push(error);
       console.warn(`[byoai] ${provider} failed: code=${error.code}${error.status ? ` status=${error.status}` : ""}`);
       attempts.push({ provider, code: error.code, ...(error.status ? { status: error.status } : {}) });
@@ -608,7 +649,10 @@ export async function invokeAIRoutedCompletion(request: AIRoutedCompletionReques
     failures.length === 1
       ? `${lastFailure.message} (${detail})`
       : `All configured AI providers failed to complete the request (${detail}).`,
-    { provider: lastFailure?.provider, ...(lastFailure?.status ? { status: lastFailure.status } : {}) },
+    { provider: lastFailure?.provider, ...(lastFailure?.status ? { status: lastFailure.status } : {}),
+      // Only when every attempted provider was rate limited is "wait this long" true for the whole request.
+      ...(failures.length > 0 && failures.every(f => f.code === "rate_limited" && f.retryAfterMs !== undefined)
+        ? { retryAfterMs: Math.min(...failures.map(f => f.retryAfterMs!)) } : {}) },
   );
 }
 

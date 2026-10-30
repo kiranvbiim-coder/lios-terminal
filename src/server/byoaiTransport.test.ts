@@ -1,6 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { AIProviderError, classifyProviderFailure, invokeAIProvider, invokeAIRoutedCompletion, resolveOllamaChatEndpoint, resolveOpenAICompatibleChatEndpoint, supportsImageInput } from "./byoaiTransport";
+import { AIProviderError, classifyProviderFailure, invokeAIProvider, invokeAIRoutedCompletion, noteProviderCooldown, orderByCooldown, parseRetryAfterMs, resetProviderCooldownsForTest, resolveOllamaChatEndpoint, resolveOpenAICompatibleChatEndpoint, supportsImageInput } from "./byoaiTransport";
+import { runWithRequestIdentity } from "./requestContext";
 import crypto from "node:crypto";
 import { currentConversationTransmissionGuard, withConversationExecutionScope } from "./exec/execution-scope";
 
@@ -844,4 +845,53 @@ test("incoming execution forbids fallback and shares its physical dispatch ceili
     assert.equal(admitted, 1);
     assert.deepEqual(contacted, ["openai"], "neither connected fallback nor a delegated direct call can bypass incoming limits");
   });
+});
+
+test("Retry-After accepts only bounded seconds or HTTP-dates and never becomes a negative or unbounded wait", () => {
+  const now = Date.parse("2026-10-30T12:00:00Z");
+  assert.equal(parseRetryAfterMs("7", now), 7_000);
+  assert.equal(parseRetryAfterMs("0", now), 0);
+  assert.equal(parseRetryAfterMs("99999999", now), 300_000);
+  assert.equal(parseRetryAfterMs("Fri, 30 Oct 2026 12:00:20 GMT", now), 20_000);
+  assert.equal(parseRetryAfterMs("Fri, 30 Oct 2026 11:00:00 GMT", now), 0);
+  for (const bad of ["", "   ", "-5", "1.5", "soon", "1e3", "7 seconds", null, undefined]) assert.equal(parseRetryAfterMs(bad as never, now), undefined, String(bad));
+});
+
+test("a 429 with Retry-After tells the user the bounded wait and exposes it without replaying the prompt", async () => {
+  const previousKey = process.env.OPENAI_API_KEY;
+  const previousFetch = globalThis.fetch;
+  process.env.OPENAI_API_KEY = "test-openai-key";
+  let calls = 0;
+  globalThis.fetch = (async () => { calls++; return new Response(JSON.stringify({ error: { message: "slow down" } }), { status: 429, headers: { "retry-after": "12" } }); }) as typeof fetch;
+  try {
+    const error = await invokeAIProvider({ provider: "openai", messages: [{ role: "user", content: "Question" }] }).catch(e => e);
+    const failure = assertProviderError(error, "rate_limited");
+    assert.equal(failure.retryAfterMs, 12_000);
+    assert.match(failure.message, /Retry in about 12s/);
+    assert.equal(failure.toJSON().retryAfterMs, 12_000);
+    assert.equal(calls, 1, "the hint is advice; the same provider is not retried inside the request");
+    globalThis.fetch = (async () => new Response("{}", { status: 429 })) as typeof fetch;
+    const bare = assertProviderError(await invokeAIProvider({ provider: "openai", messages: [{ role: "user", content: "Question" }] }).catch(e => e), "rate_limited");
+    assert.equal(bare.retryAfterMs, undefined);
+    assert.doesNotMatch(bare.message, /Retry in about/);
+  } finally {
+    globalThis.fetch = previousFetch;
+    if (previousKey === undefined) delete process.env.OPENAI_API_KEY; else process.env.OPENAI_API_KEY = previousKey;
+  }
+});
+
+test("a cooling provider moves later only per owner and only among already-permitted candidates", () => {
+  resetProviderCooldownsForTest();
+  const candidates = ["openai", "anthropic", "gemini"] as never[];
+  assert.deepEqual(orderByCooldown([...candidates]), candidates, "no owner identity means no cooldown state");
+  runWithRequestIdentity({ userId: 7, organizationId: null } as never, () => {
+    noteProviderCooldown("openai" as never, 60_000);
+    assert.deepEqual(orderByCooldown([...candidates]), ["anthropic", "gemini", "openai"]);
+    assert.deepEqual(orderByCooldown(["openai"] as never[]), ["openai"], "a sole candidate is never blocked");
+    assert.deepEqual(orderByCooldown([...candidates], Date.now() + 61_000), candidates, "a stale hint expires");
+  });
+  runWithRequestIdentity({ userId: 8, organizationId: null } as never, () => {
+    assert.deepEqual(orderByCooldown([...candidates]), candidates, "another owner is unaffected");
+  });
+  resetProviderCooldownsForTest();
 });

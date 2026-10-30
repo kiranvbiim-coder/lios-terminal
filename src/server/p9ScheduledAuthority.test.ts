@@ -259,6 +259,34 @@ test("scheduled automation rechecks pause and isolates an owner authority denial
     assert.equal(eligible.filter(run => run.triggerType === "manual" && run.status === "failed").length, 1,
       "the legacy-approval rejection must remain an actual failed P9 run in the durable history");
   });
+  await t.test("a restart backlog runs a bounded few per claim and persists strictly later staggered times without touching edits", async () => {
+    const { workflow, ctx } = workflows[0]!;
+    const created = [];
+    for (let i = 0; i < 12; i++) {
+      created.push(await createP9Workflow(ctx, workflow.projectId, { name: `Backlog ${i}`, enabled: true,
+        trigger: { type: "schedule", schedule: { kind: "interval", everyMinutes: 5 } }, action: { kind: "provider_health" }, notificationPolicy: { enabled: false } }));
+    }
+    const ids = new Set(created.map(item => item.id));
+    // Far older than any earlier fixture row, so these sort first and the cap applies to them.
+    for (const [i, item] of created.entries()) {
+      await getDb().update(projectAutomationWorkflows).set({ nextRunAt: new Date(Date.now() - 30 * 86_400_000 + i) }).where(eq(projectAutomationWorkflows.id, item.id));
+    }
+    const now = new Date();
+    const first = (await claimDueP9Workflows(now)).filter(item => ids.has(item.workflow.id));
+    assert.equal(first.length, 5, "only the bounded backlog slice is claimed");
+    const rows = await getDb().select().from(projectAutomationWorkflows);
+    const deferred = created.filter(item => !first.some(claim => claim.workflow.id === item.id))
+      .map(item => rows.find(row => row.id === item.id)!).sort((a, b) => a.nextRunAt!.getTime() - b.nextRunAt!.getTime());
+    assert.equal(deferred.length, 7);
+    deferred.forEach((row, index) => {
+      assert.equal(row.nextRunAt!.getTime(), now.getTime() + (index + 1) * 5_000);
+      assert.equal(row.claimToken, null, "a deferred schedule is not claimed or run");
+      assert.equal(row.enabled, true);
+    });
+    assert.equal((await claimDueP9Workflows(new Date(now.getTime() + 1_000))).some(item => deferred.some(row => row.id === item.workflow.id)), false,
+      "deferred schedules are not immediately due");
+    for (const item of created) await setP9WorkflowEnabled(ctx, item.id, false);
+  });
   await t.test("filing observation refuses disabled owners before source access and carries the eligible owner's identity", async () => {
     for (const { workflow, ctx } of workflows) {
       await createP9Workflow(ctx, workflow.projectId, { name: "Owner-bound filing observation", enabled: true, trigger: { type: "event", eventType: "filing", filters: { symbol: "AAPL" } }, action: workflow.action, notificationPolicy: { enabled: false } });

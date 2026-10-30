@@ -223,7 +223,7 @@ export function createAgentDelegationRecord(input: {
 }
 
 
-export type AgentDelegationReceiptStatus = "completed" | "failed" | "cancelled" | "denied";
+export type AgentDelegationReceiptStatus = "completed" | "failed" | "cancelled" | "denied" | "timed_out";
 
 export interface AgentDelegationUsage {
   stepsUsed: number;
@@ -233,7 +233,7 @@ export interface AgentDelegationUsage {
 }
 
 export interface AgentDelegationReceipt {
-  version: 1;
+  version: 2;
   requestId: string;
   delegationId: string;
   parentDelegationId: string | null;
@@ -242,7 +242,8 @@ export interface AgentDelegationReceipt {
   contextSha256: string;
   objectiveSha256: string;
   allocatedBudget: Readonly<AgentDelegationBudget>;
-  used: Readonly<AgentDelegationUsage>;
+  /** Null means unmeasured partial execution, not zero consumption or a budget refund. */
+  used: Readonly<AgentDelegationUsage> | null;
   sourceRefs: readonly string[];
   toolReceiptRefs: readonly string[];
   resultRef: string | null;
@@ -299,20 +300,23 @@ export function createAgentDelegationReceipt(
   delegation: AgentDelegationRecord,
   input: {
     status: AgentDelegationReceiptStatus;
-    used: AgentDelegationUsage;
+    used: AgentDelegationUsage | null;
     sourceRefs?: readonly string[];
     toolReceiptRefs?: readonly string[];
     resultRef?: string | null;
   },
 ): AgentDelegationReceipt {
-  if (!["completed", "failed", "cancelled", "denied"].includes(input.status)) {
+  if (!["completed", "failed", "cancelled", "denied", "timed_out"].includes(input.status)) {
     throw new Error("Agent delegation receipt status is invalid.");
+  }
+  if (input.status === "completed" && input.used === null) {
+    throw new Error("Completed agent delegation requires measured usage.");
   }
   const sourceRefs = uniqueRefs(input.sourceRefs ?? [], "sourceRefs");
   const toolReceiptRefs = uniqueRefs(input.toolReceiptRefs ?? [], "toolReceiptRefs");
   const resultRef = input.resultRef == null ? null : assertReceiptRef(input.resultRef, "resultRef");
   return Object.freeze({
-    version: 1 as const,
+    version: 2 as const,
     requestId: delegation.requestId,
     delegationId: delegation.delegationId,
     parentDelegationId: delegation.parentDelegationId,
@@ -321,7 +325,7 @@ export function createAgentDelegationReceipt(
     contextSha256: delegation.contextSha256,
     objectiveSha256: delegation.objectiveSha256,
     allocatedBudget: delegation.budget,
-    used: assertUsage(input.used, delegation.budget),
+    used: input.used === null ? null : assertUsage(input.used, delegation.budget),
     sourceRefs,
     toolReceiptRefs,
     resultRef,
