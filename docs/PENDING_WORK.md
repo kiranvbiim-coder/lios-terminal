@@ -1,5 +1,22 @@
 # pending work
 
+## Owner-visible progress snapshot — 2026-10-30
+
+**Tracker snapshot:54 completed engineering steps,14 active/pending and8 blocked.** These steps overlap broader milestones and have different sizes; this is **not** a product-completion percentage. Completed source implementation, protected-main landing, actual connected-provider behavior and installed/release acceptance remain separate claims.
+
+| Workstream | Current state | Remaining acceptance |
+| --- | --- | --- |
+| Existing PR consolidation and earlier contributor cutovers | Completed for the recorded landed batches; PR393–397 landed. | Current PR398 still requires a corrected, frozen, green head and protected merge. |
+| Package1: inventory and architecture | Seven of nine checklist items complete: source identity, existing owners, family/channel inventory, ownership mapping, protocol and acceptance definitions. | P1.04 full selected-mechanism/dependency/test dispositions and P1.06 complete rights/security/platform clearance. |
+| Package2: isolated supporting service | Bounded pipe transport, strict Home sessions, request correlation, cancellation and cleanup exercised. | Real donor-to-canonical owner bridge, runtime registration/provisioning and end-to-end supervised lifecycle; no full service enablement claimed. |
+| Packages3–4: capabilities and integrated UX | Verified bounded slices include governed Telegram text/adoption/edits/incoming AI, reviewed skills, browser snapshot/click, Project recall and explicit notes, P9 failure containment/zoned cron, MCP cooldown and reply speech. | Complete useful channel/media/group/account surfaces, remaining agents/coding/CUA/search/model/device depth and their integrated entitled user journeys. Every useful OpenClaw family remains in scope. |
+| Windows source follow-through | Compiled-CJS loader defect fixed/exercised; build/bundle hook and native ACL/handle smoke prepared locally. | Actual Windows compilation/ACL/handle results, exact Electron package, native Core, installer and qualified AMD64 sandbox. Local macOS checks do not pass these gates. |
+| Package5 and release | Earlier macOS beta self-test/map journey has bounded evidence; latest source features are not installed-qualified. | Full macOS/Windows journeys, accessibility, offline/restart/backup/manual-upgrade integrity, independent target proof, operational release trust and owner release approval. |
+
+**Current batch:** preserve PR398's active matrix; Linux's observed obsolete CSS-class assertion is removed in the prepared cleanup. Collect all remaining job results, publish one coherent corrective candidate, freeze it and land only after the required exact-head checks pass. Subsequent feature work remains separate; no mid-run push or unnecessary full local suite.
+
+**External/unresolved gates:** confirmed zero-cost artifact allowance/paid-usage block before runtime retention; exact runtime/nested WASM historical composition and rights; applicable WhatsApp/channel eligibility and redistribution clearance; actual Windows/independent native targets; final owner release go/no-go. Production P14 signing/notarization is still unmet under the$0 beta contract, not bypassed.
+
 ## Owner release cost decision — 2026-10-26
 
 **Release spending cap: strictly $0 additional cash, without exceptions.** The single actionable SI-07/P10 zero-cost Electron beta plan is [`technical/LIOS_ZERO_COST_RELEASE_EXECUTION.md`](technical/LIOS_ZERO_COST_RELEASE_EXECUTION.md). Read it before editing any release workflow, updater, installer or packaging code. Use existing master [#91](https://github.com/kiranvbiim-coder/lios-terminal/issues/91) and existing P10/P14 owners, not a new program. Ad-hoc macOS / unsigned Windows beta may be packaged and labeled honestly; **production P14 Developer ID/notarization/Authenticode evidence is not bypassed or accepted**. No paid platform, credit/overage, cloud, CI or distribution requirement may be introduced. Release steps R0–R6 have proof gates in the contract; status is NOT VERIFIED until independently exercised. This heading is a current owner lock; historical notes below remain evidence only.
