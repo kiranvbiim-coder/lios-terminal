@@ -594,7 +594,9 @@ export async function invokeAIRoutedCompletion(request: AIRoutedCompletionReques
   const requestModel = normalizeRequestedModel(request.model, "model");
   const maxAttempts = request.maxAttempts ?? 2;
   if (!Number.isInteger(maxAttempts) || maxAttempts < 1 || maxAttempts > 3) throw new AIProviderError("invalid_request", "AI provider attempts must be an integer from 1 to 3.");
-  const candidates = orderByCooldown(routedProviderCandidates(request));
+  // The chosen (or default) provider always answers first; a cooldown hint only reorders the fallbacks behind it.
+  const routed = routedProviderCandidates(request);
+  const candidates = routed.length < 2 ? routed : [routed[0]!, ...orderByCooldown(routed.slice(1))];
   if (candidates.length === 0) {
     throw new AIProviderError("not_configured", "No configured AI providers are available.");
   }
