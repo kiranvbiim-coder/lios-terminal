@@ -6,7 +6,7 @@ import type { GatewayInvalidationTopic } from "@shared/gatewayProtocol";
 export const INVALIDATION_QUERY_KEYS: Record<Exclude<GatewayInvalidationTopic, "quantlab">, ReadonlyArray<readonly unknown[]>> = {
   alerts: [[alertsUrlFor("internal")], [alertsUrlFor("client")]],
   backup: [["/api/backup"]],
-  license: [["/api/license/status"]],
+  license: [["/api/license/status"], ["/api/license/access"]],
   devices: [["/api/devices"]],
   // Project IDs are the second segment, so no single static query prefix
   // can select only P9 notifications without invalidating unrelated pages.

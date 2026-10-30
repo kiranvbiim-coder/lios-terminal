@@ -13,6 +13,7 @@ import type { Express, Request, Response } from "express";
 import { z } from "zod";
 import { requireAuth } from "./auth";
 import { createMemoryUpload } from "./uploadPolicy";
+import { assertExecutionAllowed, respondReadOnly } from "./accessMode";
 import {
   listSpeechOutputProviders,
   listTranscriptionProviders,
@@ -115,6 +116,7 @@ export function registerVoiceRoutes(app: Express): void {
     const language = typeof req.body?.language === "string" && req.body.language.trim() ? req.body.language.trim() : null;
 
     try {
+      await assertExecutionAllowed("ai");
       const { wav, durationMs } = await convertToWav(req.file.buffer, req.file.mimetype || "application/octet-stream");
       const transcript = await transcribeVoiceInput(providerId, {
         bytes: new Uint8Array(wav),
@@ -125,6 +127,7 @@ export function registerVoiceRoutes(app: Express): void {
       });
       res.json({ transcript });
     } catch (error) {
+      if (respondReadOnly(res, error)) return;
       if (error instanceof VoiceTooLongError) {
         res.status(413).json({ error: error.message });
         return;

@@ -14,6 +14,7 @@ import { calculatePersonalFinanceSnapshot, type PersonalFinanceSnapshot } from "
 import { normalizeP6PersonalFinanceFx } from "./p6PersonalFxNormalization";
 import { resolvePersistedCurrency } from "./currencyMasterStore";
 import { resolveFxRateEvidenceAsOf } from "./fxRateStore";
+import { assertExecutionAllowed, respondReadOnly } from "./accessMode";
 
 export const p6BacktestRunRequestSchema = z.object({
   symbol: z.string().trim().min(1).max(40).regex(/^[A-Za-z0-9.^_=-]+$/),
@@ -116,8 +117,10 @@ export function createP6FinanceRouteHandlers(
         return;
       }
       try {
+        await assertExecutionAllowed("analysis");
         res.json(await runner(parsed.data));
       } catch (error) {
+        if (respondReadOnly(res, error)) return;
         res.status(422).json({ error: error instanceof Error ? error.message : "Backtest failed." });
       }
     },
@@ -128,8 +131,10 @@ export function createP6FinanceRouteHandlers(
         return;
       }
       try {
+        await assertExecutionAllowed("analysis");
         res.json(await personalFinanceRunner(parsed.data));
       } catch (error) {
+        if (respondReadOnly(res, error)) return;
         res.status(422).json({ error: error instanceof Error ? error.message : "Personal-finance calculation failed." });
       }
     },

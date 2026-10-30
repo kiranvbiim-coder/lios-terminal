@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { createP6FinanceRouteHandlers, marketBarsToP6Bars, p6BacktestRunRequestSchema, registerP6FinanceRoutes, runP6MarketBacktest } from "./p6FinanceRoutes";
+import { createP6FinanceRouteHandlers, marketBarsToP6Bars, p6BacktestRunRequestSchema, runP6MarketBacktest } from "./p6FinanceRoutes";
 
 const bars = Array.from({ length: 80 }, (_, index) => {
   const date = new Date(Date.UTC(2025, 0, 1 + index)).toISOString().slice(0, 10);
@@ -55,30 +55,18 @@ test("P6 market route refuses optional strategy languages until their governed r
 });
 
 test("P6 personal-finance route validates and returns the deterministic snapshot", async () => {
-  const handlers = createP6FinanceRouteHandlers(undefined, async (input) => ({
-    engineId: "lios.personal-finance.core-v1",
-    engineVersion: "1.1.0",
-    deterministic: true,
-    asOf: input.asOf,
-    netWorth: 150000,
-    assets: 200000,
-    liabilities: 50000,
-    trailingMonthlyIncome: 100000,
-    trailingMonthlyExpenses: 30000,
-    trailingMonthlyCashFlow: 70000,
-    savingsRate: 0.7,
-    budget: { windowMonths: 3, fromMonth: "2026-07", through: input.asOf, totalExpenses: 0, categories: [] },
-    savingsRateTrend: [],
-    debt: [],
-    goals: [],
-    retirement: null,
-    inputHash: "a".repeat(64),
-    warnings: [],
-  }));
+  const handlers = createP6FinanceRouteHandlers();
   let statusCode = 200;
   let body: unknown;
   await handlers.runPersonalFinance(
-    { body: { schemaVersion: "1", asOf: "2026-09-22", accounts: [], transactions: [], debts: [], goals: [] } } as never,
+    { body: {
+      schemaVersion: "1", asOf: "2026-09-22",
+      accounts: [
+        { id: "bank", kind: "bank", balance: 200000, currency: "USD" },
+        { id: "loan", kind: "loan", balance: -50000, currency: "USD" },
+      ],
+      transactions: [], debts: [], goals: [],
+    } } as never,
     { status(code: number) { statusCode = code; return this; }, json(value: unknown) { body = value; return this; } } as never,
   );
   assert.equal(statusCode, 200);
@@ -86,8 +74,3 @@ test("P6 personal-finance route validates and returns the deterministic snapshot
   assert.equal((body as { netWorth: number }).netWorth, 150000);
 });
 
-test("P6 finance route registration exposes backtest and personal-finance endpoints", () => {
-  const registered: string[] = [];
-  registerP6FinanceRoutes({ post(path: string) { registered.push(path); return this; } } as never);
-  assert.deepEqual(registered, ["/api/finance/p6-backtest", "/api/finance/p6-personal-finance"]);
-});

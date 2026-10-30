@@ -1,4 +1,5 @@
 export { AIProviderError } from "./byoaiRouter";
+import { assertExecutionAllowed } from "./accessMode";
 import {
   AIProviderError,
   AI_PROVIDERS,
@@ -492,6 +493,7 @@ async function enforceEnterpriseAiPolicy(
 const VERIFIABLE_CONNECTOR_PROVIDERS = new Set<AIProviderType>(AI_PROVIDERS.map((provider) => provider.id));
 
 export async function invokeAIProvider(request: AICompletionRequest): Promise<AICompletionResult> {
+  await assertExecutionAllowed("ai");
   const provider = typeof request.provider === "string" ? normalizeProviderId(request.provider) : null;
   if (!provider) throw new AIProviderError("invalid_provider", "AI provider is not registered.");
   const incomingDispatch = currentIncomingAiDispatchGuard();
@@ -588,6 +590,7 @@ function routedProviderCandidates(request: AIRoutedCompletionRequest): AIProvide
 }
 
 export async function invokeAIRoutedCompletion(request: AIRoutedCompletionRequest): Promise<AICompletionResult> {
+  await assertExecutionAllowed("ai");
   if (currentIncomingAiDispatchGuard()) request = { ...request, fallback: "none", maxAttempts: 1, dataClassification: "organization" };
   const preferredProvider = normalizeRequestedProvider(request.preferredProvider, "preferredProvider");
   const preferredModel = normalizeRequestedModel(request.preferredModel, "preferredModel");

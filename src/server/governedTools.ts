@@ -1,3 +1,4 @@
+import { assertExecutionAllowed } from "./accessMode";
 import type { ProcessSupervisor } from "./exec/types";
 import type { McpAgentEvidenceCapture } from "./mcpAgentEvidence";
 /**
@@ -346,6 +347,9 @@ export class GovernedToolRegistry<TKind extends string, TResult> {
       }
       parsedInput = parsed.data;
     }
+    // Capture reviewed input before any asynchronous admission check can yield to its caller.
+    if (tool.permissionClass !== "safe_auto") parsedInput = snapshotGovernedToolInput(parsedInput);
+    await assertExecutionAllowed("tool");
     if (
       call.source === "agent"
       && tool.sideEffect === "external"
@@ -367,7 +371,6 @@ export class GovernedToolRegistry<TKind extends string, TResult> {
         || !call.requestId || !call.stepId || !call.toolCallId || !call.planHash || !call.runSignal) {
         throw new GovernedToolApprovalRequiredError(toolId, initialDecision);
       }
-      parsedInput = snapshotGovernedToolInput(parsedInput);
       authorized = await consumeGovernedToolAuthorization({
         authorization: call.authorization,
         userId: call.userId, projectId: call.projectId, chatId: call.chatId, requestId: call.requestId,

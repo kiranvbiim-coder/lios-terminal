@@ -3,6 +3,8 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { KeyRound } from "lucide-react";
 import { apiRequest } from "@/lib/queryClient";
 import { serverErrorText } from "@/lib/apiErrorText";
+import { describeLicenseAccess, useLicenseAccess } from "@/lib/licenseAccess";
+import LicenseKeyEntry from "@/components/license/LicenseKeyEntry";
 
 interface LicenseStatus {
   deviceFingerprintHash: string;
@@ -44,6 +46,7 @@ export default function LicenseSettings({ role }: { role: string }) {
     enabled: isAdmin,
     staleTime: 5_000,
   });
+  const accessQuery = useLicenseAccess(isAdmin);
   const importMutation = useMutation({
     mutationFn: async (file: File) => {
       const license = await file.text();
@@ -72,6 +75,8 @@ export default function LicenseSettings({ role }: { role: string }) {
         <p className="font-terminal text-[8px] text-rose-300" role="alert">Licence status is unavailable.</p>
       ) : (
         <dl className="grid grid-cols-[auto,1fr] gap-x-4 gap-y-1 font-terminal text-[8px]">
+          <dt className="text-muted-foreground">Access</dt>
+          <dd className="text-foreground" data-testid="license-access">{describeLicenseAccess(accessQuery.data)}</dd>
           <dt className="text-muted-foreground">Status</dt>
           <dd className="text-foreground" data-testid="license-state">{describeState(status)}</dd>
           <dt className="text-muted-foreground">Plan</dt>
@@ -96,6 +101,8 @@ export default function LicenseSettings({ role }: { role: string }) {
           <p className="font-terminal text-[7px] text-muted-foreground">Send this ID to LiOS if you need a licence bound to this installation.</p>
         </div>
       )}
+
+      <LicenseKeyEntry submitLabel="Activate license key" />
 
       <div className="space-y-1">
         <input

@@ -1,3 +1,4 @@
+import crypto from "node:crypto";
 import { z } from "zod";
 import { LICENSE_TRUST_ANCHORS } from "@shared/licenseTrust";
 import { ASYMMETRIC_LICENSE_LEASE_ALGORITHM, verifyLeaseAgainstTrustAnchors, type SignedOfflineLicenseLease } from "./licenseLease";
@@ -16,6 +17,15 @@ import {
  */
 export const LICENSE_FILE_FORMAT = "lios-license/1";
 const MAX_LICENSE_FILE_BYTES = 64 * 1024;
+
+/**
+ * Compact paste-in form of the same signed file: `LIOS1-` + base64url(file JSON + 4-byte SHA-256 checksum). The
+ * checksum only catches paste damage (truncation, a dropped character); trust still comes solely from the Ed25519
+ * signature checked against the pinned anchors, through the exact path a file takes.
+ */
+export const LICENSE_KEY_PREFIX = "LIOS1-";
+export const MAX_LICENSE_KEY_CHARS = 16 * 1024;
+const LICENSE_KEY_CHECKSUM_BYTES = 4;
 
 const leaseSchema = z.object({
   algorithm: z.literal(ASYMMETRIC_LICENSE_LEASE_ALGORITHM),
@@ -46,6 +56,42 @@ export class LicenseImportError extends Error {
 
 export function serializeLicenseFile(lease: SignedOfflineLicenseLease): string {
   return `${JSON.stringify({ format: LICENSE_FILE_FORMAT, lease }, null, 2)}\n`;
+}
+
+function licenseKeyChecksum(body: Buffer): Buffer {
+  return crypto.createHash("sha256").update(LICENSE_KEY_PREFIX).update(body).digest().subarray(0, LICENSE_KEY_CHECKSUM_BYTES);
+}
+
+/** The text a customer pastes: one unbroken line. */
+export function serializeLicenseKey(lease: SignedOfflineLicenseLease): string {
+  const body = Buffer.from(JSON.stringify({ format: LICENSE_FILE_FORMAT, lease }), "utf8");
+  return `${LICENSE_KEY_PREFIX}${Buffer.concat([body, licenseKeyChecksum(body)]).toString("base64url")}`;
+}
+
+export function looksLikeLicenseKey(text: string): boolean {
+  return text.trimStart().slice(0, LICENSE_KEY_PREFIX.length).toUpperCase() === LICENSE_KEY_PREFIX;
+}
+
+/** Whitespace and line breaks anywhere in the pasted text are ignored. */
+export function parseLicenseKey(text: string): SignedOfflineLicenseLease {
+  const compact = text.replace(/\s+/g, "");
+  if (compact.length > MAX_LICENSE_KEY_CHARS) throw new LicenseImportError("This license key is too long.");
+  if (!looksLikeLicenseKey(compact)) throw new LicenseImportError("This is not a LiOS license key.");
+  const encoded = compact.slice(LICENSE_KEY_PREFIX.length);
+  if (!/^[A-Za-z0-9_-]+$/.test(encoded)) throw new LicenseImportError("This license key contains characters that are not allowed; copy it again.");
+  const decoded = Buffer.from(encoded, "base64url");
+  if (decoded.length <= LICENSE_KEY_CHECKSUM_BYTES) throw new LicenseImportError("This license key is incomplete; copy the whole key.");
+  const body = decoded.subarray(0, decoded.length - LICENSE_KEY_CHECKSUM_BYTES);
+  const checksum = decoded.subarray(decoded.length - LICENSE_KEY_CHECKSUM_BYTES);
+  if (!crypto.timingSafeEqual(checksum, licenseKeyChecksum(body))) {
+    throw new LicenseImportError("This license key was damaged when it was copied; copy it again exactly.");
+  }
+  return parseLicenseFile(body.toString("utf8"));
+}
+
+/** Accepts either the license file contents or a pasted `LIOS1-` key; both end up as the same signed lease. */
+export function parseLicenseInput(text: string): SignedOfflineLicenseLease {
+  return looksLikeLicenseKey(text) ? parseLicenseKey(text) : parseLicenseFile(text);
 }
 
 export function parseLicenseFile(text: string): SignedOfflineLicenseLease {
@@ -104,7 +150,7 @@ export function importLicenseFile(
   now = new Date(),
   anchors: Readonly<Record<string, string>> = LICENSE_TRUST_ANCHORS,
 ): LicenseStatus {
-  const lease = parseLicenseFile(text);
+  const lease = parseLicenseInput(text);
   const verification = verifyLeaseAgainstTrustAnchors(lease, anchors, now);
   if (!verification.valid) {
     const message = verification.reason === "lease_untrusted_key" ? "This licence was not issued by a trusted LiOS licence key."

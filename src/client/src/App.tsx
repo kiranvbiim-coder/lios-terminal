@@ -5,6 +5,7 @@ import { useHashLocation } from "wouter/use-hash-location";
 import { queryClient } from "./lib/queryClient";
 import { QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/toaster";
+import AccessModeGate from "@/components/license/AccessModeGate";
 import { P9DesktopNotificationBridge } from "@/components/terminal/P9DesktopNotificationBridge";
 import Terminal from "./pages/Terminal";
 import PublicProductPreview from "./pages/PublicProductPreview";
@@ -273,7 +274,7 @@ function App() {
         {session && session.mustChangePassword ? (
           <ForcedChangePassword email={session.email} onDone={() => setSession({ ...session, mustChangePassword: false })} />
         ) : session ? (
-          <>
+          <AccessModeGate enabled>
             {/* Preserve the conversation, staged inputs and workspace while contextual setup is open. */}
             <div data-lios-workspace hidden={domainPickerOpen}>
               <AppRouter
@@ -309,7 +310,7 @@ function App() {
             {session && domainPickerOpen && managementView === null && (
               <DomainPicker session={session} onChoose={handleChooseDomain} onCancel={() => setDomainPickerOpen(false)} onLogout={handleLogout} />
             )}
-          </>
+          </AccessModeGate>
         ) : (
           <PublicProductPreview onLoginSuccess={(nextSession) => { acceptSession(nextSession); }} />
         )}

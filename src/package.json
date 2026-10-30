@@ -74,6 +74,7 @@
     "license:inspect": "tsx script/license_tool.ts inspect",
     "license:issue": "tsx script/license_tool.ts issue",
     "license:keygen": "tsx script/license_tool.ts keygen",
+    "license:key": "node script/license_key.cjs",
     "data-root": "tsx script/data_root.ts",
     "backup:create": "tsx script/backup.ts create",
     "backup:verify": "tsx script/backup.ts verify",

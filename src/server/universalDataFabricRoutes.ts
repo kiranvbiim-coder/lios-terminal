@@ -1,6 +1,7 @@
 import type { Express, Request, Response } from "express";
 import { z } from "zod";
 import { requireAuth } from "./auth";
+import { assertExecutionAllowed, respondReadOnly } from "./accessMode";
 import { tenantContext } from "./tenantContext";
 import {
   browserConnectorPolicySchema,
@@ -49,6 +50,7 @@ import { getProject } from "./projectStore";
 
 function ctx(req: Request){ return tenantContext(req.user!); }
 function fail(res: Response,error:unknown){
+  if(respondReadOnly(res,error))return;
   if(error instanceof z.ZodError){res.status(400).json({error:"Invalid data-fabric request.",issues:error.issues});return;}
   res.status(422).json({error:error instanceof Error?error.message:"Data-fabric request failed."});
 }
@@ -244,6 +246,7 @@ export function registerUniversalDataFabricRoutes(app: Express):void{
 
   app.post("/api/data-fabric/browser/execute",async(req,res)=>{
     try{
+      await assertExecutionAllowed("tool");
       const body=z.object({
         policy:browserConnectorPolicySchema,
         request:z.object({

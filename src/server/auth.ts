@@ -28,7 +28,7 @@ import {
   type UserRole,
 } from "@shared/schema";
 import { checkPasswordPolicy } from "@shared/passwordPolicy";
-import { DEFAULT_TRIAL_DAYS } from "@shared/commercialRuntime";
+import { DEFAULT_TRIAL_DAYS, TRIAL_PENDING_BILLING_STATE } from "@shared/commercialRuntime";
 import { evaluateOrganizationAccess } from "./controlPlanePolicy";
 import { recordAuditEvent } from "./auditEvents";
 import {
@@ -675,15 +675,17 @@ export function registerAuthRoutes(app: Express): void {
       return;
     }
 
-    // The trial belongs to the installation, not to an account: once its clock has run out without a licence, a new
-    // registration cannot restart it.
-    const licensed = evaluateCachedOfflineAccess().allowed;
-    const [trialStarted] = await db.select({ endsAt: organizationLicenses.trialEndsAt }).from(organizationLicenses)
-      .where(and(eq(organizationLicenses.billingState, "trial"), isNotNull(organizationLicenses.trialEndsAt)))
-      .orderBy(asc(organizationLicenses.trialEndsAt)).limit(1);
-    if (!licensed && trialStarted?.endsAt && trialStarted.endsAt.getTime() < Date.now()) {
-      res.status(402).json({ error: "The trial on this installation has ended. Import a LiOS licence to create more client accounts." });
-      return;
+    // Desktop accounts share the installation's one-time trial. Server-Home customers have independent trials:
+    // one customer's expiry must neither block another customer's enrollment nor restart the Home's clock.
+    if (resolveRuntimeMode() === "desktop_local") {
+      const licensed = evaluateCachedOfflineAccess().allowed;
+      const [trialStarted] = await db.select({ endsAt: organizationLicenses.trialEndsAt }).from(organizationLicenses)
+        .where(and(eq(organizationLicenses.billingState, "trial"), isNotNull(organizationLicenses.trialEndsAt)))
+        .orderBy(asc(organizationLicenses.trialEndsAt)).limit(1);
+      if (!licensed && trialStarted?.endsAt && trialStarted.endsAt.getTime() < Date.now()) {
+        res.status(402).json({ error: "The trial on this installation has ended. Import a LiOS licence to create more client accounts." });
+        return;
+      }
     }
 
     const [financeDomain] = await db.select().from(domains).where(eq(domains.slug, "finance")).limit(1);
@@ -694,7 +696,6 @@ export function registerAuthRoutes(app: Express): void {
 
     const organizationName = parsed.data.organizationName || `${parsed.data.name}'s LiOS Workspace`;
     const slug = `trial-${crypto.randomBytes(12).toString("hex")}`;
-    const now = new Date();
     let organization: typeof organizations.$inferSelect | undefined;
     let createdUser: User | undefined;
     try {
@@ -726,13 +727,16 @@ export function registerAuthRoutes(app: Express): void {
         planId: null,
         status: "active",
         seatsPurchased: 1,
-        billingState: "trial",
-        trialEndsAt: new Date(now.getTime() + DEFAULT_TRIAL_DAYS * 86_400_000),
+        // The administrator explicitly starts this trial next (POST /api/license/trial/start); until then no clock runs.
+        // Only the Home owner, not a server-Home customer administrator, may import an installation license key.
+        billingState: TRIAL_PENDING_BILLING_STATE,
+        trialEndsAt: null,
       });
 
       await recordAuditEvent(createdUser.id, "self_serve_trial_registered", {
         organizationId: organization.id,
         trialDays: DEFAULT_TRIAL_DAYS,
+        trialStarted: false,
       });
     } catch (error) {
       if (organization) {

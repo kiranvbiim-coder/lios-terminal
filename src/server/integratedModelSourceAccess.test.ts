@@ -14,14 +14,18 @@ import type { DrizzleDb } from "./db";
 const root = fs.mkdtempSync(path.join(os.tmpdir(), "lios-model-source-access-"));
 process.env.LIOS_DATA_ROOT = root;
 process.env.LIMURIA_DATA_DIR = root;
+process.env.LIOS_LICENSE_CACHE_DIR = path.join(root, "license-cache");
+process.env.LIOS_DESKTOP_PACKAGED = "true";
 delete process.env.DATABASE_URL;
+// Set the isolated Home, license cache and packaged mode before loading modules that capture runtime paths.
 const { initDb, closeDb, getDb } = await import("./db");
-const { users, organizations, datasetSnapshots, financialModelRuns, dataEntitlementPolicies, auditEvents } = await import("@shared/schema");
+const { users, organizations, organizationLicenses, datasetSnapshots, financialModelRuns, dataEntitlementPolicies, auditEvents } = await import("@shared/schema");
 const { createEntitlementPolicy } = await import("./dataEntitlementStore");
 const { stableSnapshotHash } = await import("./pointInTimeDatasetStore");
 const { registerDataFabricRoutes } = await import("./dataFabricRoutes");
 const { saveFinancialModelRun } = await import("./financialModelRunStore");
 const { loadIntegratedModelDatasetSource, assertIntegratedModelDatasetSourceCurrent } = await import("./integratedModelArtifact");
+const { ensureInstallationTrialRecord } = await import("./accessMode");
 
 // Entirely synthetic statements and rights; no connected-provider or owner Home data.
 const payload = financialDatasetPayloadSchema.parse({ symbol: "TEST", periods: [{
@@ -35,6 +39,9 @@ test("integrated calculation admits current synthetic source rights before loadi
   t.after(async () => { await closeDb(); fs.rmSync(root, { recursive: true, force: true }); });
   await initDb();
   const db = getDb();
+  const { organizationId: installationId } = await ensureInstallationTrialRecord();
+  const activeTrialEndsAt = new Date(Date.now() + 7 * 86_400_000);
+  await db.update(organizationLicenses).set({ billingState: "trial", trialEndsAt: activeTrialEndsAt }).where(eq(organizationLicenses.organizationId, installationId));
   const [orgA, orgB] = await db.insert(organizations).values([
     { name: "Synthetic model A", slug: `model-source-a-${crypto.randomUUID()}` },
     { name: "Synthetic model B", slug: `model-source-b-${crypto.randomUUID()}` },
@@ -54,12 +61,15 @@ test("integrated calculation admits current synthetic source rights before loadi
     return row;
   }
   let payloadReads = 0;
+  let datasetReads = 0;
+  let modelTransactions = 0;
   function observePayloadSelects(executor: Pick<DrizzleDb, "select">) {
     const originalSelect = executor.select.bind(executor);
     return t.mock.method(executor, "select", (fields?: Parameters<typeof executor.select>[0]) => {
       const builder = fields === undefined ? originalSelect() : originalSelect(fields);
       const originalFrom = builder.from.bind(builder);
       builder.from = ((table: Parameters<typeof builder.from>[0]) => {
+        if (table === datasetSnapshots) datasetReads++;
         if (table === datasetSnapshots && (fields === undefined || Object.values(fields).includes(datasetSnapshots.payload))) payloadReads++;
         return originalFrom(table);
       }) as typeof builder.from;
@@ -70,7 +80,7 @@ test("integrated calculation admits current synthetic source rights before loadi
   type ModelTransaction = Parameters<Parameters<DrizzleDb["transaction"]>[0]>[0];
   const originalTransaction = db.transaction.bind(db);
   const transactionSpy = t.mock.method(db, "transaction", function<R>(work: (tx: ModelTransaction) => Promise<R>, config?: Parameters<DrizzleDb["transaction"]>[1]) {
-    return originalTransaction(async tx => { observePayloadSelects(tx); return work(tx); }, config);
+    return originalTransaction(async tx => { modelTransactions++; observePayloadSelects(tx); return work(tx); }, config);
   });
   const app = express();
   app.use(express.json());
@@ -87,7 +97,7 @@ test("integrated calculation admits current synthetic source rights before loadi
   const address = server.address();
   assert.ok(address && typeof address !== "string");
   const url = `http://127.0.0.1:${address.port}/api/financial-models/integrated`;
-  const request = (id: string, actor = owner) => fetch(url, { method: "POST", headers: { "content-type": "application/json", "x-test-user": String(actor.id) }, body: JSON.stringify({ datasetSnapshotId: id, assumptions: { projectionYears: 2, revenueGrowth: 0.1 } }) });
+  const request = (id: string, actor = owner, revenueGrowth = 0.1) => fetch(url, { method: "POST", headers: { "content-type": "application/json", "x-test-user": String(actor.id) }, body: JSON.stringify({ datasetSnapshotId: id, assumptions: { projectionYears: 2, revenueGrowth } }) });
   async function denied(id: string, status: number, metadataOnly: boolean, actor = owner) {
     const before = await db.select({ id: financialModelRuns.id }).from(financialModelRuns);
     const auditBefore = await db.select({ id: auditEvents.id }).from(auditEvents);
@@ -152,6 +162,47 @@ test("integrated calculation admits current synthetic source rights before loadi
     assert.equal(replay.status, 200);
     assert.equal((await replay.json()).receipt.runId, run.id);
     await denied(source.id, 409, false, colleague);
+  });
+  await t.test("expired managed trial refuses calculation before model/source callbacks while saved forecasts remain readable", async () => {
+    const source = await snapshot();
+    const saved = await request(source.id, owner, 0.2);
+    assert.equal(saved.status, 200, saved.status === 200 ? undefined : await saved.text());
+    const savedBody = await saved.json();
+    const runsBefore = await db.select().from(financialModelRuns);
+    const auditsBefore = await db.select().from(auditEvents);
+    const expiredTrialEndsAt = new Date(Date.now() - 60_000);
+    await db.update(organizationLicenses).set({ trialEndsAt: expiredTrialEndsAt }).where(eq(organizationLicenses.organizationId, installationId));
+    try {
+      datasetReads = 0;
+      payloadReads = 0;
+      const transactionsBefore = modelTransactions;
+      const response = await request(source.id);
+      assert.equal(response.status, 402);
+      const body = await response.json();
+      assert.equal(body.code, "license_read_only");
+      assert.equal(body.reason, "trial_expired");
+      assert.equal(body.capability, "analysis");
+      assert.equal(body.trialEndsAt, expiredTrialEndsAt.toISOString());
+      assert.match(body.error, /open and export/i);
+      assert.equal(datasetReads, 0, "Expired calculation must not load even source metadata.");
+      assert.equal(payloadReads, 0, "Expired calculation must not load source values.");
+      assert.equal(modelTransactions, transactionsBefore, "The transaction containing source loading, model execution and save must never run.");
+      assert.deepEqual(await db.select().from(financialModelRuns), runsBefore);
+      assert.deepEqual(await db.select().from(auditEvents), auditsBefore);
+
+      const reopened = await fetch(`${url}/runs/${savedBody.receipt.runId}`, { headers: { "x-test-user": String(owner.id) } });
+      assert.equal(reopened.status, 200, reopened.status === 200 ? undefined : await reopened.text());
+      const reopenedBody = await reopened.json();
+      assert.deepEqual(reopenedBody.result.forecast, savedBody.result.forecast);
+      assert.deepEqual(reopenedBody.receipt, savedBody.receipt);
+      const listed = await fetch(`${url}/runs?symbol=TEST`, { headers: { "x-test-user": String(owner.id) } });
+      assert.equal(listed.status, 200);
+      assert.ok((await listed.json()).some((run: { id: string }) => run.id === savedBody.receipt.runId));
+      assert.equal(modelTransactions, transactionsBefore, "Reading persisted forecasts must not rerun the model.");
+      assert.deepEqual(await db.select().from(financialModelRuns), runsBefore);
+    } finally {
+      await db.update(organizationLicenses).set({ trialEndsAt: activeTrialEndsAt }).where(eq(organizationLicenses.organizationId, installationId));
+    }
   });
   await t.test("explicitly shared source still requires rights but not personal ownership", async () => {
     const source = await snapshot({ organizationId: null, createdByUserId: null });

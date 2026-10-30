@@ -194,6 +194,11 @@ async function runMigrations(db: DrizzleDb): Promise<void> {
   }
 }
 
+/** True once `initDb()` has run. Lets code that must not throw before startup (and tests without a database) ask first. */
+export function isDbInitialized(): boolean {
+  return Boolean(dbInstance);
+}
+
 export function getDb(): DrizzleDb {
   if (!dbInstance) {
     throw new Error("Database not initialized. Call initDb() at server startup before using getDb().");

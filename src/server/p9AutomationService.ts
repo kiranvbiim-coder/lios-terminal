@@ -1,3 +1,4 @@
+import { assertExecutionAllowed, resolveInstallationAccess } from "./accessMode";
 import crypto from "node:crypto";
 import { eq } from "drizzle-orm";
 import { p6PersonalFinanceRequestSchema } from "@shared/p6FinanceContracts";
@@ -539,6 +540,8 @@ export async function executeP9Workflow(input: ExecuteP9WorkflowInput): Promise<
   result: P9WorkflowRunResult | null;
   error: string | null;
 }> {
+  // Read-only mode (trial or licence ended) admits no new automation run, from any trigger.
+  await assertExecutionAllowed("automation");
   const ctx = await tenantForWorkflow(input.workflow);
   if (input.ctx && (input.ctx.userId !== ctx.userId || input.ctx.organizationId !== ctx.organizationId || input.ctx.role !== ctx.role)) {
     throw new Error("Automation caller authority changed; inspect current account permissions before running.");
@@ -613,6 +616,8 @@ export async function executeP9Workflow(input: ExecuteP9WorkflowInput): Promise<
 }
 
 export async function runDueP9Workflows(now = new Date()): Promise<{ claimed: number; succeeded: number; failed: number }> {
+  // Nothing is claimed while read-only, so due work waits instead of burning claim leases.
+  if ((await resolveInstallationAccess(now)).mode === "read_only") return { claimed: 0, succeeded: 0, failed: 0 };
   const claimed = await claimDueP9Workflows(now, 25);
   let succeeded = 0;
   let failed = 0;
