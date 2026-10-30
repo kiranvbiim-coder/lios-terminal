@@ -26,6 +26,7 @@ src/.pyinstaller-spec/
 src/sandbox-image-inputs/
 src/sandbox-image-dist/
 src/native-runtime-dist/
+src/native-runtime-fs/build/
 
 # Private runtime custody and audit outputs are not publication artifacts.
 **/.sp02-qualification/

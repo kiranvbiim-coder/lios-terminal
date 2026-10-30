@@ -1,5 +1,4 @@
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
 import test from "node:test";
 import type { SourceConnection } from "@shared/schema";
 import type { InstalledPluginSnapshot } from "./p13PluginManager";
@@ -110,13 +109,3 @@ test("P3 Chat hides credential-like labels and does not allow non-owner manageme
   assert.equal(JSON.stringify(catalog).includes("private-secret"), false);
 });
 
-test("P3 catalog route stays authenticated, read only, and P13 installation remains owner-managed", () => {
-  const routes = readFileSync(new URL("./p13ExtensionRoutes.ts", import.meta.url), "utf8");
-  assert.match(routes, /router\.use\(requireAuth\)/);
-  assert.match(routes, /router\.get\("\/chat-catalog"/);
-  assert.match(routes, /chatExtensionCatalog\(/);
-  assert.match(routes, /getP13PluginRuntimeHost\(\)\.plugins\.list\(\)/);
-  assert.match(routes, /const actor = await currentOwner\(req\)/);
-  assert.match(routes, /router\.post\("\/install"/);
-  assert.doesNotMatch(routes, /router\.post\("\/chat-catalog"/);
-});

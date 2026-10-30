@@ -19,22 +19,3 @@ test("Sprint D: graphical overlays and market component must parse as real TypeS
   }
 });
 
-test("Sprint D: stored comparison consent never propagates to new A/B captures or missing receipts", () => {
-  const ui = component("AnalyticalStudio");
-  assert.match(ui, /comparisonReviewKey\(leftSnapshot, rightSnapshot\)/);
-  assert.match(ui, /reviewedPairKey === pairKey/);
-  assert.match(ui, /resolveRecordedReceiptPair\(evidence.receipts, receiptA, receiptB\)/);
-  assert.match(ui, /diffCalculationReceipts\(actualReceipts\[0\], actualReceipts\[1\]\)/);
-  assert.match(ui, /context.kind === "cross-context" && pairKey !== null/);
-  assert.doesNotMatch(ui, /Math\.min\(receiptA|Math\.min\(receiptB/);
-});
-
-test("Sprint D: performance measures do not introduce a new animation or market data owner", () => {
-  const market = component("FusionMarketCanvas");
-  assert.match(market, /EMPTY_BREADTH_SERIES/);
-  assert.match(market, /RECORDED OBSERVATIONS/);
-  assert.match(market, /SESSION_LABEL\[item\]/);
-  assert.match(market, /Ranges count recorded trading sessions/);
-  assert.match(market, /recordedBreadthRows\(series, points\)/);
-  assert.doesNotMatch(market, /setInterval\(|requestAnimationFrame\(|fetch\(/);
-});

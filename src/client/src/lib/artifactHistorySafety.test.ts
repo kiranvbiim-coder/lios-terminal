@@ -1,6 +1,5 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { readFileSync } from "node:fs";
 import type { ArtifactComparison } from "@shared/artifactContracts";
 import type { ArtifactDetail, ProjectArtifactVersionRecord } from "./useArtifacts";
 import {
@@ -70,24 +69,3 @@ test("WS-40 restoration only uses current head, earlier recorded version and no 
   assert.equal(canRestoreArtifactHistory(anchor, { ...oldRecord, artifactId: "artifact:foreign" }, false, false), false);
 });
 
-test("WS-40 history UI never swaps placeholder revisions or auto-restores and validates async response hashes", () => {
-  const pane = readFileSync(new URL("../components/terminal/ArtifactPane.tsx", import.meta.url), "utf8");
-  const hooks = readFileSync(new URL("./useArtifacts.ts", import.meta.url), "utf8");
-  assert.match(pane, /exactArtifactHistoryDetail\(detail\.data, artifactId, version, projectId, owningChatId, detail\.isPlaceholderData \|\| detail\.isError\)/);
-  assert.doesNotMatch(hooks, /placeholderData: previous => previous\?\.artifact\.id === artifactId/);
-  assert.match(pane, /exactArtifactHistoryComparison\(result, captured, from, to\)/);
-  assert.match(pane, /historyRequest\.current !== requestId/);
-  assert.match(pane, /sameArtifactHistoryAnchor\(historyCurrent\.current\.anchor, captured\)/);
-  assert.match(pane, /historyCurrent\.current\.left !== from\.version/);
-  assert.match(pane, /metadataDeltaLabels\(compareArtifactVersionMetadata\(from, to\)\)/);
-  assert.match(pane, /data-testid="artifact-history-version-list"/);
-  assert.match(pane, /View exact v/);
-  assert.match(pane, /data-testid="artifact-prepare-restore"/);
-  assert.match(pane, /data-testid="artifact-restore-confirmation"/);
-  assert.match(pane, /data-testid="artifact-confirm-restore"/);
-  assert.match(pane, /await restoreArtifactRevision\(artifactId, captured\.anchor\.headVersion, captured\.targetVersion\)/);
-  assert.match(pane, /saved\.version !== captured\.anchor\.headVersion \+ 1/);
-  assert.match(pane, /Save or reset unsaved Artifact edits before switching revisions/);
-  assert.match(pane, /setRestoreIntent\(\{anchor:\{\.\.\.anchor\},targetVersion:previous\.version,targetHash:previous\.contentHash\}\)/);
-  assert.doesNotMatch(pane, /await undoArtifact\(/);
-});

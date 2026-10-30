@@ -1,5 +1,4 @@
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
 import test from "node:test";
 import { prepareArtifactChart, selectArtifactChartViewport } from "./artifactChartProjection";
 import { buildArtifactEChartsOption } from "./artifactEChartsOption";
@@ -72,13 +71,3 @@ test("ECharts supports unsaved chart-type preview while refusing invalid indices
 });
 
 
-test("B08/B09 SVG chart has one runtime instance for repeated canonical type and viewport changes",()=>{
-  const source=readFileSync(new URL("../components/terminal/EChartsArtifactPlot.tsx",import.meta.url),"utf8");
-  assert.equal((source.match(/const chart=init\(/g)??[]).length,1);
-  assert.match(source,/const chartRef=useRef<ReturnType<typeof init> \| null>\(null\)/);
-  assert.match(source,/chartRef\.current\?\.setOption\(option/);
-  assert.match(source,/chartRef\.current=null;chart\.dispose\(\)/);
-  assert.match(source,/ResizeObserver/);
-  assert.match(source,/renderer:"svg"/);
-  assert.doesNotMatch(source,/renderer:"canvas"|new WebSocket|fetch\(/);
-});

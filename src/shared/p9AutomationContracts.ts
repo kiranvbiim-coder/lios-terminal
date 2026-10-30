@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { conversationRequestSchema } from "./conversationRuntime";
 import { p9PortfolioMaterialityActionSchema } from "./p9PortfolioMateriality";
+import { p9CronScheduleSchema } from "./p9CronSchedule";
 
 export const P9_AUTOMATION_SCHEMA_VERSION = "1" as const;
 /** Repeated recurring-run failures require explicit owner recovery, not an endless background retry loop. */
@@ -40,7 +41,7 @@ export const p9WorkflowTriggerSchema = z.discriminatedUnion("type", [
   z.object({ type: z.literal("manual") }).strict(),
   z.object({
     type: z.literal("schedule"),
-    schedule: z.discriminatedUnion("kind", [
+    schedule: z.union([
       z.object({
         kind: z.literal("interval"),
         everyMinutes: z.number().int().min(5).max(10_080),
@@ -50,6 +51,7 @@ export const p9WorkflowTriggerSchema = z.discriminatedUnion("type", [
         hour: z.number().int().min(0).max(23),
         minute: z.number().int().min(0).max(59),
       }).strict(),
+      p9CronScheduleSchema,
     ]),
   }).strict(),
   z.object({

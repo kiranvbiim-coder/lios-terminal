@@ -209,10 +209,10 @@ export async function setP9WorkflowEnabled(
 ): Promise<ProjectAutomationWorkflow> {
   const current = await getP9Workflow(ctx, workflowId);
   const now = new Date();
-  const trigger = p9WorkflowTriggerSchema.parse(current.trigger);
   const [row] = await getDb().update(projectAutomationWorkflows).set({
     enabled,
-    nextRunAt: enabled ? nextP9ScheduledRun(trigger, now) : null,
+    // An invalid persisted definition must still be pausable; enabling revalidates it.
+    nextRunAt: enabled ? nextP9ScheduledRun(p9WorkflowTriggerSchema.parse(current.trigger), now) : null,
     ...(enabled ? { consecutiveFailures: 0 } : {}),
     claimToken: null,
     claimExpiresAt: null,
@@ -328,6 +328,9 @@ export async function beginP9Run(
   expectedWorkflowUpdatedAt: Date | null = null,
 ): Promise<ProjectAutomationRun | null> {
   await getProject(ctx, workflow.projectId);
+  // Persisted definitions can outlive their original validation. Refuse an
+  // invalid cron before an action starts; the due runner isolates this denial.
+  p9WorkflowTriggerSchema.parse(workflow.trigger);
   const id = "workflow-run:" + crypto.randomUUID();
   const startedAt = new Date();
   const values = {

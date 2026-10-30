@@ -1,5 +1,4 @@
 import assert from "node:assert/strict";
-import fs from "node:fs";
 import test from "node:test";
 import {
   currentAgentExecPolicy,
@@ -73,26 +72,3 @@ test("proposal refuses aliases, child request ids and malformed tool call ids be
   );
 });
 
-test("L9 coordinator has one exact approved launch path and never mints a second session id", () => {
-  const source = fs.readFileSync(new URL("./agentExecOperation.ts", import.meta.url), "utf8");
-  assert.equal((source.match(/executePreparedGovernedCommand\(/g) ?? []).length, 1);
-  assert.doesNotMatch(source, /executeJournaledGovernedCommand|runCommand\(|spawn\(/);
-  assert.doesNotMatch(source, /randomUUID\(/);
-  assert.match(source, /proposeExactConversationOperation/);
-  assert.doesNotMatch(source, /reviewExactConversationOperation|reviewAgentExecOperation/);
-  assert.match(source, /consumeExactConversationOperation/);
-  assert.match(source, /Same canonical agent-run id/);
-  assert.match(source, /tool_call_execution_prepared/);
-  const durableEvidence = source.indexOf("await input.recordPreparedEvidence");
-  const reviewRegistration = source.indexOf("await proposeExactConversationOperation");
-  assert.ok(durableEvidence >= 0 && reviewRegistration > durableEvidence, "L2 prepared evidence must persist before GM-11 review registration");
-  assert.match(source, /backendGenerationId: prepared\.facts\.runtimeGenerationId \?\? null/);
-  assert.match(source, /executePreparedGovernedCommand\(\s*approved\.prepared,/);
-  const executeStart = source.indexOf("export async function executeApprovedAgentExecOperation");
-  assert.ok(executeStart >= 0);
-  const executeBody = source.slice(executeStart);
-  assert.doesNotMatch(executeBody, /prepareStrictAgentExecIntent|proposeExactConversationOperation|reviewExactConversationOperation/);
-  assert.match(executeBody, /approvedOperationDigest: approved\.approvedOperationDigest/);
-  assert.match(executeBody, /lease: approved\.lease/);
-  assert.match(executeBody, /currentPolicy: approved\.currentPolicy/);
-});

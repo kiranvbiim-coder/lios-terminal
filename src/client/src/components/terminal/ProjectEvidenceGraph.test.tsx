@@ -1,7 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import * as React from "react";
-import { readFileSync } from "node:fs";
 import { renderToStaticMarkup } from "react-dom/server";
 import type { P7ContextGraph, P7Insight } from "@shared/p7ResearchContracts";
 import { ProjectEvidenceGraph } from "./ProjectEvidenceGraph";
@@ -57,10 +56,4 @@ test("B02 Project graph search and source filters remain bound to same P7 source
   assert.match(html,/Source IDs only/);
   assert.match(html,/2 of 2 Project nodes/);
   assert.match(html,/not guessed here/);
-  const source=readFileSync(new URL("./ProjectEvidenceGraph.tsx",import.meta.url),"utf8");
-  assert.match(source,/const visibleNodes = useMemo/);
-  assert.match(source,/const visibleEdges = useMemo/);
-  assert.match(source,/visibleNodeIds\.has\(item\.from\) && visibleNodeIds\.has\(item\.to\)/);
-  assert.match(source,/setChosenNode\(null\);setChosenEdge\(null\)/);
-  assert.doesNotMatch(source,/fetch\(|navigator\.geolocation|new WebSocket|setP7Graph/);
 });

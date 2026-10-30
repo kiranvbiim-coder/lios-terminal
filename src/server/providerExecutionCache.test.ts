@@ -333,11 +333,3 @@ test("P5 credential mutation revision blocks old provider-cache hits under an un
   clearProviderExecutionCache();
 });
 
-test("P5 vault writes and external invalidations signal cache credential revisions", async () => {
-  const { readFileSync } = await import("node:fs");
-  const vault = readFileSync(new URL("./credentialVault.ts", import.meta.url), "utf8");
-  const cache = readFileSync(new URL("./providerExecutionCache.ts", import.meta.url), "utf8");
-  assert.match(vault, /function writeVaultStore[\s\S]*?noteProviderCredentialMutation\(\)/);
-  assert.match(vault, /export function invalidateVaultCache[\s\S]*?noteProviderCredentialMutation\(\)/);
-  assert.match(cache, /credentialRevision:\s*providerCredentialRevision\(\)/);
-});

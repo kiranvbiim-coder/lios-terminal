@@ -60,6 +60,7 @@ Supported trigger types:
 - `manual`;
 - `schedule.interval` — 5 minutes through 7 days;
 - `schedule.daily_utc`;
+- `schedule.cron` — five fields and an explicit IANA `timeZone`; minute-field slots must remain at least five minutes apart, including the hour boundary. Numeric/name lists, ranges and steps are supported; seconds, years, macros, random fields and impossible future schedules refuse.
 - `event`.
 
 Declared event types (provider/bridge readiness is separate):
@@ -72,6 +73,13 @@ Declared event types (provider/bridge readiness is separate):
 - provider health.
 
 Event envelopes can carry Project, owner and organization scope. Private risk/provider events therefore cannot wake a different tenant's workflow.
+
+Cron calendar policy: restricted day-of-month and weekday use OR. Nonexistent local wall times are skipped; a repeated wall time runs only at its first real occurrence, including half-hour/two-hour folds. `shared/p9CronSchedule.ts` adapts the approved OpenClaw future-occurrence/offsetless-wall normalization around pinned Croner10.0.1. Evaluators are paused with no task callbacks/timers and a bounded cache; P9 alone owns scheduling. Existing interval/daily-UTC definitions are unchanged.
+
+Save Workflow and exact Automation schedule review show the expression, selected zone and a local UTC/zoned preview; Home computes the authoritative saved next due. Changing expression or zone invalidates activation acknowledgement. Saving/editing does not enable a paused workflow or authorize actions. Downtime still permits at most one currently overdue claim, never replay of all missed slots; existing failure backoff/pause remains a floor on future scheduling.
+
+Source evidence:71 focused timezone/DST/validation/P9 revision/claim/recovery/authority/UI-helper behaviors and TypeScript passed. Actual authenticated UI rejected an unsafe every-minute schedule, saved a paused weekday09:00 Asia/Kolkata definition, explicitly enabled it and observed server next due `2026-11-02T03:30:00Z`. A simulated owned overdue timestamp then passed through the actual canonical provider-health executor once; the next cycle claimed zero, and real process reopen retained the exact schedule/next slot/single successful run. Actual full Home deterministic Doctor run → Save Workflow accepted cron/zone review, invalidated activation acknowledgement on zone change, and saved the exact recipe inactive. A discovered action-row layout collapse was corrected and visually rechecked; saved cron due display names the selected zone plus UTC. This is source/runtime proof, not installed/native/catch-up-family/SP acceptance.
+
 
 ### Durable persistence
 

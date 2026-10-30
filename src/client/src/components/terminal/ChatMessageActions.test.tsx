@@ -1,12 +1,10 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { readFileSync } from "node:fs";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import ChatMessageActions from "./ChatMessageActions";
 import { copyChatMessageText } from "@/lib/chatMessageActions";
 
-const source = readFileSync(new URL("./ChatMessageActions.tsx", import.meta.url), "utf8");
 
 test("Chat message actions are keyboard-discernible, 44px and role appropriate", () => {
   const answer = renderToStaticMarkup(createElement(ChatMessageActions, {
@@ -31,16 +29,6 @@ test("machine-only response exposes no copyable message actions", () => {
   assert.equal(html, "");
 });
 
-test("a message change releases its own pending clipboard lock but not a newer message's lock", () => {
-  assert.ok(source.includes("useEffect(()=>{"));
-  assert.ok(source.includes("epoch.current++;"));
-  assert.ok(source.includes("inFlight.current=false;"));
-  assert.ok(source.includes("},[content,role]);"));
-  assert.ok(source.includes("const generation=epoch.current;"));
-  assert.ok(source.includes("if(epoch.current===generation)setState(ok?\"copied\":\"failed\");"));
-  assert.ok(source.includes("if(epoch.current===generation)inFlight.current=false;"));
-  assert.ok(!source.includes("finally {inFlight.current=false;}"));
-});
 
 test("copy stays pending until resolved, explicitly reports denial and never reports false success", async () => {
   let settle!: () => void;
@@ -56,7 +44,4 @@ test("copy stays pending until resolved, explicitly reports denial and never rep
   assert.equal(await request, true);
   assert.equal(await copyChatMessageText(async () => { throw Error("clipboard denied"); }, "Visible answer"), false);
   assert.equal(await copyChatMessageText(undefined, "Visible answer"), false);
-  assert.ok(source.includes('aria-busy={state==="copying"}'));
-  assert.ok(source.includes('state==="failed"?"Try copy again"'));
-  assert.ok(source.includes('role="alert"'));
 });

@@ -27,6 +27,22 @@ test("P9 interval and daily UTC schedules compute deterministic next run", () =>
   );
 });
 
+test("P9 cron remains inside the existing trigger contract and scheduled-run engine", () => {
+  const parsed = p9WorkflowDefinitionInputSchema.parse({
+    name: "Zoned review", enabled: true,
+    trigger: { type: "schedule", schedule: { kind: "cron", expression: "15 9 * * MON-FRI", timeZone: "America/New_York" } },
+    action: { kind: "provider_health" }, notificationPolicy: { enabled: false },
+  });
+  assert.equal(nextP9ScheduledRun(parsed.trigger, new Date("2026-10-30T13:15:00Z"))?.toISOString(), "2026-11-02T14:15:00.000Z");
+  assert.throws(() => nextP9ScheduledRun({ type: "schedule", schedule: {
+    kind: "cron", expression: "0 9 31 FEB *", timeZone: "UTC",
+  } }, new Date()), /Invalid automation cron schedule/);
+  assert.throws(() => p9WorkflowDefinitionInputSchema.parse({
+    name: "Unsafe recurrence", trigger: { type: "schedule", schedule: { kind: "cron", expression: "* * * * *", timeZone: "UTC" } },
+    action: { kind: "provider_health" },
+  }));
+});
+
 test("failure delay is capped, resettable and refuses invalid counters", () => {
   assert.equal(p9FailureBackoff(0), 0);
   assert.equal(p9FailureBackoff(1), 30_000);

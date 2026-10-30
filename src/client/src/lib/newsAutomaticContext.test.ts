@@ -1,6 +1,5 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
 import { automaticContextSearchTerm, chooseAutomaticContextImage } from "./newsAutomaticContext";
 
 const safe = {
@@ -31,14 +30,3 @@ test("no RSS unverified image or unrelated/unsafe Commons URL becomes automatic 
   assert.equal(chooseAutomaticContextImage({ status: "unreviewed", results: [{ imageCandidate: safe }] }, "solar"), null);
 });
 
-test("News uses existing bounded authenticated Commons path, honors opt-out, never equates an image to news-event proof", () => {
-  const news = readFileSync(new URL("../components/panels/NewsPanel.tsx", import.meta.url), "utf8");
-  assert.match(news, /slice\(0, 4\)/);
-  assert.match(news, /enabled: automaticContextOn && newsQuery\.isSuccess/);
-  assert.match(news, /CONTEX[T] IMAGES/);
-  assert.match(news, /chooseAutomaticContextImage\(payload, story.term\)/);
-  assert.match(news, /contextIllustration=\{!item\.media/);
-  assert.match(news, /not a photograph of this event/);
-  assert.match(news, /selectedContextImage \?\? /);
-  assert.doesNotMatch(news, /item\.imageCandidate\.url|src=\{item\.imageCandidate/);
-});

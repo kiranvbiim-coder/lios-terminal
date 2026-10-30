@@ -21,7 +21,7 @@ LiOS already has a **single** canonical `terminal-shell.css`, `VisualCanvas`, ac
 From `src/` with the locked dependencies installed:
 ```sh
 npm run check
-node --import tsx --test client/src/lib/sprintCMarketCanvas.test.ts client/src/lib/sprintCVisualIntegration.test.ts
+node --import tsx --test client/src/lib/sprintCMarketCanvas.test.ts
 npm run test:offline
 npm run test:desktop
 npm run build

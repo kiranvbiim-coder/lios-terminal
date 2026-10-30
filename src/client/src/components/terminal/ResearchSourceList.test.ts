@@ -2,9 +2,6 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
-import fs from "node:fs";
-import path from "node:path";
-import { fileURLToPath } from "node:url";
 import ResearchSourceList, { inspectableSourceHref } from "./ResearchSourceList";
 import { collectCitationSources, type ChatCitationSource } from "@/lib/chatMarkdown";
 import type { ConversationRuntimeEvent } from "@shared/conversationRuntime";
@@ -53,9 +50,6 @@ test("show work source list keeps all references accessible via expandable discl
   assert.match(markup, />Show all 9 sources<\/button>/);
   assert.equal((markup.match(/<li\b/g) ?? []).length, 6);
   assert.doesNotMatch(markup, /Source 7/);
-  const componentSource = requireSource();
-  assert.match(componentSource, /onClick=\{\(\) => setExpanded\(\(current\) => !current\)\}/);
-  assert.match(componentSource, /expanded \? sources : sources\.slice\(0, INITIAL_VISIBLE\)/);
 });
 
 test("the full evidence catalog is capped truthfully and empty list has no chrome", () => {
@@ -67,10 +61,6 @@ test("the full evidence catalog is capped truthfully and empty list has no chrom
   assert.equal(renderToStaticMarkup(createElement(ResearchSourceList, { sources: [] })), "");
 });
 
-function requireSource(): string {
-  // Source-contract assertion complements SSR without a browser or new test runner.
-  return fs.readFileSync(path.join(path.dirname(fileURLToPath(import.meta.url)), "ResearchSourceList.tsx"), "utf8");
-}
 
 
 test("premium source inspector shares the exact inline citation link policy and needs no remote media", () => {

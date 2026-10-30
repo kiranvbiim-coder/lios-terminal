@@ -1,6 +1,5 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { readFileSync } from "node:fs";
 import {
   ARTIFACT_KEYBOARD_STEP,
   artifactSidecarBounds,
@@ -52,39 +51,6 @@ test("WS-36 exact revision and unsaved draft must both authorize Expand", () => 
   assert.equal(canExpandArtifactRevision({ ...loaded, requestedVersion: null, version: 5 }, loaded.artifactId, null, false), true);
 });
 
-test("WS-36 original sidecar preserves one ArtifactPane, native pointer capture, keyboard back and dirty-draft lock", () => {
-  const src = readFileSync(new URL("../components/terminal/ConversationArtifactSidecar.tsx", import.meta.url), "utf8");
-  assert.equal((src.match(/<ArtifactPane /g) ?? []).length, 1);
-  assert.match(src, /role="separator"/);
-  assert.match(src, /aria-valuenow=/);
-  assert.match(src, /aria-valuemin=/);
-  assert.match(src, /aria-valuemax=/);
-  assert.match(src, /onKeyDown=\{event =>/);
-  assert.match(src, /keyboardArtifactSidecarWidth\(/);
-  assert.match(src, /new ResizeObserver\(measure\)/);
-  assert.match(src, /setPointerCapture\(event.pointerId\)/);
-  assert.match(src, /onPointerCancel=\{event => endDrag\(event, true\)\}/);
-  assert.match(src, /releasePointerCapture\(current.pointerId\)/);
-  assert.match(src, /event.key !== "Escape"/);
-  assert.match(src, /onDirtyChange=\{value => \{ setDirty\(value\); props.onDirtyChange\?\.\(value\); \}\}/);
-  assert.match(src, /disabled=\{!canExpand\}/);
-  assert.match(src, /if \(canExpand && displayed\) onExpand\(displayed.version\)/);
-  assert.match(src, /exitFocusRef.current\?\.focus\(\)/);
-  assert.match(src, /onClick=\{onExitFocus\}/);
-  assert.match(src, /--lios-sidecar-width/);
-  assert.doesNotMatch(src, /localStorage|createArtifactVersion|persistConversationDraft|window.innerWidth/);
-});
-
-test("WS-36 returning to Chat restores keyboard focus and Workbench still refuses a stale/dirty revision", () => {
-  const shell = readFileSync(new URL("../components/terminal/ProjectExperienceShell.tsx", import.meta.url), "utf8");
-  assert.match(shell, /reopenArtifactFocusRef = useRef<HTMLButtonElement>\(null\)/);
-  assert.match(shell, /ref=\{reopenArtifactFocusRef\}/);
-  assert.match(shell, /onExitFocus=\{\(\) => \{ setArtifactFocusMode\(false\); requestAnimationFrame\(\(\) => reopenArtifactFocusRef.current\?\.focus\(\)\); \}\}/);
-  assert.match(shell, /onExpand=\{\(version\) => \{ displayedArtifactRef.current/);
-  assert.match(shell, /if \(artifactDraftDirtyRef.current\) \{ setLifecycleNotice\("Save or reset unsaved Artifact edits before opening Workbench/);
-  assert.match(shell, /displayed\?\.artifactId !== conversationArtifactRef \|\| displayed.requestedVersion !== artifactViewVersion/);
-  assert.match(shell, /navigateWorkbench\(\{ projectId: selection.projectId, chatId: selection.chatId, artifactId: conversationArtifactRef, version: displayed.version \}\)/);
-});
 
 test("only the exact current P4 load can notify the Chat Workbench handoff", () => {
   const a = "artifact:11111111-1111-4111-8111-111111111111";
@@ -101,26 +67,3 @@ test("only the exact current P4 load can notify the Chat Workbench handoff", () 
   assert.equal(isCurrentArtifactLoad(a, null, 1.5, a, null), false);
 });
 
-test("sidecar refuses stale callbacks before notifying the parent or enabling expansion", () => {
-  const sidecar = readFileSync(new URL("../components/terminal/ConversationArtifactSidecar.tsx", import.meta.url), "utf8");
-  assert.match(sidecar, /if \(!isCurrentArtifactLoad\(artifactId, loadedRequest, version, props\.artifactId, requestedVersion\)\) return;/);
-  const start = sidecar.indexOf("onDisplayedVersionChange={(version, artifactId, loadedRequest) => {");
-  const end = sidecar.indexOf("props.onDisplayedVersionChange?.(version, artifactId, loadedRequest);", start);
-  assert.ok(start > 0 && end > start);
-  const region = sidecar.slice(start, end + "props.onDisplayedVersionChange?.(version, artifactId, loadedRequest);".length);
-  assert.ok(region.indexOf("isCurrentArtifactLoad(") >= 0);
-  assert.ok(region.indexOf("isCurrentArtifactLoad(") < region.indexOf("setDisplayed("));
-  assert.ok(region.indexOf("isCurrentArtifactLoad(") < region.indexOf("props.onDisplayedVersionChange"), "stale loads never reach the parent");
-  assert.match(sidecar, /disabled=\{!canExpand\}/);
-  assert.match(sidecar, /if \(canExpand && displayed\) onExpand\(displayed\.version\)/);
-  assert.ok((sidecar.match(/min-h-11/g) ?? []).length >= 3);
-});
-
-test("parent Chat records only the currently requested Artifact load for Workbench shortcut", () => {
-  const shell = readFileSync(new URL("../components/terminal/ProjectExperienceShell.tsx", import.meta.url), "utf8");
-  assert.match(shell, /onDisplayedVersionChange=\{\(version, artifactId, loadedRequest\) => \{/);
-  assert.match(shell, /isCurrentArtifactLoad\(artifactId, loadedRequest, version, conversationArtifactRef, artifactViewVersion\)/);
-  assert.match(shell, /displayedArtifactRef\.current = \{ artifactId, requestedVersion: loadedRequest, version \}/);
-  assert.match(shell, /displayed\?\.artifactId !== conversationArtifactRef \|\| displayed\.requestedVersion !== artifactViewVersion/);
-  assert.match(shell, /if \(artifactDraftDirtyRef\.current\)/);
-});

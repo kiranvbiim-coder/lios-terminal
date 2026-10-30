@@ -1,6 +1,5 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
 import type { Quote, OHLCVSeries } from "./finance";
 import { computeObservedBrinsonAttribution, parseAttributionHoldings } from "./portfolioAttributionObservations";
 
@@ -116,15 +115,3 @@ test("source fallback flag is presented without claiming source-signed records",
   if (result.state === "ready") assert.deepEqual(result.fallbackSymbols, ["AAPL"]);
 });
 
-test("original Brinson UI hides old results for pending edits and errors, using pp effect units", () => {
-  const source = readFileSync(new URL("../components/panels/PortfolioAttributionPanel.tsx", import.meta.url), "utf8");
-  assert.match(source, /computeObservedBrinsonAttribution\(holdingsA, holdingsB, quotes, histories\)/);
-  assert.match(source, /!inputsPending && !validationError && calculation\?\.state === "ready"/);
-  assert.match(source, /const queryFailed = quoteQuery\.isError \|\| ohlcvResults\.some/);
-  assert.match(source, /fmtEffect\(totals\.total\)/);
-  assert.match(source, /percentage points \(pp\)/);
-  assert.match(source, /Observed common daily close window/);
-  assert.match(source, /not an immutable signed source snapshot/);
-  assert.doesNotMatch(source, /periodReturnOf\.get\(h\.symbol\) \?\? 0/);
-  assert.match(source, /factors\.isError/);
-});

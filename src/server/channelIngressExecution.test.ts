@@ -244,7 +244,9 @@ test("adopted ingress executes once through the canonical owner and permanently 
 
   await t.test("step and wall-clock budgets bound tool admission and an injected model wait", async t => {
     for (const limit of ["steps", "duration"] as const) {
-      const f = await fixture(t, limit === "steps" ? { maxSteps: 1 } : { maxDurationMs: 2000 });
+      // Exercise expiry inside the model, not a cold hosted Mac's DB/authority admission.
+      // This fixture-only allowance leaves production policy/defaults and all denial assertions unchanged.
+      const f = await fixture(t, limit === "steps" ? { maxSteps: 1 } : { maxDurationMs: 30_000 });
       const row = await f.adopt(); let calls = 0;
       const aiCompletion: NonNullable<ConversationRunServiceOptions["aiCompletion"]> = async request => {
         calls++;

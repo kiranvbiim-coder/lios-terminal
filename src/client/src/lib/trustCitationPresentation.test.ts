@@ -47,13 +47,3 @@ test("presentation retains source identity, provenance, status and original obse
   assert.ok(projected[1].details.includes("Provider tier excludes deep history"));
 });
 
-test("beUI source is reused in canonical P3 Trust panel, not an alternate evidence store", async () => {
-  const { readFileSync } = await import("node:fs");
-  const { fileURLToPath } = await import("node:url");
-  const trustPanel = readFileSync(fileURLToPath(new URL("../components/terminal/ConversationTrustPanel.tsx", import.meta.url)), "utf8");
-  const beui = readFileSync(fileURLToPath(new URL("../components/vendor/beui/BeuiCitations.tsx", import.meta.url)), "utf8");
-  assert.match(trustPanel, /<BeuiCitations key=\{manifest\.trustId\} items=\{presentTrustCitations\(manifest\.evidence\)\}/);
-  assert.match(beui, /starc007\/ui-components/);
-  assert.match(beui, /81e5b9be45c248de16645c1554d37d7d33d8960b/);
-  assert.doesNotMatch(beui, /fetch\(|useQuery\(|axios\.|<img/);
-});

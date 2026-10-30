@@ -5,6 +5,7 @@ import os from "node:os";
 import path from "node:path";
 import test from "node:test";
 import { eq } from "drizzle-orm";
+import { nextP9CronRun } from "@shared/p9CronSchedule";
 const root = fs.mkdtempSync(path.join(os.tmpdir(), "lios-run-continuity-"));
 process.env.LIOS_DATA_ROOT = root;
 process.env.LIMURIA_DATA_DIR = root;
@@ -98,6 +99,43 @@ test("automation interruption ends stale running status without replaying an unk
     assert.ok(dailyAttempt);
     const failedDaily = await completeP9Run(ctx, { ...daily, consecutiveFailures: 5 }, dailyAttempt.id, { error: "controlled failure" });
     assert.equal((await getP9Workflow(ctx, daily.id)).nextRunAt!.getTime() - failedDaily.completedAt!.getTime(), 1440 * 60_000);
+  });
+  await t.test("cron completion preserves normal future slots, failure floors and explicit pause recovery", async () => {
+    const schedule = { kind: "cron" as const, expression: "*/5 * * * *", timeZone: "UTC" };
+    let recurring = await createP9Workflow(ctx, project.id, {
+      name: "Zoned failure policy", enabled: true, trigger: { type: "schedule", schedule },
+      action: { kind: "project_what_changed" }, notificationPolicy: { enabled: false },
+    });
+    const floor = [30_000, 60_000, 300_000, 900_000, 3_600_000];
+    for (let failures = 1; failures <= 10; failures++) {
+      const attempt = await beginP9Run(ctx, recurring, "schedule", {});
+      assert.ok(attempt);
+      const completed = await completeP9Run(ctx, recurring, attempt.id, { error: "controlled cron failure" });
+      recurring = await getP9Workflow(ctx, recurring.id);
+      assert.equal(recurring.consecutiveFailures, failures);
+      assert.equal(recurring.enabled, failures < 10);
+      assert.equal(recurring.nextRunAt?.getTime() ?? null, failures === 10 ? null : Math.max(
+        nextP9CronRun(schedule, completed.completedAt!)!.getTime(),
+        completed.completedAt!.getTime() + floor[Math.min(failures - 1, floor.length - 1)],
+      ));
+    }
+    await closeDb();
+    await initDb();
+    recurring = await getP9Workflow(ctx, recurring.id);
+    assert.equal(recurring.enabled, false);
+    assert.equal(recurring.nextRunAt, null);
+    recurring = await setP9WorkflowEnabled(ctx, recurring.id, true, recurring.updatedAt.toISOString());
+    assert.equal(recurring.consecutiveFailures, 0);
+    assert.equal(recurring.nextRunAt?.getTime(), nextP9CronRun(schedule, recurring.updatedAt)?.getTime());
+    const retry = await beginP9Run(ctx, recurring, "manual", {});
+    assert.ok(retry);
+    const completed = await completeP9Run(ctx, recurring, retry.id, { result: {
+      summary: "Known cron success", changed: false, conditionMet: false, relevanceScore: 0,
+      sourceRefs: [], engineRefs: [], artifactRefs: [], executionReceiptIds: [], output: {},
+    } });
+    recurring = await getP9Workflow(ctx, recurring.id);
+    assert.equal(recurring.nextRunAt?.getTime(), nextP9CronRun(schedule, completed.completedAt!)?.getTime());
+    await setP9WorkflowEnabled(ctx, recurring.id, false);
   });
   await t.test("ten scheduled failures pause durably and only explicit recovery resets the streak", async () => {
     let failing = await createP9Workflow(ctx, project.id, {

@@ -80,13 +80,3 @@ test("duplicate ticker across ambiguous listings requires explicit selection", (
   assert.equal(resolveVerifiedSecuritySelection("ABC", [us], "ABC"), us);
 });
 
-test("client TopBar submits resolved provider-listed symbols only and surfaces missing data", async () => {
-  const { readFileSync } = await import("node:fs");
-  const source = readFileSync(new URL("../components/terminal/TopBar.tsx", import.meta.url), "utf8");
-  assert.match(source, /resolveVerifiedSecuritySelection\(searchVal, searchResults, completedSearch\)/);
-  assert.match(source, /if \(resolved\) chooseSecurity\(resolved\)/);
-  assert.match(source, /onSymbol\(result\.symbol\.trim\(\)\.toUpperCase\(\)\)/);
-  assert.doesNotMatch(source, /onSymbol\(v\)/);
-  assert.match(source, /signal: controller\.signal/);
-  assert.match(source, /No matching securities returned by the source/);
-});

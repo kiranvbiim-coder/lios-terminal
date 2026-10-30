@@ -4,12 +4,12 @@
 #endif
 #include <windows.h>
 #include <sddl.h>
-#include <io.h>
-#include <fcntl.h>
+#include <uv.h>
 #include <string>
 #include <vector>
 #include <memory>
 #include <stdexcept>
+#include <cwctype>
 
 namespace {
 struct Handle {
@@ -37,7 +37,7 @@ std::wstring pathArg(napi_env env,napi_value arg) {
     if(part.empty()||part==L"."||part==L".."||part.back()==L'.'||part.back()==L' '||part.find_first_of(L"<>:\"|?*")!=std::wstring::npos)
       throw std::runtime_error("Unsafe Windows runtime path component.");
     for(wchar_t c:part)if(c<32)throw std::runtime_error("Control character in runtime path.");
-    auto stem=part.substr(0,part.find(L'.'));for(auto& c:stem)c=towupper(c);
+    auto stem=part.substr(0,part.find(L'.'));for(auto& c:stem)c=std::towupper(c);
     if(stem==L"CON"||stem==L"PRN"||stem==L"AUX"||stem==L"NUL"||
        (stem.size()==4&&(stem.substr(0,3)==L"COM"||stem.substr(0,3)==L"LPT")&&stem[3]>=L'1'&&stem[3]<=L'9'))
       throw std::runtime_error("Reserved Windows device path.");
@@ -61,7 +61,9 @@ napi_value pinDirectories(napi_env env,napi_callback_info info){
     size_t end=3;
     for(;;){
       auto current=path.substr(0,end);
-      auto handle=std::make_unique<Handle>(CreateFileW(current.c_str(),FILE_READ_ATTRIBUTES,
+      // Windows ignores share restrictions for attribute-only opens. A listing right makes the omitted
+      // FILE_SHARE_DELETE actually block rename/delete of every pinned ancestor while the pin is held.
+      auto handle=std::make_unique<Handle>(CreateFileW(current.c_str(),FILE_LIST_DIRECTORY|FILE_READ_ATTRIBUTES,
         FILE_SHARE_READ|FILE_SHARE_WRITE,nullptr,OPEN_EXISTING,FILE_FLAG_BACKUP_SEMANTICS|FILE_FLAG_OPEN_REPARSE_POINT,nullptr));
       if(handle->value==INVALID_HANDLE_VALUE)throw std::runtime_error("Cannot pin Windows runtime directory ancestry.");
       inspect(handle->value,true);pin->handles.push_back(std::move(handle));
@@ -97,7 +99,8 @@ napi_value openFile(napi_env env,napi_callback_info info){
       create?&security.attributes:nullptr,create?CREATE_NEW:OPEN_EXISTING,FILE_ATTRIBUTE_NORMAL|FILE_FLAG_OPEN_REPARSE_POINT,nullptr));
     if(handle.value==INVALID_HANDLE_VALUE)throw std::runtime_error("Cannot exclusively open regular runtime file.");
     inspect(handle.value,false);
-    int fd=_open_osfhandle(reinterpret_cast<intptr_t>(handle.value),_O_BINARY|(create?_O_RDWR:_O_RDONLY));
+    // Transfer through Node's libuv, not an addon-local CRT descriptor table.
+    int fd=uv_open_osfhandle(handle.value);
     if(fd<0)throw std::runtime_error("Cannot own runtime file descriptor.");handle.release();
     napi_value result;check(napi_create_int32(env,fd,&result));return result;
   }catch(const std::exception& error){return fail(env,error.what());}

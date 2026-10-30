@@ -20,7 +20,7 @@
 
 ## QA
 
-Added `offlineWorldMapPresentation.test.ts` (world-edge and normal projection, source/date gating, NaN/string rejection, 60-pin limit), `OfflineProjectWorldMap.test.tsx` (SSR, controls, attribution/keyboard details, no online URLs, sanitised public SVG asset), `websiteB2OfflineMapIntegration.test.ts` (one P7 Project source and no geolocation/provider calls), and reused existing P7 & Investigation tests. `npm run test:website-b2` runs on the existing standard public Linux source workflow.
+`offlineWorldMapPresentation.test.ts` covers world-edge/normal projection, source/date gating, NaN/string rejection and the60-pin limit. `OfflineProjectWorldMap.test.tsx` exercises SSR, controls, attribution/keyboard details, no online URLs and the sanitised public SVG asset, alongside existing P7/Investigation behaviors. Incidental source-wiring assertions were removed, not treated as geolocation/network execution proof. `npm run test:website-b2` retains these behavior tests.
 
 ```bash
 cd src

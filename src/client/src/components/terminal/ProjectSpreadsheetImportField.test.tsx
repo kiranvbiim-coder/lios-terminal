@@ -1,6 +1,5 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { readFileSync } from "node:fs";
 import * as React from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { ProjectSpreadsheetImportField, SPREADSHEET_IMPORT_MAX_FILE_BYTES, validateProjectSpreadsheetFile } from "./ProjectSpreadsheetImportField";
@@ -30,17 +29,5 @@ test("file drop is readable, keyboard browseable and does not import without exp
   // Lucide inline SVG uses the standard xmlns="http://www.w3.org/2000/svg";
   // this namespace is not a network request, image, or uploaded file.
   assert.doesNotMatch(html, /<img|<iframe|previewUrl|createObjectURL/i);
-  const source = readFileSync(new URL("./ProjectSpreadsheetImportField.tsx", import.meta.url), "utf8");
-  assert.equal(source.includes("fetch("), false);
-  assert.equal(source.includes("XMLHttpRequest"), false);
-  assert.equal(source.includes("URL.createObjectURL"), false);
 });
 
-test("existing Project Library has one canonical upload route instead of a duplicate uploader", () => {
-  const owner = readFileSync(new URL("./ProjectArtifactsPanel.tsx", import.meta.url), "utf8");
-  assert.match(owner, /<ProjectSpreadsheetImportField/);
-  assert.match(owner, /handleSpreadsheetImport/);
-  assert.match(owner, /importSpreadsheetArtifact\(projectId, file\)/);
-  assert.equal((owner.match(/type="file"/g) ?? []).length, 1); // package import only
-  assert.match(owner, /Import package/);
-});

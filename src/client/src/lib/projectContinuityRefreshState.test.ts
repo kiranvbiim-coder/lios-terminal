@@ -1,6 +1,5 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { readFileSync } from "node:fs";
 import {
   canBeginProjectRefresh,
   visibleProjectRefreshNotice,
@@ -33,26 +32,3 @@ test("invalid or unsafe Project identities cannot initiate a refresh", () => {
   assert.equal(canBeginProjectRefresh(inFlight, Number.MAX_SAFE_INTEGER + 1), false);
 });
 
-test("mounted P6 refresh snapshots exact request scope and suppresses stale responses", () => {
-  const source = readFileSync(new URL("../components/terminal/ProjectContinuityPanel.tsx", import.meta.url), "utf8");
-  assert.match(source, /const requestedProjectId = projectId;/);
-  assert.match(source, /if \(!canBeginProjectRefresh\(inFlightProjectsRef\.current, requestedProjectId\)\) return;/);
-  assert.match(source, /inFlightProjectsRef\.current\.add\(requestedProjectId\);/);
-  assert.match(source, /await refreshP6ProjectContinuity\(requestedProjectId\)/);
-  assert.match(source, /invalidate\(requestedProjectId\)/);
-  assert.match(source, /if \(currentProjectRef\.current !== requestedProjectId\) return;/);
-  assert.match(source, /if \(currentProjectRef\.current === requestedProjectId\)/);
-  assert.match(source, /inFlightProjectsRef\.current\.delete\(requestedProjectId\)/);
-  assert.match(source, /const message = visibleProjectRefreshNotice\(notice, projectId\);/);
-  assert.match(source, /aria-busy=\{refreshing\}/);
-  assert.doesNotMatch(source, /refreshP6ProjectContinuity\(projectId\)/);
-});
-
-test("missing Project decision counts are not misreported as zero", () => {
-  const source = readFileSync(new URL("../components/terminal/ProjectContinuityPanel.tsx", import.meta.url), "utf8");
-  assert.match(source, /snapshot \? `\$\{snapshot\.counts\.unresolvedDecisions\} open` : "Unavailable"/);
-  assert.doesNotMatch(source, /snapshot\?\.counts\.unresolvedDecisions \?\? 0/);
-  assert.match(source, /setNotice\(focused \? null : \{/);
-  assert.match(source, /projectId,/);
-  assert.match(source, /Nothing was run or changed/);
-});

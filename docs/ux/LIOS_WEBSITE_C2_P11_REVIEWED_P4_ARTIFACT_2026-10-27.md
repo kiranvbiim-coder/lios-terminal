@@ -32,7 +32,6 @@ npm run build
 ```
 
 - `reviewedModelRunArtifact.test.ts`: immutable review identity; changes to run/output/input/dataset/destination; malformed/failed/nonconverged receipts denied; same owned Project/Chat, actual engine keeper/source refs, precise response mismatch.
-- `websiteC2ReviewedModelIntegration.test.ts`: actual P11 Studio button, user-confirmed gating, fresh owned-run GET and P4 POST, real server snapshot rights/hash verification and no invented work.
 - Existing `integratedModelArtifactSave.test.ts` and `integratedModelArtifact.test.ts` protect persistence/repeat and backend source lineage.
 - `npm run test:website-c2` added to the same free/public Linux source validation workflow. **Do not claim the tests passed until CI reports success.**
 

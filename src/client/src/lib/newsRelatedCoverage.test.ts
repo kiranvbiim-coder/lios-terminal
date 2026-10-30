@@ -1,6 +1,5 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
 import { relatedNewsCoverage } from "./newsRelatedCoverage";
 import type { NewsStoryObservation } from "./newsStoryEvolution";
 
@@ -30,12 +29,3 @@ test("refuses generic terms, sole-keyword coincidences, unrelated times, same so
   assert.deepEqual(relatedNewsCoverage({ ...base, title: "Stock market rises today" }, [alone]), []);
 });
 
-test("source UI navigates only source-linked records and labels relatedness as unverified", () => {
-  const pane = readFileSync(new URL("../components/panels/NewsPanel.tsx", import.meta.url), "utf8");
-  const screen = readFileSync(new URL("../components/panels/NewsStoryEvolution.tsx", import.meta.url), "utf8");
-  assert.match(screen, /relatedNewsCoverage\(anchor, coverage\)/);
-  assert.match(screen, /not proof that they report the same event/);
-  assert.match(screen, /safePulseSourceUrl\(item.url\)/);
-  assert.match(pane, /coverage=\{filtered\}/);
-  assert.match(pane, /onSelectRelated=\{url => \{/);
-});

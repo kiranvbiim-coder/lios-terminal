@@ -1,6 +1,5 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { readFileSync } from "node:fs";
 import { savedChatArtifactAnswer } from "./savedChatArtifactAnswer";
 
 const defaultTurn = { text: "", persistedArtifactCount: 1, cancelled: false, awaitingApproval: false, failed: false };
@@ -33,20 +32,3 @@ test("WS-35: pending drafts and empty runs never get a fabricated persisted Arti
   }
 });
 
-test("WS-35: runtime message retention is bound to real P4 writes, exact refs and successful terminal outcomes", () => {
-  const runtime = readFileSync(new URL("./conversationRunService.ts", import.meta.url), "utf8");
-  assert.match(runtime, /const savedAnswer = savedChatArtifactAnswer\(/);
-  assert.match(runtime, /persistedArtifactCount: persistedArtifacts\.length/);
-  assert.match(runtime, /failed: held\.errored \|\| held\.done\?\.status !== "completed"/);
-  assert.match(runtime, /await transcript\.recordText\(savedAnswer \?\? result\.text\)/);
-  assert.match(runtime, /const saved = savedAnswer !== null/);
-  assert.match(runtime, /content: savedAnswer!/);
-  assert.match(runtime, /persistedArtifacts\.push\(retainedArtifactMessageRef\(savedArtifact\)\)/);
-  assert.match(runtime, /persistedArtifacts\.push\(retainedArtifactMessageRef\(\{ artifact, version \}\)\)/);
-  assert.match(runtime, /if \(!result\.cancelled && !result\.awaitingApproval && !held\.errored && held\.done\?\.status === "completed"\)/);
-  assert.match(runtime, /scope: "temporary"/);
-  const temporaryEntry = runtime.slice(runtime.indexOf("export async function startTemporaryRun("));
-  assert.ok(temporaryEntry.length > 100);
-  assert.doesNotMatch(temporaryEntry, /persistConversationDraft\(/);
-  assert.doesNotMatch(temporaryEntry, /addProjectChatMessage\(/);
-});

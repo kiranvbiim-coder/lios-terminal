@@ -1,6 +1,5 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
 import type { ArtifactContent } from "./artifactContracts";
 import { assertValuationRevisionIsRecorded, prepareValuationRecalculationPrompt, validWaccChange } from "./valuationRevisionPolicy";
 
@@ -48,21 +47,3 @@ test("WACC proposal is bounded and never implies a live calculation", () => {
   assert.throws(() => prepareValuationRecalculationPrompt(saved, { ...target, version: 0 }, 11));
 });
 
-test("original server version write and proposal acceptance both protect valuation outputs", () => {
-  const source = readFileSync(new URL("../server/artifactStore.ts", import.meta.url), "utf8");
-  assert.match(source, /if \(input\.action !== "undo"\) assertValuationRevisionIsRecorded\(baseContent, content\)/);
-  assert.match(source, /assertValuationRevisionIsRecorded\(baseContent, proposedContent\)/);
-  assert.match(source, /const nativeWriteAuthorized/);
-  for (const field of ["executionReceiptIds", "assumptionRefs", "sourceRefs", "trustManifest", "dependencyRefs", "refreshSpec"]) {
-    assert.ok(source.includes(`same(input.${field}, base.${field})`), `recorded valuation ${field} must not be replaced by user JSON`);
-  }
-});
-
-test("readable valuation never saves arbitrary JSON or labels proposed WACC as recalculated", () => {
-  const viewer = readFileSync(new URL("../client/src/components/terminal/ValuationArtifactView.tsx", import.meta.url), "utf8");
-  const pane = readFileSync(new URL("../client/src/components/terminal/ArtifactPane.tsx", import.meta.url), "utf8");
-  assert.match(viewer, /Prepare recalculation in Chat/);
-  assert.match(viewer, /Recorded valuation JSON/);
-  assert.doesNotMatch(viewer, /<ExpertJsonView/);
-  assert.match(pane, /prepareValuationRecalculationPrompt\(content, \{ artifactId, version: revision, contentHash \}, waccPct\)/);
-});

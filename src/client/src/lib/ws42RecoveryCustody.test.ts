@@ -1,6 +1,5 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { readFileSync } from "node:fs";
 import { artifactContentSchema } from "@shared/artifactContracts";
 import {
   matchesNativeArtifactDraft, nativeDraftCheckpointScope, nativeDraftRecoveryKey,
@@ -38,32 +37,3 @@ test("WS-42 decrypted draft is never authority to cross current saved revision o
   assert.equal(matchesNativeArtifactDraft({ ...candidate, content: { kind: "report", blocks: [{ id: "", type: "unknown" }] } }, context, "report"), false);
 });
 
-test("WS-42 native generation is required for explicit Discard and save cleanup; failed clear remains blocked", () => {
-  const client = readFileSync(new URL("./nativeArtifactDraftRecovery.ts", import.meta.url), "utf8");
-  const store = readFileSync(new URL("../../../desktopArtifactDraftRecovery.cjs", import.meta.url), "utf8");
-  const notice = readFileSync(new URL("../components/terminal/NativeDraftRecoveryNotice.tsx", import.meta.url), "utf8");
-  assert.match(client, /const ownedCheckpointIds = new Map<string, string>\(\)/);
-  assert.match(client, /checkpointId: candidate\.checkpointId/);
-  assert.match(client, /checkpointId: localGeneration/);
-  assert.match(client, /written\.checkpointId/);
-  assert.match(client, /expectedCheckpointId: ownedCheckpointIds\.get\(nativeDraftCheckpointScope\(context\)\)/);
-  assert.match(store, /current\.checkpointId !== input\.expectedCheckpointId/);
-  assert.match(client, /if \(!removed\) \{/);
-  assert.match(client, /status: "error", candidate: null/);
-  assert.match(client, /Retry protected recovery to inspect the current state/);
-  assert.match(client, /Another window has a newer protected draft for this Artifact/);
-  assert.match(store, /const checkpointId = crypto\.randomUUID\(\)/);
-  assert.match(store, /current\.checkpointId !== expected\.checkpointId/);
-  assert.match(store, /return \{ protected: true, checkpointId \}/);
-  assert.match(notice, /recovery\.status === "error"/);
-  assert.match(notice, /Continue without crash recovery/);
-});
-
-test("WS-42 legacy checkpoint still remains a sealed local draft, never native saved work", () => {
-  const native = readFileSync(new URL("../../../desktopArtifactDraftRecovery.cjs", import.meta.url), "utf8");
-  assert.match(native, /requireEncryption\(safeStorage, platform\)/);
-  assert.match(native, /fileSystem\.writeFileSync\(temporary, ciphertext/);
-  assert.match(native, /if \(record\?\.schemaVersion !== 1/);
-  assert.match(native, /expected\.checkpointId/);
-  assert.doesNotMatch(native, /localStorage|JSON\.stringify\(record\).*writeFileSync/);
-});

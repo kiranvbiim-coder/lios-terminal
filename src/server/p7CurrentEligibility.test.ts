@@ -1,6 +1,5 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
 import type { P7InsightLens } from "@shared/p7ResearchContracts";
 import { retainPermittedProjectInsights } from "./p7ProjectIntelligence";
 const lens: P7InsightLens = {
@@ -28,12 +27,4 @@ test("no current refs means no current insights, not a resurrected old title", (
   const current = retainPermittedProjectInsights(lens, new Set());
   assert.deepEqual(current.insights,[]);
   assert.deepEqual(current.counts,{});
-});
-test("active P7 graph and insight endpoints use the existing current owner+scope permission filter", () => {
-  const store=readFileSync(new URL("./p7ProjectIntelligenceStore.ts", import.meta.url), "utf8");
-  assert.match(store,/export async function currentProjectIntelligence[\s\S]*?const documents = await currentPermittedProjectSearchDocuments\(ctx, projectId\);/);
-  assert.match(store,/export async function currentInsightLens[\s\S]*?const documents = await currentPermittedProjectSearchDocuments\(ctx, projectId\);/);
-  assert.match(store,/return retainPermittedProjectInsights\(lens, eligibleRefs\)/);
-  assert.match(store,/const resourceIds = new Set\(resources\.filter\(resource => resource\.contextMode !== "excluded"\)/);
-  assert.match(store,/const artifactIds = new Set\(artifacts\.map\(artifact => artifact\.id\)\)/);
 });

@@ -28,15 +28,18 @@ import {
   prepareP9ManualRunAttempt,
   subscribeP9ManualRunAttempts,
 } from "@/lib/p9ManualRunAttemptLedger";
-import { p9AutomationEventTypeSchema, p9EventFiltersSchema, type P9WorkflowTrigger } from "@shared/p9AutomationContracts";
+import { p9AutomationEventTypeSchema, p9EventFiltersSchema, p9WorkflowTriggerSchema, type P9WorkflowTrigger } from "@shared/p9AutomationContracts";
 import { quickMonitorDraft, workflowTriggerEditDefinition, workflowExecutionTruth, workflowScheduleSummary, type QuickMonitorKind } from "@/lib/workflowReviewTruth";
 import { P9NotificationHistory } from "./P9NotificationHistory";
 import { PortfolioMaterialityResult } from "./ArtifactPortfolioMateriality";
+import { CronScheduleFields } from "./CronScheduleFields";
 
-function time(value: string | null): string {
+function time(value: string | null, timeZone?: string): string {
   if (!value) return "—";
   const parsed = new Date(value);
-  return Number.isFinite(parsed.getTime()) ? parsed.toLocaleString() : "—";
+  if (!Number.isFinite(parsed.getTime())) return "—";
+  if (!timeZone) return parsed.toLocaleString();
+  return `${new Intl.DateTimeFormat(undefined, { timeZone, dateStyle: "medium", timeStyle: "long" }).format(parsed)} (${timeZone}) · ${parsed.toISOString()}`;
 }
 
 type WorkflowReview = {
@@ -261,6 +264,10 @@ export function ProjectAutomationPanel({ projectId }: { projectId: number }) {
       setMessage("Event filters must be a JSON object with at most 50 string, number or boolean values.");
       return;
     }
+    if (candidate.intent === "edit" && !p9WorkflowTriggerSchema.safeParse(candidate.trigger).success) {
+      setMessage("Review a valid trigger before saving this workflow.");
+      return;
+    }
     managementInFlight.current = true;
     setBusyId("review:" + candidate.workflowId);
     setMessage(null);
@@ -355,6 +362,22 @@ export function ProjectAutomationPanel({ projectId }: { projectId: number }) {
           <h3 className="font-ui text-sm font-semibold">Review {review.intent} · {review.name} · Project {projectId}</h3>
           <p className="break-all text-xs text-muted-foreground">Workflow {review.workflowId} · version {review.expectedUpdatedAt}</p>
           <p className="text-xs text-muted-foreground">Current status: {review.enabled ? "enabled" : "paused"}. {current ? workflowScheduleSummary(current) : "Workflow no longer listed."}</p>
+          {review.intent === "edit" && review.trigger.type === "schedule" && <label className="block text-sm">Schedule kind
+            <select aria-label="Schedule kind" value={review.trigger.schedule.kind} disabled={Boolean(busyId)}
+              onChange={event => setReview(previous => previous?.trigger.type === "schedule" ? {
+                ...previous, trigger: { type: "schedule", schedule: event.target.value === "cron"
+                  ? { kind: "cron", expression: "0 9 * * MON-FRI", timeZone: "UTC" }
+                  : event.target.value === "daily_utc" ? { kind: "daily_utc", hour: 9, minute: 0 }
+                    : { kind: "interval", everyMinutes: 60 } },
+              } : previous)}
+              className="mt-1 min-h-10 w-full rounded border border-border bg-background px-2">
+              <option value="interval">Interval</option><option value="daily_utc">Daily UTC</option><option value="cron">Cron + time zone</option>
+            </select>
+          </label>}
+          {review.intent === "edit" && review.trigger.type === "schedule" && review.trigger.schedule.kind === "cron" && <CronScheduleFields
+            schedule={review.trigger.schedule} disabled={Boolean(busyId)}
+            onChange={schedule => setReview(previous => previous?.trigger.type === "schedule"
+              ? { ...previous, trigger: { type: "schedule", schedule } } : previous)} />}
           {review.intent === "edit" && review.trigger.type === "schedule" && review.trigger.schedule.kind === "interval" && (
             <label className="block text-sm">New interval · minutes (5 to 10080)
               <input type="number" min={5} max={10080} step={1} disabled={Boolean(busyId)}
@@ -403,11 +426,8 @@ export function ProjectAutomationPanel({ projectId }: { projectId: number }) {
             : "Save only this workflow's trigger. Its actions, permissions, source refs and enabled state are preserved; schedule changes may recalculate the next due time."}</p>
           {!unchanged && <p role="alert" className="text-amber-200">Workflow changed or is unavailable since review. Refresh and inspect again.</p>}
           <div className="flex flex-wrap gap-2">
-            <button type="button" disabled={Boolean(busyId) || !unchanged || (review.intent === "edit" && review.trigger.type === "event" && !eventFilters?.success) || (review.intent === "edit" && review.trigger.type === "schedule" &&
-              (review.trigger.schedule.kind === "interval"
-                ? !Number.isInteger(review.trigger.schedule.everyMinutes) || review.trigger.schedule.everyMinutes < 5 || review.trigger.schedule.everyMinutes > 10080
-                : !Number.isInteger(review.trigger.schedule.hour) || review.trigger.schedule.hour < 0 || review.trigger.schedule.hour > 23 ||
-                  !Number.isInteger(review.trigger.schedule.minute) || review.trigger.schedule.minute < 0 || review.trigger.schedule.minute > 59))}
+            <button type="button" disabled={Boolean(busyId) || !unchanged || (review.intent === "edit" &&
+              (!p9WorkflowTriggerSchema.safeParse(review.trigger).success || (review.trigger.type === "event" && !eventFilters?.success)))}
               onClick={() => void confirmWorkflowReview()} className="min-h-10 rounded border border-amber-300/40 px-3 py-2 text-sm text-amber-200 disabled:opacity-40">Confirm {review.intent} for this workflow</button>
             <button type="button" disabled={Boolean(busyId)} onClick={() => setReview(null)} className="min-h-10 rounded border border-border px-3 py-2 text-sm">Cancel</button>
           </div>
@@ -431,7 +451,7 @@ export function ProjectAutomationPanel({ projectId }: { projectId: number }) {
                 >
                   {workflow.enabled ? <Pause className="h-4 w-4" aria-hidden="true" /> : <Play className="h-4 w-4" aria-hidden="true" />}
                 </button>
-                <div className="min-w-0 flex-1">
+                <div className="min-w-0 flex-1 break-words">
                   <div className="flex flex-wrap items-center gap-2">
                     <span className="truncate font-ui text-[14px] font-medium text-foreground">{workflow.name}</span>
                     <span className="rounded border border-border/50 px-1.5 py-0.5 font-terminal text-[12px] uppercase text-cyan-300">{workflow.template}</span>
@@ -444,12 +464,6 @@ export function ProjectAutomationPanel({ projectId }: { projectId: number }) {
                   <div className="mt-1 font-ui text-[13px] leading-4 text-muted-foreground">
                     {workflow.description || "Saved Project workflow."}
                   </div>
-                  {workflow.trigger.type === "schedule" && <p className="mt-1 text-xs text-muted-foreground">
-                    {workflow.trigger.schedule.kind === "daily_utc"
-                      ? `Daily at ${String(workflow.trigger.schedule.hour).padStart(2, "0")}:${String(workflow.trigger.schedule.minute).padStart(2, "0")} UTC`
-                      : `Every ${workflow.trigger.schedule.everyMinutes} minutes`}
-                    {" · Requires a running Home"}
-                  </p>}
                   {workflow.trigger.type === "event" && <p className="mt-1 text-xs text-muted-foreground">
                     {workflow.trigger.eventType}{" · "}
                     {Object.entries(workflow.trigger.filters).map(([key, value]) => `${key} = ${String(value)}`).join(", ") || "All permitted matching events"}
@@ -472,14 +486,14 @@ export function ProjectAutomationPanel({ projectId }: { projectId: number }) {
                   </details>}
                   <div data-testid="p9-workflow-execution-truth" className="mt-2 space-y-1 font-ui text-xs text-muted-foreground">
                     <p>{truth.state.toUpperCase()} · {workflowScheduleSummary(workflow)}</p>
-                    <p>Next due: {truth.next === workflow.nextRunAt ? time(workflow.nextRunAt) : truth.next}</p>
+                    <p>Next due: {truth.next === workflow.nextRunAt ? time(workflow.nextRunAt, workflow.trigger.type === "schedule" && workflow.trigger.schedule.kind === "cron" ? workflow.trigger.schedule.timeZone : undefined) : truth.next}</p>
                     <p>Last observed run: {truth.latest} · {truth.receiptCount} linked execution receipt ID{truth.receiptCount === 1 ? "" : "s"}</p>
                     <p>{truth.warning}</p>
                   </div>
                   {last?.summary && <div className="mt-2 line-clamp-2 font-ui text-[13px] leading-4 text-muted-foreground/90">{last.summary}</div>}
                 </div>
                 <div role="group" aria-label={`Actions for ${workflow.name}`}
-                  className="flex w-full flex-wrap items-center gap-2 border-t border-border/40 pt-3 sm:w-auto sm:border-0 sm:pt-0">
+                  className="flex w-full flex-wrap items-center gap-2 border-t border-border/40 pt-3">
                   <button type="button" disabled={Boolean(busyId)}
                     onClick={() => void run(workflow.id, workflow.updatedAt)}
                     aria-label={`Run ${workflow.name} now — explicit manual action`}
@@ -491,7 +505,7 @@ export function ProjectAutomationPanel({ projectId }: { projectId: number }) {
                   <button type="button" disabled={Boolean(busyId) || workflow.trigger.type === "manual"}
                     onClick={() => requestWorkflowReview(workflow, "edit")}
                     className="inline-flex min-h-11 items-center rounded-lg border border-border/60 px-3 font-ui text-[13px] text-foreground hover:bg-accent/40 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-amber-300 disabled:opacity-40"
-                    title={workflow.trigger.type === "event" ? "Review event type and matching filters" : "Review interval or UTC daily schedule edit"}>
+                    title={workflow.trigger.type === "event" ? "Review event type and matching filters" : "Review interval, daily UTC or zoned cron schedule edit"}>
                     {workflow.trigger.type === "event" ? "Review event trigger" : "Review schedule"}
                   </button>
                   <button type="button" disabled={Boolean(busyId)}
@@ -599,7 +613,7 @@ export function ProjectAutomationPanel({ projectId }: { projectId: number }) {
         onRefetch={() => { void notificationsQuery.refetch(); }} />
 
       <div className="mt-3 font-terminal text-[12px] leading-3 text-muted-foreground/70">
-        Workflows use the selected Project's existing P9 sources and permissions. Review interval and daily UTC schedules or event-type and filter changes here. Saving a trigger does not run it or authorize additional actions.
+        Workflows use the selected Project's existing P9 sources and permissions. Review interval, daily UTC, explicit-zone cron schedules or event-type and filter changes here. Saving a trigger does not run it or authorize additional actions.
       </div>
     </section>
   );

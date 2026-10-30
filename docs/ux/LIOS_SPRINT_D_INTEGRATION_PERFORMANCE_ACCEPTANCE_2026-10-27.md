@@ -19,7 +19,7 @@ On **the exact Sprint D PR head**, from `src`:
 
 ```sh
 npm run check
-node --import tsx --test client/src/lib/sprintDComparisonGuard.test.ts client/src/lib/sprintDIntegrationAcceptance.test.ts client/src/lib/sprintCMarketCanvas.test.ts client/src/lib/sprintCVisualIntegration.test.ts client/src/lib/sprintBComparisonContext.test.ts client/src/lib/sprintBSourceReview.test.ts client/src/lib/graphExplorerPresentation.test.ts
+node --import tsx --test client/src/lib/sprintDComparisonGuard.test.ts client/src/lib/sprintDIntegrationAcceptance.test.ts client/src/lib/sprintCMarketCanvas.test.ts client/src/lib/sprintBComparisonContext.test.ts client/src/lib/sprintBSourceReview.test.ts client/src/lib/graphExplorerPresentation.test.ts
 node --test script/validate_universal_donor_adoption.test.mjs
 npm run test:offline
 npm run test:desktop

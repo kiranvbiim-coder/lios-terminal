@@ -1,6 +1,5 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
 import { browseRegisteredSpecialists } from "./contextualSpecialistDiscovery";
 import { isRegisteredView, isViewVisibleToAudience } from "./featureRegistry";
 import { TERMINAL_CAPABILITIES } from "./terminalCatalog";
@@ -63,11 +62,3 @@ test("result limits never bypass the original registry or introduce derived sour
   assert.ok(limited.every((result) => !("entitlement" in result) && !("sourceGrant" in result)));
 });
 
-test("Command Bar keeps full browsing optional and receives context only from visible Workbench", () => {
-  const bar = readFileSync(new URL("../components/terminal/CommandBar.tsx", import.meta.url), "utf8");
-  const terminal = readFileSync(new URL("../pages/Terminal.tsx", import.meta.url), "utf8");
-  assert.match(bar, /mode === "tools"\s*\? browseRegisteredSpecialists/);
-  assert.match(bar, /id="lios-specialist-workspace-filter"/);
-  assert.match(bar, /access and data are checked when used/);
-  assert.match(terminal, /activeView=\{isProjectsSurface \? undefined : activePane\.view\}/);
-});

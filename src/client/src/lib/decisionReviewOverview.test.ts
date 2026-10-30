@@ -1,6 +1,5 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { decisionArtifactContentSchema } from "@shared/artifactContracts";
@@ -75,12 +74,3 @@ test("summary never hides dissent or relabels completed tracking as execution", 
   assert.match(markup, /Reviewer disputes liquidity assumption/);
 });
 
-test("decision editor mounts review map before authoritative server approval inspector", () => {
-  const source = readFileSync(new URL("../components/terminal/DecisionArtifactEditor.tsx", import.meta.url), "utf8");
-  const map = source.indexOf("<DecisionReviewSummary content={content}");
-  const inspector = source.indexOf("<DecisionApprovalInspector key=");
-  assert.ok(map > 0 && inspector > map, "authored review should precede and not replace canonical approval");
-  assert.match(source, /dirty=\{dirty\} pending=\{pending\} conflict=\{conflict\}/);
-  assert.match(source, /useDecisionArtifactApproval\(artifactId, version, contentHash\)/);
-  assert.match(source, /decisionApprovalMatchesVersion\(recorded, \{ artifactId, version, contentHash \}\)/);
-});

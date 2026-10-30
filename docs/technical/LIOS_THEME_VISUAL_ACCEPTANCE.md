@@ -9,7 +9,7 @@ Follow the canonical [UX contract](../LIOS_UX_SYSTEM.md), issue #91, and
 
 - `npm run check`
 - `npm run test:palette:source`
-- `node --import tsx --test client/src/lib/liosProductPalette.test.ts client/src/lib/liosProductExperience.test.ts client/src/lib/terminalThemeLock.test.ts`
+- `node --import tsx --test client/src/lib/liosProductPalette.test.ts client/src/lib/liosProductExperience.test.ts`
 - `npm run test:ux`
 - `npm run test:offline`
 - `npm run build`
