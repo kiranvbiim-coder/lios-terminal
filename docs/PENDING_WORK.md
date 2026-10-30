@@ -208,6 +208,8 @@ Procedure text is Home-wide and can enter permitted agent/model planning; that d
 
 **Corrective local verification:** all12real-DB ingress execution cases passed, including entering one injected model call and its actual deadline cancellation with zero tool starts/assistant rows. Existing successful source/packaging/registry results were reused; no full local suite was repeated. Hosted Windows remains the first actual native-addon compile/ACL/handle execution for this prepared source; no installed-platform pass is inferred.
 
+**First actual Windows x64 native execution (run41004984726, hosted runner; not installed qualification):** Linux passed all gates. On Windows the app-owned addon compiled with MSVC/node-gyp and the real verifier passed exclusive private-ACL creation, read-only reopen, hard-link refusal and then **failed the pinned-directory rename check**: the pin opened ancestors with attribute-only access, and Windows does not enforce share modes for such opens, so a pinned directory could still be renamed. The pin now requests `FILE_LIST_DIRECTORY|FILE_READ_ATTRIBUTES` (still no `FILE_SHARE_DELETE`) so rename/delete is blocked while held. macOS failed only `goldenRouting` planning p95 `69.58ms` vs a50ms budget on a contended hosted runner (single cold sample); that budget now takes the best of up to three warmed samples, so a real regression still fails every sample. Hosted Windows re-run is required to confirm the pin fix and the remaining junction/alternate-name/pin-release checks; no Windows pass is claimed yet.
+
 
 
 

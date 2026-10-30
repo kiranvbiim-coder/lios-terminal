@@ -61,7 +61,9 @@ napi_value pinDirectories(napi_env env,napi_callback_info info){
     size_t end=3;
     for(;;){
       auto current=path.substr(0,end);
-      auto handle=std::make_unique<Handle>(CreateFileW(current.c_str(),FILE_READ_ATTRIBUTES,
+      // Windows ignores share restrictions for attribute-only opens. A listing right makes the omitted
+      // FILE_SHARE_DELETE actually block rename/delete of every pinned ancestor while the pin is held.
+      auto handle=std::make_unique<Handle>(CreateFileW(current.c_str(),FILE_LIST_DIRECTORY|FILE_READ_ATTRIBUTES,
         FILE_SHARE_READ|FILE_SHARE_WRITE,nullptr,OPEN_EXISTING,FILE_FLAG_BACKUP_SEMANTICS|FILE_FLAG_OPEN_REPARSE_POINT,nullptr));
       if(handle->value==INVALID_HANDLE_VALUE)throw std::runtime_error("Cannot pin Windows runtime directory ancestry.");
       inspect(handle->value,true);pin->handles.push_back(std::move(handle));
