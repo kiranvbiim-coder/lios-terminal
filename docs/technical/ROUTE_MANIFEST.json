@@ -4087,6 +4087,18 @@
    "unprobed": false
   },
   {
+   "method": "GET",
+   "path": "/api/license/access",
+   "reachableBy": [
+    "client_user",
+    "client_admin",
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
    "method": "POST",
    "path": "/api/license/import",
    "reachableBy": [
@@ -4098,6 +4110,15 @@
   {
    "method": "GET",
    "path": "/api/license/status",
+   "reachableBy": [
+    "client_admin",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "POST",
+   "path": "/api/license/trial/start",
    "reachableBy": [
     "client_admin",
     "internal_admin"

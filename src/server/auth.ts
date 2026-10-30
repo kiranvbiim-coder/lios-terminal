@@ -28,7 +28,7 @@ import {
   type UserRole,
 } from "@shared/schema";
 import { checkPasswordPolicy } from "@shared/passwordPolicy";
-import { DEFAULT_TRIAL_DAYS } from "@shared/commercialRuntime";
+import { DEFAULT_TRIAL_DAYS, TRIAL_PENDING_BILLING_STATE } from "@shared/commercialRuntime";
 import { evaluateOrganizationAccess } from "./controlPlanePolicy";
 import { recordAuditEvent } from "./auditEvents";
 import {
@@ -694,7 +694,6 @@ export function registerAuthRoutes(app: Express): void {
 
     const organizationName = parsed.data.organizationName || `${parsed.data.name}'s LiOS Workspace`;
     const slug = `trial-${crypto.randomBytes(12).toString("hex")}`;
-    const now = new Date();
     let organization: typeof organizations.$inferSelect | undefined;
     let createdUser: User | undefined;
     try {
@@ -726,13 +725,16 @@ export function registerAuthRoutes(app: Express): void {
         planId: null,
         status: "active",
         seatsPurchased: 1,
-        billingState: "trial",
-        trialEndsAt: new Date(now.getTime() + DEFAULT_TRIAL_DAYS * 86_400_000),
+        // The owner chooses next: "Start 7-day trial" (POST /api/license/trial/start) or enter a licence key.
+        // Until then the install is read-only and no trial clock runs.
+        billingState: TRIAL_PENDING_BILLING_STATE,
+        trialEndsAt: null,
       });
 
       await recordAuditEvent(createdUser.id, "self_serve_trial_registered", {
         organizationId: organization.id,
         trialDays: DEFAULT_TRIAL_DAYS,
+        trialStarted: false,
       });
     } catch (error) {
       if (organization) {

@@ -39,6 +39,8 @@ export function requireSoftwarePlanTier(value: unknown): SoftwarePlanTier {
 }
 
 export const DEFAULT_TRIAL_DAYS = 7 as const;
+/** Account created, owner has not yet chosen "Start 7-day trial" or entered a licence key; no trial clock runs. */
+export const TRIAL_PENDING_BILLING_STATE = "trial_pending" as const;
 export const BILLING_FAILURE_GRACE_DAYS = 7 as const;
 export const TRIAL_ENTITLEMENT_TIER: Exclude<SoftwarePlanTier, "trial"> = "pro";
 
@@ -216,4 +218,76 @@ export function resolveRuntimeAccess(input: RuntimeAccessInput): RuntimeAccessDe
 
 export function aiInvocationConsumesLiosCredits(): false {
   return false;
+}
+
+/**
+ * Installation-level access (offline, no server): full while a verified licence key or the 7-day local trial is
+ * in force; otherwise READ-ONLY. Read-only never hides or deletes data: opening, viewing and exporting stay
+ * available; only new AI calls, analysis/tool execution, automation runs and new provider connections are refused.
+ */
+export const READ_ONLY_ERROR_CODE = "license_read_only" as const;
+
+export type InstallationAccessReason =
+  | "license_valid"
+  | "trial_active"
+  | "trial_not_started"
+  | "trial_expired"
+  | "license_expired"
+  | "license_unusable"
+  | "unmanaged";
+
+export interface InstallationAccessInput {
+  now: Date;
+  /**
+   * An explicit signal (the packaged customer desktop) that this installation is under the trial/key rule. Never
+   * derived from missing rows: a managed install with no record yet is "trial not started", not "unmanaged".
+   */
+  managed: boolean;
+  /** The imported licence key, if any. `valid` means signature, trust anchor, device scope and expiry all pass. */
+  license: { present: boolean; valid: boolean; expiresAt: Date | null; expired: boolean };
+  /** The installation's trial, or null when this install has never had a client trial record. */
+  trial: { state: TrialLifecycleState; endsAt: Date | null } | null;
+}
+
+export interface InstallationAccessMode {
+  mode: "full" | "read_only";
+  reason: InstallationAccessReason;
+  /** ISO time the access that is currently granting (or last granted) execution ends. */
+  trialEndsAt: string | null;
+  licenseExpiresAt: string | null;
+  /** Whole days remaining on the access in force; null while read-only or unmanaged. */
+  daysLeft: number | null;
+  /** The owner has not yet chosen between the trial and entering a key. */
+  canStartTrial: boolean;
+}
+
+const ACCESS_DAY_MS = 24 * 60 * 60 * 1000;
+
+function wholeDaysLeft(until: Date, now: Date): number {
+  return Math.max(0, Math.ceil((until.getTime() - now.getTime()) / ACCESS_DAY_MS));
+}
+
+export function resolveInstallationAccessMode(input: InstallationAccessInput): InstallationAccessMode {
+  const { now, license, trial } = input;
+  const trialEndsAt = trial?.endsAt ? trial.endsAt.toISOString() : null;
+  const licenseExpiresAt = license.expiresAt ? license.expiresAt.toISOString() : null;
+  const base = { trialEndsAt, licenseExpiresAt };
+
+  if (license.valid && license.expiresAt) {
+    return { ...base, mode: "full", reason: "license_valid", daysLeft: wholeDaysLeft(license.expiresAt, now), canStartTrial: false };
+  }
+  if (trial?.state === "active" && trial.endsAt) {
+    return { ...base, mode: "full", reason: "trial_active", daysLeft: wholeDaysLeft(trial.endsAt, now), canStartTrial: false };
+  }
+  if (license.present) {
+    return { ...base, mode: "read_only", reason: license.expired ? "license_expired" : "license_unusable", daysLeft: null, canStartTrial: trial?.state === "not_started" };
+  }
+  if (trial) {
+    const reason = trial.state === "not_started" ? "trial_not_started" : "trial_expired";
+    return { ...base, mode: "read_only", reason, daysLeft: null, canStartTrial: trial.state === "not_started" };
+  }
+  // Managed with no record yet: the owner has not chosen between the trial and a key.
+  if (input.managed) return { ...base, mode: "read_only", reason: "trial_not_started", daysLeft: null, canStartTrial: true };
+  // Not managed (server Home, development, internal): not under a client trial.
+  return { ...base, mode: "full", reason: "unmanaged", daysLeft: null, canStartTrial: false };
 }

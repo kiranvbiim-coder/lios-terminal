@@ -1,3 +1,4 @@
+import { assertExecutionAllowed } from "./accessMode";
 import type { ProcessSupervisor } from "./exec/types";
 import type { McpAgentEvidenceCapture } from "./mcpAgentEvidence";
 /**
@@ -333,6 +334,7 @@ export class GovernedToolRegistry<TKind extends string, TResult> {
   ): Promise<TResult> {
     const tool = this.get(toolId);
     if (!tool) throw new Error(`Tool "${toolId}" is not registered.`);
+    await assertExecutionAllowed("tool");
     if (call.source === "agent" && (!tool.inputSchema || !tool.outputSchema)) {
       throw new GovernedToolSchemaUnavailableError(toolId);
     }

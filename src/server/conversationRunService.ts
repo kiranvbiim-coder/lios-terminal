@@ -49,6 +49,7 @@ import type {
   WorkflowPlan,
 } from "@shared/conversationRuntime";
 import { voiceExecutionReviewSchema } from "@shared/multimodalContracts";
+import { assertExecutionAllowed, isReadOnlyModeError } from "./accessMode";
 import { assertVoiceTranscriptReviewed, prepareVoiceConversationRequest } from "./p12VoiceRuntime";
 import {
   ProjectAttachmentContextExcludedError,
@@ -121,6 +122,16 @@ export class ConversationStartError extends Error {
   constructor(readonly status: number, readonly body: Record<string, unknown>) {
     super(typeof body.error === "string" ? body.error : "Conversation request rejected.");
     this.name = "ConversationStartError";
+  }
+}
+
+/** Read-only mode (trial or licence ended): no new run, resume or approved tool execution; history stays readable. */
+async function assertConversationMayExecute(requestId?: string): Promise<void> {
+  try {
+    await assertExecutionAllowed("conversation");
+  } catch (error) {
+    if (isReadOnlyModeError(error)) throw new ConversationStartError(error.status, { ...error.body(), ...(requestId ? { requestId } : {}) });
+    throw error;
   }
 }
 
@@ -497,6 +508,7 @@ async function runProjectChat(
   restart: RestartLaunch | null,
   adopted: AdoptedChannelIngressLaunch | null = null,
 ): Promise<RunSummary> {
+  await assertConversationMayExecute();
   const wire = parseWire(projectChatWireSchema, rawBody, "Invalid chat request.");
   const { voiceReview, agent, ...conversationInput } = wire;
   const initialRequest = canonicalRequest(conversationInput);
@@ -1180,6 +1192,7 @@ export async function resumeInterruptedConversationRun(
   if (typeof requestId !== "string" || !LOWERCASE_UUID.test(requestId)) {
     throw new ConversationStartError(400, { code: "invalid_request_id", error: "Resume needs the canonical lowercase run id." });
   }
+  await assertConversationMayExecute(requestId);
   const journal = await getConversationExecutionJournal().catch((error: unknown) => { throw new ConversationStartError(500, { code: "execution_journal_failed", error: new ConversationJournalError(error).message, requestId }); });
   const record = await journal.readForUser(requestId, user.id).catch(() => { throw new ConversationStartError(500, { code: "execution_journal_failed", error: "The execution journal could not be read.", requestId }); });
   if (!record || record.owner.chatId === null) throw new ConversationStartError(404, { code: "interrupted_run_not_found", error: "Interrupted execution not found.", requestId });
@@ -1266,6 +1279,7 @@ export async function reviewGovernedToolRun(
     return { ok: true, status: "cancelled" };
   }
 
+  await assertConversationMayExecute(requestId);
   await payload.assertCurrent?.();
   if (decision === "allow_project" && (payload.adoptedIngress || descriptor.allowProjectApproval === false)) {
     throw new ConversationStartError(409, {
@@ -1349,6 +1363,7 @@ export async function reviewGovernedToolRun(
 }
 
 export async function startTemporaryRun(user: ConversationUser, rawBody: unknown): Promise<RunSummary> {
+  await assertConversationMayExecute();
   const wire = parseWire(temporarySchema, rawBody, "Invalid temporary chat request.");
   const { history, voiceReview, workingContext: clientContext, ...requestInput } = wire;
   const initialRequest = canonicalRequest(requestInput);

@@ -1,3 +1,4 @@
+import { respondReadOnly } from "./accessMode";
 import type { Express, Request, Response } from "express";
 import { z } from "zod";
 import { requireAuth } from "./auth";
@@ -43,6 +44,7 @@ function projectId(req: Request): number {
 }
 
 function fail(res: Response, error: unknown): void {
+  if (respondReadOnly(res, error)) return;
   if (error instanceof z.ZodError) {
     res.status(400).json({ error: "Invalid P9 automation request.", issues: error.issues });
     return;

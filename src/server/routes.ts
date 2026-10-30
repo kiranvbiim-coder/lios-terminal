@@ -104,6 +104,7 @@ import { registerFinancialNormalizationRoutes } from "./financialNormalizationRo
 import { registerConnectorRoutes } from "./connectorRoutes";
 import { registerRuntimeFoundationRoutes } from "./runtimeFoundationRoutes";
 import { registerLicenseRoutes } from "./licenseRoutes";
+import { guardExecutionRoutes } from "./accessMode";
 import { registerBackupRoutes } from "./backupRoutes";
 import { registerDeviceRoutes } from "./deviceRoutes";
 import { registerMCPRoutes } from "./mcpRoutes";
@@ -196,6 +197,14 @@ const portfolioAnalyticsRequestSchema = z.object({
 export async function registerRoutes(httpServer: Server, app: Express): Promise<void> {
   app.use(p10ObservabilityMiddleware);
   registerAuthRoutes(app);
+  // Read-only mode (trial or licence ended): new provider/source connections and analysis compute are refused
+  // before their handlers run; reads, DELETE and export stay open. Conversation, AI, tool and automation
+  // starts are refused at their own chokepoints (see accessMode.ts).
+  guardExecutionRoutes(app, ["/api/setup"], "connection");
+  guardExecutionRoutes(app, [
+    "/api/quant", "/api/quant-lab", "/api/p8", "/api/factor-risk", "/api/calculation-jobs",
+    "/api/scenario-pipeline", "/api/decision-analysis",
+  ], "analysis");
 
   // Client dashboard (Phase 3) routes are registered here, before the
   // requireInternal gate below, so client_* credentials can reach their own
