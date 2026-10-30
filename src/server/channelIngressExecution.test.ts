@@ -106,7 +106,8 @@ function model(before?: (callNumber: number) => Promise<void>, toolId = "lios.pr
   return { aiCompletion, prompts, calls: () => calls };
 }
 
-test("adopted ingress executes once through the canonical owner and permanently fences replay", { timeout: 120_000 }, async t => {
+// Serial real-DB scenarios take over120s on hosted Intel macOS; individual execution budgets stay unchanged.
+test("adopted ingress executes once through the canonical owner and permanently fences replay", { timeout: 240_000 }, async t => {
   await dbModule.initDb();
   const [finance] = await dbModule.getDb().select().from(schema.domains).where(eq(schema.domains.slug, "finance")).limit(1);
   if (!finance) await dbModule.getDb().insert(schema.domains).values({ slug: "finance", name: "Finance", active: true });
