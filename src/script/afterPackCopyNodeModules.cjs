@@ -26,6 +26,7 @@ const { finished } = require("node:stream/promises");
 const asar = require("@electron/asar");
 const plist = require("plist");
 const { selectRuntimeClosure, copyRuntimeClosure, closureEvidence } = require("./runtimeDependencyClosure.cjs");
+const { buildNativeRuntimeFs } = require("./build_native_runtime_fs.cjs");
 
 /** Enumerate every bundled root-rights source so verification cannot miss nested donor grants. */
 function rootRightsFiles(repoRoot) {
@@ -205,6 +206,19 @@ module.exports = async function afterPack(context) {
         buildPath: stagingDir, electronVersion, platform: electronPlatformName,
         arch: closure.target.arch, onlyModules: nativeModules, force: true,
       });
+    }
+
+    // This app-owned addon is outside the npm closure. Build for this exact
+    // Electron target and put it at the loader's fixed sealed-resource path.
+    if (electronPlatformName === "win32") {
+      const electronVersion = packager.config?.electronVersion || require(path.join(projectDir, "node_modules/electron/package.json")).version;
+      const addon = buildNativeRuntimeFs({ projectDir, arch: closure.target.arch, electronVersion });
+      const destination = path.join(resourcesDir, "native-runtime-fs", "lios_native_runtime_fs.node");
+      fs.mkdirSync(path.dirname(destination), { recursive: true });
+      fs.copyFileSync(addon, destination);
+      if (!fs.readFileSync(destination).equals(fs.readFileSync(addon))) {
+        throw new Error("Packaged Windows runtime custody bytes differ from the target build.");
+      }
     }
 
     // Audit the graph actually copied, including dev-only and unlocked packages,
