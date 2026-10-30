@@ -1,16 +1,21 @@
-import { useState } from "react";
-import { Eye, Focus, MoonStar, MonitorPlay, Settings2 } from "lucide-react";
+import { useMemo, useState } from "react";
+import { Eye, Focus, MoonStar, MonitorPlay, Settings2, Wrench } from "lucide-react";
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
 import ThemeSwitcher from "./ThemeSwitcher";
 import {
   patchTerminalUxPreferences, saveTerminalUxPreferences,
   type TerminalUxPreferences,
 } from "@/lib/terminalUxPreferences";
+import { getSettingsAdvancedCapabilities } from "@/lib/terminalCatalog";
+import type { ViewMode } from "@/lib/terminalTypes";
 
 interface Props {
   preferences: TerminalUxPreferences;
   onChange: (preferences: TerminalUxPreferences) => void;
   onClose: () => void;
+  isInternal: boolean;
+  /** Opens a Settings › Advanced tool through the normal audience-checked view routing. */
+  onOpenView: (view: ViewMode) => void;
 }
 
 function Toggle({ checked, label, description, onChange, shortcut }: { checked: boolean; label: string; description: string; onChange: (value: boolean) => void; shortcut?: string }) {
@@ -27,8 +32,9 @@ function SectionTitle({ children }: { children: React.ReactNode }) {
   return <h2 className="mb-2 font-ui text-sm font-semibold text-muted-foreground">{children}</h2>;
 }
 
-export default function TerminalUxSettings({ preferences, onChange, onClose }: Props) {
+export default function TerminalUxSettings({ preferences, onChange, onClose, isInternal, onOpenView }: Props) {
   const [opener] = useState(() => document.activeElement instanceof HTMLElement ? document.activeElement : null);
+  const advancedTools = useMemo(() => getSettingsAdvancedCapabilities(isInternal), [isInternal]);
   const motionStyle = preferences.reducedMotion ? { animation: "none", transition: "none" } : undefined;
   const update = (patch: Partial<TerminalUxPreferences>) => {
     const next = patchTerminalUxPreferences(preferences, patch);
@@ -106,6 +112,23 @@ export default function TerminalUxSettings({ preferences, onChange, onClose }: P
             <SectionTitle>Text scale</SectionTitle>
             <div className="grid grid-cols-3 gap-2">{(["small", "normal", "large"] as const).map(textScale => <button key={textScale} aria-pressed={preferences.textScale === textScale} onClick={() => update({ textScale })} className="min-h-11 rounded border border-border px-3 py-2 font-ui text-sm capitalize aria-pressed:border-primary aria-pressed:text-primary focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary">{textScale}</button>)}</div>
           </section>
+
+          {advancedTools.length > 0 && (
+            <section aria-labelledby="settings-advanced-title" data-testid="settings-advanced">
+              <h2 id="settings-advanced-title" className="mb-2 font-ui text-sm font-semibold text-muted-foreground">Advanced</h2>
+              <p className="mb-2 font-ui text-sm leading-6 text-muted-foreground">Administration, data sources and diagnostics. These open in the Workbench; your access rules still apply.</p>
+              <div className="grid gap-2 sm:grid-cols-2">
+                {advancedTools.map((tool) => (
+                  <button key={tool.view} type="button" data-testid={`settings-advanced-${tool.view}`}
+                    onClick={() => { onOpenView(tool.view); onClose(); }}
+                    className="min-h-11 rounded-xl border border-border/55 bg-white/[0.012] p-3 text-left font-ui hover:border-border hover:bg-white/[0.025] focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary">
+                    <span className="flex items-center gap-2 text-sm font-semibold text-foreground"><Wrench className="h-3.5 w-3.5 text-muted-foreground" aria-hidden="true" />{tool.label}</span>
+                    <span className="mt-1 block text-sm leading-5 text-muted-foreground">{tool.description}</span>
+                  </button>
+                ))}
+              </div>
+            </section>
+          )}
 
           <p className="font-ui text-sm leading-6 text-muted-foreground"><MoonStar className="mr-2 inline h-4 w-4"/>Comfort and motion preferences support extended analytical work.</p>
           <p className="font-ui text-sm leading-6 text-muted-foreground"><MonitorPlay className="mr-2 inline h-4 w-4"/>Local presentation settings do not change model calculations, source rights or execution permissions.</p>

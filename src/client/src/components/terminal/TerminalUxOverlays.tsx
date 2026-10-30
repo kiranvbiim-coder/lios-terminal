@@ -213,10 +213,18 @@ export default function TerminalUxOverlays({ experienceSurface, activeView, acti
         return;
       }
       if (!editable && event.key === "?" && !modifier) { event.preventDefault(); openSurface("shortcuts"); return; }
+      // Pulse: ⌘/Ctrl U (outside text fields) or ⌘/Ctrl ⇧ U / ⇧ V anywhere. Plain ⌘/Ctrl V stays paste.
+      const pulseKey = event.key.toLowerCase();
+      if (modifier && !event.altKey && (event.shiftKey ? pulseKey === "u" || pulseKey === "v" : pulseKey === "u" && !editable)) {
+        event.preventDefault();
+        event.stopPropagation();
+        openSurface(null);
+        setExperienceSurface("pulse");
+        return;
+      }
       if (!modifier || !event.shiftKey) return;
       const key = event.key.toLowerCase();
       if (key === "g") { event.preventDefault(); openSurface("cognitive-core"); return; }
-      if (key === "u" || key === "v") { event.preventDefault(); setExperienceSurface("pulse"); openSurface(null); return; }
       if (key === "k") { event.preventDefault(); openSurface("impact-map"); return; }
       if (key === "t") { event.preventDefault(); openSurface("trust-ledger"); return; }
       if (key === "j") { event.preventDefault(); openSurface("decision-drift"); return; }
@@ -270,7 +278,7 @@ export default function TerminalUxOverlays({ experienceSurface, activeView, acti
       {surface === "macros" && <TerminalMacroManager activeSymbol={activeSymbol} isInternal={isInternal} onRunStep={runMacroStep} onClose={() => setSurface(null)} />}
       {surface === "missions" && <TerminalMissionCenter isInternal={isInternal} onOpenView={(view) => onOpen(view, "current", activeSymbol)} onClose={() => setSurface(null)} />}
       {surface === "evidence" && <ProvenanceDrawer onClose={() => setSurface(null)} />}
-      {surface === "settings" && <TerminalUxSettings preferences={preferences} onChange={onPreferencesChange} onClose={() => setSurface(null)} />}
+      {surface === "settings" && <TerminalUxSettings preferences={preferences} onChange={onPreferencesChange} onClose={() => setSurface(null)} isInternal={isInternal} onOpenView={(view) => onOpen(view, "tab")} />}
       {surface === "share" && <WorkspaceSharePreview workspace={workspace} onClose={() => setSurface(null)} />}
       {surface === "wave-e-shell" && isInternal && <WaveEExperienceShell activeView={activeView} activeSymbol={activeSymbol} onOpen={onOpen} onClose={() => setSurface(null)} />}
       {contextMenu && <AnalyticalContextMenu x={contextMenu.x} y={contextMenu.y} view={contextMenu.view} symbol={contextMenu.symbol} isInternal={isInternal} onOpen={onOpen} onEvidence={() => openSurface("evidence")} onClose={() => setContextMenu(null)} />}

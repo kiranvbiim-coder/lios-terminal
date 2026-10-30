@@ -87,7 +87,7 @@
   color: hsl(var(--limuria-text-dim));
 }
 
-.terminal-root :where(.panel-label, th, [role='columnheader']) {
+.terminal-root :where(th, [role='columnheader']) {
   letter-spacing: .095em;
 }
 

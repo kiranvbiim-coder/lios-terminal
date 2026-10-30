@@ -79,14 +79,15 @@ test("full precision mode shows every stored digit", () => {
   assert.match(markup, />Show formatted numbers</);
 });
 
-test("raw valuation JSON is reachable only as read-only recorded evidence", () => {
+test("recorded valuation data is reachable only as read-only exact evidence, never raw JSON", () => {
   const closed = valuation();
   assert.match(closed, /<button[^>]*aria-expanded="false"[^>]*>.*?Expert view/);
   assert.doesNotMatch(closed, /<textarea/);
   const open = valuation({ expertDefaultOpen: true });
   assert.match(open, /aria-expanded="true"/);
-  assert.match(open, /<pre[^>]*aria-label="Recorded valuation JSON"/);
-  assert.match(open, /&quot;valuePerShare&quot;: 71\.370824940136/);
+  assert.match(open, /<div[^>]*aria-label="Recorded valuation data"/);
+  assert.match(open, />71\.370824940136 per share</);
+  assert.doesNotMatch(open, RAW_JSON);
   assert.match(open, /This is recorded calculation evidence, not an input editor/);
   assert.doesNotMatch(open, /<textarea|Save revision/);
 });
@@ -97,7 +98,7 @@ test("Expert view panel mounts read-only valuation data only on explicit disclos
   assert.match(closed, /<div id="[^"]+" hidden=""[^>]*><\/div>/);
   const open = valuation({ expertDefaultOpen: true });
   assert.doesNotMatch(open, /<div id="[^"]+" hidden=""/);
-  assert.match(open, /<pre aria-label="Recorded valuation JSON"/);
+  assert.match(open, /aria-label="Recorded valuation data"/);
 });
 
 test("WACC control stages a proposal without changing stored calculations", () => {

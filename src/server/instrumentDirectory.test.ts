@@ -61,5 +61,53 @@ test("directory bounds output for a common short query and paginated scan", () =
   assert.equal(page.total, 12_000);
   assert.equal(page.items.length, 20);
   assert.equal(page.totalPages, 600);
-  assert.equal(page.items[0].symbol, "A120");
+  // Equal-relevance rows page in deterministic alphabetical symbol order.
+  const alphabetical = source.map(row => row.symbol).sort((a, b) => a.toLowerCase() < b.toLowerCase() ? -1 : 1);
+  assert.equal(page.items[0].symbol, alphabetical[120]);
+  assert.deepEqual(queryInstrumentDirectory(rows, { q: "Example", page: 7 }).items.map(r => r.symbol),
+    page.items.map(r => r.symbol), "Paging is stable across identical queries");
+});
+
+test("search puts the home primary listing of the intended security first", () => {
+  // Fixture mirrors the real FinanceDatabase rows that previously outranked
+  // the intended security (catalog insertion order, venue-blind).
+  const fx = (symbol: string, name: string, exchange: string, mic: string, countryName: string, marketCapTier: string | null, assetClass = "equities") =>
+    eq(symbol, name, exchange, mic, { countryName, marketCapTier, assetClass });
+  const rows = collectInstrumentDirectoryRows([], [], [
+    fx("RWC.AX", "Reliance Worldwide Corporation Limited", "ASX", "XASX", "United States", "Mid Cap"),
+    fx("EUPIC.AT", "European Reliance General Insurance Company S.A.", "ATH", "ASEX", "Greece", "Micro Cap"),
+    fx("RLI.BE", "Reliance Industries Ltd Sponsored GDR 144A", "BER", "XBER", "India", "Large Cap"),
+    fx("NIOSAD.BO", "Reliance Mutual Fund", "BSE", "XBOM", "India", null),
+    fx("RPOWER.NS", "Reliance Power Limited", "NSE", "XNSE", "India", "Small Cap"),
+    fx("500325.BO", "Reliance Industries Limited", "BSE", "XBOM", "India", "Large Cap"),
+    fx("RELIANCE.NS", "Reliance Industries Limited", "NSE", "XNSE", "India", "Large Cap"),
+    fx("MSF.BE", "Microsoft Corporation", "BER", "XBER", "United States", "Mega Cap"),
+    fx("MSFT.BA", "Microsoft Corporation", "BUE", "XBUE", "United States", "Mega Cap"),
+    fx("MSF.DE", "Microsoft Corporation", "GER", "XETR", "United States", "Mega Cap"),
+    fx("MSFT", "Microsoft Corporation", "NMS", "XNAS", "United States", "Mega Cap"),
+    fx("MSFTX", "Microsoft Tracker Index", "NIM", "", "United States", null, "indices"),
+    fx("INFY", "Infosys Limited", "NYQ", "XNYS", "India", "Large Cap"),
+    fx("INFY.NS", "Infosys Limited", "NSE", "XNSE", "India", "Large Cap"),
+  ]).items;
+  const top = (q: string, n: number) => searchInstrumentDirectory(rows, q, 15).slice(0, n).map(r => r.symbol);
+
+  assert.deepEqual(top("Reliance", 4), ["RELIANCE.NS", "RPOWER.NS", "500325.BO", "NIOSAD.BO"],
+    "base-ticker match, then home primary NSE listings, then BSE, each by market-cap tier");
+  assert.deepEqual(top("Reliance", 7).slice(4), ["RWC.AX", "RLI.BE", "EUPIC.AT"],
+    "foreign venues and GDRs follow; a mid-name word match comes last");
+  assert.equal(top("Microsoft", 1)[0], "MSFT", "home primary venue beats foreign venues");
+  assert.equal(top("MSFT", 1)[0], "MSFT", "exact ticker on the primary venue first");
+  assert.deepEqual(top("MSFT", 3), ["MSFT", "MSFT.BA", "MSFTX"], "base-ticker venue match outranks symbol prefix");
+  assert.equal(top("RELIANCE.NS", 1)[0], "RELIANCE.NS");
+  assert.equal(top("infosys", 1)[0], "INFY.NS", "home exchange over a foreign ADR");
+  assert.deepEqual(top("INFY", 2), ["INFY.NS", "INFY"], "base and bare tickers are both exact; the home listing leads");
+
+  // The paged directory uses the same order, and Markets tabs map to venues.
+  assert.equal(queryInstrumentDirectory(rows, { q: "Reliance" }).items[0].symbol, "RELIANCE.NS");
+  assert.equal(queryInstrumentDirectory(rows, { q: "microsoft", page: 1, limit: 1 }).items[0].symbol, "MSFT");
+  assert.equal(queryInstrumentDirectory(rows, { q: "microsoft", page: 2, limit: 1 }).items[0].symbol, "MSF.DE");
+  assert.deepEqual(queryInstrumentDirectory(rows, { exchange: "NSE" }).items.map(r => r.symbol),
+    ["INFY.NS", "RELIANCE.NS", "RPOWER.NS"]);
+  assert.equal(queryInstrumentDirectory(rows, { exchange: "XETRA" }).items[0].symbol, "MSF.DE");
+  assert.equal(queryInstrumentDirectory(rows, { exchange: "US" }).items[0].symbol, "MSFT");
 });

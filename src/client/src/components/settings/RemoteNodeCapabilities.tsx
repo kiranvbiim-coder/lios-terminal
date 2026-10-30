@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useGateway, useGatewayState } from "@/lib/gateway/GatewayProvider";
 import { REMOTE_DIAGNOSIS_CAPABILITY, REMOTE_FINANCE_CAPABILITY, type RemoteNodePlacementPolicy, type RemoteNodePlacementSelection, type RemoteOperationOutcome } from "@shared/remoteNode";
+import { ReadableValue } from "@/components/ui/ReadableValue";
 
 type Target = RemoteNodePlacementSelection["target"];
 type Destination = { id: number; label: string };
@@ -109,7 +110,7 @@ export function RemoteNodeCapabilities() {
     {outcome && <div role="status" className="space-y-1 text-xs">
       <p>{outcome.status} · {outcome.outcome} · {outcome.reason}</p>
       <p className="text-muted-foreground">Home verifies the authenticated device and operation binding, not independent hardware/financial attestation. Request {outcome.binding.requestId} is retained in the canonical encrypted journal. Disconnect/unknown outcomes never automatically replay.</p>
-      <pre className="max-h-80 overflow-auto whitespace-pre-wrap break-all">{JSON.stringify(outcome.report, null, 2)}</pre>
+      <ReadableValue value={outcome.report} className="max-h-80 overflow-auto" />
     </div>}
   </section>;
 }

@@ -4,6 +4,7 @@ import { FileBarChart } from "lucide-react";
 import { savedMessageArtifactRefs, type SavedMessageArtifactRef } from "@shared/conversationArtifactRefs";
 import { useOwnedArtifacts, type ArtifactDetail, type ProjectArtifactRecord } from "@/lib/useArtifacts";
 import { recordedArtifactPreview } from "@/lib/recordedArtifactPreview";
+import { generatedImageFromContent } from "@/lib/generatedImageArtifact";
 
 const KIND_LABEL: Record<string, string> = {
   chart: "Chart",
@@ -32,6 +33,8 @@ export interface SavedArtifactCardModel {
   preview: string | null;
   /** The exact access-checked lookup of this Artifact version failed or returned another Project (deleted or no longer accessible). Absence from the active list alone never sets this. */
   unavailable: boolean;
+  /** Data URL of a generated image from the exact access-checked revision. */
+  thumbnail?: string | null;
 }
 
 /**
@@ -76,7 +79,9 @@ export function SavedArtifactCardList({ cards, activeId, onOpen }: {
           aria-pressed={card.unavailable ? undefined : activeId === card.id}
           className="flex w-full min-w-0 items-center gap-2 rounded-md border border-border/50 bg-black/20 px-2.5 py-2 text-left transition-colors hover:border-fuchsia-300/30 hover:bg-white/[0.03] focus-visible:outline focus-visible:outline-2 focus-visible:outline-amber-300 disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:border-border/50 disabled:hover:bg-black/20"
         >
-          <FileBarChart className="h-3.5 w-3.5 shrink-0 text-fuchsia-300" aria-hidden="true" />
+          {card.thumbnail
+            ? <img src={card.thumbnail} alt="" data-testid="artifact-card-thumbnail" className="h-10 w-10 shrink-0 rounded border border-border/50 object-cover"/>
+            : <FileBarChart className="h-3.5 w-3.5 shrink-0 text-fuchsia-300" aria-hidden="true" />}
           <span className="min-w-0 flex-1 space-y-1">
             <span className="block truncate font-ui text-[13px] text-foreground">{card.title}</span>
             {card.preview && <span data-testid="artifact-task-preview" className="block truncate font-ui text-[12px] text-muted-foreground">{card.preview}</span>}
@@ -157,8 +162,10 @@ export default function SavedArtifactCards({ metadata, projectId, chatId = null,
     const live = fromList ?? (detail ? { title: detail.artifact.title, kind: detail.artifact.kind, headVersion: detail.artifact.headVersion } : undefined);
     const wrongIdentityOrScope = Boolean(query?.data) && Boolean(query?.isFetchedAfterMount) && !query?.isFetching && !detail;
     const lookup = live ? "found" : wrongIdentityOrScope || query?.isError ? "missing" : "pending";
-    const preview = detail ? recordedArtifactPreview(detail.version.content) : null;
-    return describeSavedArtifactCard(ref, live, lookup, preview, detail?.artifact.kind ?? null);
+    const image = detail ? generatedImageFromContent(detail.version.content) : null;
+    const preview = image ? image.prompt || null : detail ? recordedArtifactPreview(detail.version.content) : null;
+    const card = describeSavedArtifactCard(ref, live, lookup, preview, detail?.artifact.kind ?? null);
+    return image ? { ...card, kindLabel: "Image", thumbnail: image.src } : card;
   });
   return <SavedArtifactCardList cards={cards} activeId={activeId} onOpen={onOpen} />;
 }

@@ -1,5 +1,6 @@
 import type { z } from "zod";
 import { GATEWAY_METHODS } from "@shared/gatewayProtocol";
+import { ReadableValue } from "@/components/ui/ReadableValue";
 
 type Proposal = z.output<(typeof GATEWAY_METHODS)["execution.operation.propose"]["result"]>;
 
@@ -44,7 +45,7 @@ export default function SandboxOperationReviewCard({
       </dl>
       <div className="space-y-1">
         <div className="font-ui text-[11px] font-medium text-foreground/80">Exact executable and arguments</div>
-        <pre className="max-h-32 overflow-auto rounded border border-border/60 bg-black/30 p-2 font-terminal text-[10px] leading-4 text-foreground/80">{JSON.stringify(proposal.argv, null, 2)}</pre>
+        <ReadableValue value={proposal.argv} exact className="max-h-32 overflow-auto rounded border border-border/60 bg-black/30 p-2 font-terminal text-[10px] leading-4 text-foreground/80" />
       </div>
       <div className="space-y-1 font-terminal text-[10px] text-muted-foreground">
         <div>Operation digest: <code className="break-all">{proposal.operationDigest}</code></div>

@@ -252,7 +252,13 @@ function withDonorCheckout(callback) {
 
 function run(argv = process.argv.slice(2)) {
   let sourceDir = null, sourceCommit = null, categories = DEFAULT_CATEGORIES, minimum = 300000;
-  const dest = path.join(resolveDataRoot({ cwd: path.resolve(__dirname, "..") }).root, "instrument-catalogs");
+  let dest = path.join(resolveDataRoot({ cwd: path.resolve(__dirname, "..") }).root, "instrument-catalogs");
+  const destIndex = argv.indexOf("--dest");
+  if (destIndex >= 0) {
+    if (!argv[destIndex + 1]) throw new Error("--dest requires a directory");
+    dest = path.resolve(argv[destIndex + 1]);
+    argv = argv.filter((_, i) => i !== destIndex && i !== destIndex + 1);
+  }
   if (argv.length === 1 && argv[0] === "--verify") {
     const report = verifyInstalled(dest);
     console.log(JSON.stringify(report, null, 2));

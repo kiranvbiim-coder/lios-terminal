@@ -9,6 +9,7 @@ import { apiRequest } from "@/lib/queryClient";
 import { getTerminalPersona, resolveTerminalPersonaId, type TerminalPersonaId } from "@/lib/terminalPersona";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import ChangePasswordForm from "@/components/ChangePasswordForm";
+import ReferenceUniverseLoadPrompt from "@/components/data/ReferenceUniverseLoadPrompt";
 import { useAudience } from "@/lib/audience";
 import { isSecuritySearchResult, rankSecuritySearchResults, resolveVerifiedSecuritySelection, type SecuritySearchResult } from "@/lib/terminalSecuritySearch";
 
@@ -381,6 +382,11 @@ export default function TopBar({ activeSymbol, view, onNav, onSymbol, onOpenCmd,
         {(isFocused || searchNotice) && searchVal.trim() && (searchResults.length === 0 || completedSearch?.trim().toUpperCase() !== searchVal.trim().toUpperCase()) && (
           <div id="lios-topbar-lookup-status" role="status" aria-live="polite" className="absolute left-0 top-full z-40 w-72 max-w-[90vw] border border-border bg-[#090909] px-3 py-2 font-ui text-xs leading-relaxed text-muted-foreground">
             {searchNotice ?? (searchingSecurity ? "Searching permitted security listings…" : completedSearch?.trim().toUpperCase() === searchVal.trim().toUpperCase() && searchResults.length === 0 ? "No matching securities returned by the source. Nothing was selected." : "Select a returned security. GO only opens one exact ticker match.")}
+            {!searchNotice && !searchingSecurity && completedSearch?.trim().toUpperCase() === searchVal.trim().toUpperCase() && searchResults.length === 0 && (
+              <div onMouseDown={(event) => event.preventDefault()}>
+                <ReferenceUniverseLoadPrompt compact />
+              </div>
+            )}
           </div>
         )}
       </form>

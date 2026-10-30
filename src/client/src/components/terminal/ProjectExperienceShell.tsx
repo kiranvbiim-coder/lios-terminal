@@ -2,6 +2,9 @@ import { ChatTerminalControl, type ChatTerminalRenderer } from "./ChatTerminalSu
 import TerminalScreenArtifact from "./TerminalScreenArtifact";
 import { initialTerminalScreenState, readTerminalScreenState } from "@shared/terminalArtifact";
 import { captureChatWorkbenchOrigin, returnChangesChatIdentity, type ChatWorkbenchOrigin } from "@/lib/chatWorkbenchHandoff";
+import { AI_NOT_CONNECTED_CODE, useAiConnectionGate } from "@/lib/aiConnection";
+import { useLicenseAccess } from "@/lib/licenseAccess";
+import ReconnectAiPrompt from "@/components/license/ReconnectAiPrompt";
 import { useArtifact, createArtifactVersion, type ArtifactDetail } from "@/lib/useArtifacts";
 import { getTerminalCapability } from "@/lib/terminalCatalog";
 import { apiRequest } from "@/lib/queryClient";
@@ -80,9 +83,13 @@ import {
   VolumeX,
   Workflow,
   X,
+  ImagePlus,
+  PenLine,
 } from "lucide-react";
 import type { ArtifactWorkbenchContext, ViewMode } from "@/lib/terminalTypes";
 import { resolveScopedWorkbenchSymbol } from "@/lib/chatWorkbenchContext";
+import { buildChatAnalysisCard, decideChatAnalysisPresentation, type ChatAnalysisCard as ChatAnalysisCardModel } from "@/lib/chatAnalysisHandoff";
+import ChatAnalysisCard from "./ChatAnalysisCard";
 import type { LifecycleAction } from "@shared/objectLifecycle";
 import { P6_PERSONAL_FINANCE_INPUT_ACTION, type P6PersonalFinanceRequest } from "@shared/p6FinanceContracts";
 import type { WorkspaceAudience } from "@/lib/featureRegistry";
@@ -479,10 +486,14 @@ export default function ProjectExperienceShell({
   const [lastWorkflowOrigin, setLastWorkflowOrigin] = useState<{projectId: number | null; chatId: number | null} | null>(null);
   const [showSaveWorkflow, setShowSaveWorkflow] = useState(false);
   const composerToolsTrigger = useRef<HTMLButtonElement>(null);
-  const pendingComposerDialog = useRef<"workflow" | "resource" | "plugins" | null>(null);
+  const pendingComposerDialog = useRef<"workflow" | "resource" | "plugins" | "compose" | null>(null);
   const [lifecycleNotice, setLifecycleNotice] = useState<string | null>(null);
   const replySpeech = useReplySpeech(speakRepliesEnabled && voiceOutputAvailable, financeOwner, setLifecycleNotice);
   const [executionMode, setExecutionMode] = useState<ConversationExecutionMode>("ai_assisted");
+  const licenseAccess = useLicenseAccess(true);
+  const aiConnection = useAiConnectionGate(licenseAccess.data?.mode === "full");
+  const [reconnectAiShown, setReconnectAiShown] = useState(false);
+  const [resendAfterAiReconnect, setResendAfterAiReconnect] = useState(false);
   const agentComposer = useBoundedAgentComposer(chatMode, executionMode);
   const [sourceScope, setSourceScope] = useState<ConversationSourceScope>(() => loadComposerSourceScope(selection.projectId));
   const [transmissionPolicy, setTransmissionPolicy] = useState<AITransmissionPolicy>(() => loadProjectAITransmissionPolicy(selection.projectId));
@@ -556,6 +567,27 @@ export default function ProjectExperienceShell({
       return true;
     } catch (cause) { setLifecycleNotice(cause instanceof Error ? cause.message : "Terminal view could not be retained. Your prompt remains available."); return false; }
     finally { terminalOpeningRef.current = false; setBusy(false); }
+  };
+  // Chat → Workbench: the tool matching a finished turn opens beside Chat (wide window) and a
+  // compact card offers Open / Expand. Keyed to its Chat so it never leaks into another.
+  const [analysisCard, setAnalysisCard] = useState<{ card: ChatAnalysisCardModel; chatKey: string } | null>(null);
+  const analysisChatKey = chatMode === "temporary" ? "temporary" : `chat:${selection.chatId ?? "none"}`;
+  useEffect(() => { setAnalysisCard(current => current && current.chatKey !== analysisChatKey ? null : current); }, [analysisChatKey]);
+  const pendingAnalysisExpandRef = useRef<{ fromArtifactId: string | null } | null>(null);
+  const presentChatAnalysis = async (message: string, events: readonly ConversationRuntimeEvent[], producedArtifactOrDirective: boolean, chatKey: string, canAutoOpen: boolean) => {
+    const card = renderTerminalPanel ? buildChatAnalysisCard({ message, events, audience }) : null;
+    setAnalysisCard(card ? { card, chatKey } : null);
+    if (!card || !canAutoOpen) return;
+    const presentation = decideChatAnalysisPresentation({ card, viewportWidth: window.innerWidth, artifactDraftDirty: artifactDraftDirtyRef.current, turnProducedArtifactOrDirective: producedArtifactOrDirective, showing: terminalContext });
+    if (presentation === "sidecar") await openTerminalPanel({ view: card.view, symbol: card.symbol });
+  };
+  const expandChatAnalysis = async (card: ChatAnalysisCardModel) => {
+    const showing = terminalContext?.view === card.view && (terminalContext.symbol ?? null) === card.symbol;
+    if (chatMode === "temporary" || showing) { onOpenWorkbench(); return; }
+    // Retain the tool in this Chat first; once the sidecar loads it, the existing
+    // Artifact → Workbench handoff opens it so Return to Chat keeps the conversation.
+    const fromArtifactId = conversationArtifactRef;
+    if (await openTerminalPanel({ view: card.view, symbol: card.symbol })) pendingAnalysisExpandRef.current = { fromArtifactId };
   };
   const handledChatReturn = useRef<number | null>(null);
   const reviewingChatReturn = useRef<number | null>(null);
@@ -1539,6 +1571,12 @@ export default function ProjectExperienceShell({
       setLifecycleNotice(`Send was blocked because the Home connection was not confirmed. ${availability.detail}`);
       return;
     }
+    // Chat needs a connected AI; the typed draft stays in the composer while the user reconnects.
+    if (!override?.continuationOf && executionMode !== "deterministic_first" && (aiConnection.gate === "connect" || aiConnection.gate === "reconnect")) {
+      setReconnectAiShown(true);
+      return;
+    }
+    setReconnectAiShown(false);
 
     if (chatMode === "project" && selection.projectId) {
       dispatchVisualContext({
@@ -1631,6 +1669,8 @@ export default function ProjectExperienceShell({
     setBusy(true);
     setStreaming("");
     setRuntimeEvents([]);
+    // A card belongs to the turn that produced it; a new turn never shows the previous one.
+    setAnalysisCard(null);
     setRuntimeRequestId(requestId);
     setLastSubmittedMessage(message);
     try {
@@ -1654,6 +1694,12 @@ export default function ProjectExperienceShell({
           },
         });
         if (!result.ok && result.errorCode === "working_context_invalid") temporaryWorkingContextRef.current = null;
+        if (!result.ok && result.errorCode === AI_NOT_CONNECTED_CODE) {
+          if (!retrying) setTemporaryMessages((current) => current.filter((item) => item.id !== userMessage.id));
+          setInput(current => restoreFailedComposerDraft(current, originalComposerDraft, message));
+          setReconnectAiShown(true);
+          return;
+        }
         if (result.status === 428) {
           if (!retrying) {
             setTemporaryMessages((current) => current.filter((item) => item.id !== userMessage.id));
@@ -1679,6 +1725,7 @@ export default function ProjectExperienceShell({
             recordP1ShellEvent("living_workspace_action");
             await applyWorkspaceAction(action, "assistant");
           }
+          await presentChatAnalysis(message, result.events, parsed.actions.length > 0 || result.events.some(item => item.type === "artifact"), "temporary", true);
           const visible = parsed.visibleText || final;
           setTemporaryMessages((current) => [...current, { id: `a-${Date.now()}`, role: "assistant", content: visible }]);
           replySpeech.speak(visible, financeOwner);
@@ -1724,6 +1771,11 @@ export default function ProjectExperienceShell({
           body: { ...payload, agent: payload.recordedClaimReview ? false : agentComposer.enabled, ...(voiceReview ? { voiceReview } : {}) },
           onEvent: applyRuntimeEvent,
         });
+        if (!result.ok && result.errorCode === AI_NOT_CONNECTED_CODE) {
+          setInput(current => restoreFailedComposerDraft(current, originalComposerDraft, message));
+          setReconnectAiShown(true);
+          return;
+        }
         if (result.status === 428) {
           setInput(current => restoreFailedComposerDraft(current, originalComposerDraft, message));
           setVoiceTranscriptReviewed(false);
@@ -1746,6 +1798,7 @@ export default function ProjectExperienceShell({
             recordP1ShellEvent("living_workspace_action");
             await applyWorkspaceAction(action, "assistant");
           }
+          await presentChatAnalysis(message, result.events, parsed.actions.length > 0 || result.events.some(item => item.type === "artifact"), `chat:${chatId}`, selection.chatId === chatId);
           replySpeech.speak(parsed.visibleText || result.text, `${chatMode}:${selection.projectId ?? "none"}:${chatId ?? "none"}`);
         }
         invalidate(selection.projectId, chatId);
@@ -1754,6 +1807,8 @@ export default function ProjectExperienceShell({
       if (!override?.continuationOf) setInput(current => restoreFailedComposerDraft(current, originalComposerDraft, message));
       setLifecycleNotice(error instanceof Error ? error.message : "Unable to send this conversation request.");
     } finally {
+      // A staged calculation/replay must not change how later ordinary Chat messages run.
+      if (executionMode === "deterministic_first") setExecutionMode("ai_assisted");
       setUploadingAttachment(null);
       setStreaming("");
       busyRef.current = false;
@@ -1765,6 +1820,15 @@ export default function ProjectExperienceShell({
       sendInFlightRef.current = false;
     }
   };
+
+  // After Reconnect succeeds, send the kept draft once the connection reads as ready.
+  useEffect(() => {
+    if (!resendAfterAiReconnect || aiConnection.gate !== "ready") return;
+    setResendAfterAiReconnect(false);
+    setReconnectAiShown(false);
+    void send();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [resendAfterAiReconnect, aiConnection.gate]);
 
   const approveRuntimeAction = async (action: ConversationActionName, scope: ApprovalGrant["scope"]) => {
     if (!lastSubmittedMessage || !runtimeRequestId) return;
@@ -2574,6 +2638,11 @@ export default function ProjectExperienceShell({
                     </div>
                   </div>
                 ); })}
+                {!streaming && analysisCard && analysisCard.chatKey === analysisChatKey && (
+                  <ChatAnalysisCard card={analysisCard.card} disabled={busy}
+                    onOpen={() => void openTerminalPanel({ view: analysisCard.card.view, symbol: analysisCard.card.symbol })}
+                    onExpand={() => void expandChatAnalysis(analysisCard.card)} />
+                )}
                 {streaming && (
                   <div className="flex justify-start">
                     <div className="lios-conversation-message lios-conversation-stream max-w-[85%] rounded-xl border border-border/60 bg-white/[0.018] px-4 py-3" data-lios-message="assistant" role="group" aria-label="LiOS response in progress">
@@ -2900,6 +2969,11 @@ export default function ProjectExperienceShell({
                     </div>
                   </div>
                 )}
+                {reconnectAiShown && (
+                  <div className="px-3 pt-2">
+                    <ReconnectAiPrompt setup={aiConnection.setup} permission={aiConnection.permission} onReconnected={() => setResendAfterAiReconnect(true)} />
+                  </div>
+                )}
                 <textarea
                   ref={composerRef}
                   value={input}
@@ -2957,6 +3031,12 @@ export default function ProjectExperienceShell({
                       const dialog = pendingComposerDialog.current;
                       pendingComposerDialog.current = null;
                       if (!dialog) return;
+                      if (dialog === "compose") {
+                        // Keep the staged draft editable; never auto-send.
+                        event.preventDefault();
+                        composerRef.current?.focus();
+                        return;
+                      }
                       // Match ObjectActionMenu: release its modal layer before opening another.
                       event.preventDefault();
                       composerToolsTrigger.current?.focus();
@@ -2985,6 +3065,13 @@ export default function ProjectExperienceShell({
                         <Blocks className="h-4 w-4" /> Plugins & tools
                       </DropdownMenuItem>
                       <DropdownMenuSeparator />
+                      <DropdownMenuItem disabled={busy} onSelect={() => { setInput(current => `${stageUniversalChatQuestion(current, "Create an image of ").trimEnd()} `); pendingComposerDialog.current = "compose"; }}>
+                        <ImagePlus className="h-4 w-4" /> Create image
+                      </DropdownMenuItem>
+                      <DropdownMenuItem disabled={busy} onSelect={() => { setInput(current => `${stageUniversalChatQuestion(current, "Write a memo on ").trimEnd()} `); pendingComposerDialog.current = "compose"; }}>
+                        <PenLine className="h-4 w-4" /> Write a document
+                      </DropdownMenuItem>
+                      <DropdownMenuSeparator />
                       <DropdownMenuItem onSelect={askActiveObject}>Ask this</DropdownMenuItem>
                       <DropdownMenuSub>
                         <DropdownMenuSubTrigger>Advanced</DropdownMenuSubTrigger>
@@ -2993,7 +3080,6 @@ export default function ProjectExperienceShell({
                           <DropdownMenuLabel className="text-xs text-muted-foreground">Response mode</DropdownMenuLabel>
                           <DropdownMenuRadioGroup value={executionMode} onValueChange={(value) => setExecutionMode(value as ConversationExecutionMode)}>
                             <DropdownMenuRadioItem value="ai_assisted">AUTO · AI ASSISTED</DropdownMenuRadioItem>
-                            <DropdownMenuRadioItem value="deterministic_first">DETERMINISTIC ONLY</DropdownMenuRadioItem>
                             <DropdownMenuRadioItem value="ai_direct">AI DIRECT · APPROVAL</DropdownMenuRadioItem>
                           </DropdownMenuRadioGroup>
                           {selection.projectId && (
@@ -3080,6 +3166,7 @@ export default function ProjectExperienceShell({
             {chatMode === "temporary" && temporaryTerminal && <aside aria-label="Temporary terminal Artifact" className="lios-artifact-sidecar lios-temporary-terminal-sidecar w-[48%] overflow-auto border-l p-3"><button type="button" className="min-h-10" onClick={() => { focusComposerAfterTerminalCloseRef.current = true; setTemporaryTerminal(null); }}>Close terminal Artifact</button><TerminalScreenArtifact key={temporaryTerminal.view} content={temporaryTerminal} revision={1} onSave={async content => { if (content.kind === "screen") setTemporaryTerminal(content); }} ephemeral/></aside>}
             {conversationArtifactRef && chatMode !== "temporary" && selection.chatId && (
               <ConversationArtifactSidecar focus={artifactFocusMode}
+                    onOpenArtifact={(id, version) => { setConversationArtifactRef(id); setArtifactViewVersion(version); }}
                     onEnterFocus={() => setArtifactFocusMode(true)}
                     onExitFocus={() => { setArtifactFocusMode(false); requestAnimationFrame(() => reopenArtifactFocusRef.current?.focus()); }}
                     onExpand={(version) => { displayedArtifactRef.current = { artifactId: conversationArtifactRef, requestedVersion: artifactViewVersion, version }; onOpenWorkbench(); }}
@@ -3088,6 +3175,8 @@ export default function ProjectExperienceShell({
                       // the separate Chat → Workbench shortcut target.
                       if (isCurrentArtifactLoad(artifactId, loadedRequest, version, conversationArtifactRef, artifactViewVersion)) {
                         displayedArtifactRef.current = { artifactId, requestedVersion: loadedRequest, version };
+                        const pendingExpand = pendingAnalysisExpandRef.current;
+                        if (pendingExpand && pendingExpand.fromArtifactId !== artifactId) { pendingAnalysisExpandRef.current = null; onOpenWorkbench(); }
                       }
                     }}
                     artifactId={conversationArtifactRef}

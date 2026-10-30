@@ -1,12 +1,14 @@
 import * as React from "react";
 import { useState, type ReactNode } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { KeyRound, Lock } from "lucide-react";
+import { KeyRound, Loader2, Lock } from "lucide-react";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { apiRequest } from "@/lib/queryClient";
 import { serverErrorText } from "@/lib/apiErrorText";
 import { LICENSE_ACCESS_KEY, needsFirstRunChoice, readOnlyBannerText, useLicenseAccess, type LicenseAccess } from "@/lib/licenseAccess";
+import { useAiConnectionGate } from "@/lib/aiConnection";
 import LicenseKeyEntry from "./LicenseKeyEntry";
+import ConnectAiStep from "./ConnectAiStep";
 
 /** First run after enrollment: start the trial; only the Home owner may also import a license key. */
 export function FirstRunLicenseChoice({ canImportLicense = true }: { canImportLicense?: boolean }) {
@@ -101,10 +103,38 @@ export function ReadOnlyBanner({ access }: { access: LicenseAccess }) {
   );
 }
 
-/** First-run activation follows its explicit permission; installation key entry remains owner-only. */
-export default function AccessModeGate({ enabled, children }: { enabled: boolean; children: ReactNode }) {
-  const { data: access } = useLicenseAccess(enabled);
-  if (access && needsFirstRunChoice(access)) return <FirstRunLicenseChoice canImportLicense={access.isOwner} />;
+function StartupCheck({ text }: { text: string }) {
+  return (
+    <main className="flex min-h-screen w-screen items-center justify-center bg-[#030303] p-4 text-foreground" data-testid="startup-check">
+      <p role="status" className="flex items-center gap-2 font-ui text-sm text-muted-foreground">
+        <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" /> {text}
+      </p>
+    </main>
+  );
+}
+
+/**
+ * First-run order: license choice, then Connect your AI, then the workspace. Once the workspace has
+ * opened in this session it is never torn down for AI changes; Chat asks to reconnect inline instead.
+ */
+export default function AccessModeGate({ enabled, onLogout, children }: { enabled: boolean; onLogout: () => void | Promise<void>; children: ReactNode }) {
+  const license = useLicenseAccess(enabled);
+  const access = license.data;
+  const ai = useAiConnectionGate(access?.mode === "full");
+  const [workspaceOpened, setWorkspaceOpened] = useState(false);
+  // Once the Connect step has been shown, verifying saves the provider (gate becomes "reconnect");
+  // only the user's Continue, which also turns AI on for Chat, may close it.
+  const [connectStarted, setConnectStarted] = useState(false);
+  if (ai.gate === "connect" && !connectStarted && !workspaceOpened) setConnectStarted(true);
+  const firstRunChoice = needsFirstRunChoice(access);
+  const aiSettled = !firstRunChoice && (ai.gate === "ready" || (ai.gate === "reconnect" && !connectStarted) || (ai.gate === "not_required" && !(enabled && license.isPending)));
+  if (aiSettled && !workspaceOpened) setWorkspaceOpened(true);
+
+  if (access && firstRunChoice) return <FirstRunLicenseChoice canImportLicense={access.isOwner} />;
+  if (!workspaceOpened && !aiSettled) {
+    if (connectStarted || ai.gate === "connect") return <ConnectAiStep setup={ai.setup} onConnected={() => setWorkspaceOpened(true)} onLogout={onLogout} />;
+    return <StartupCheck text={ai.gate === "checking" ? "Checking your AI connection…" : "Getting LiOS ready…"} />;
+  }
   return (
     <>
       {children}

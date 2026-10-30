@@ -1,4 +1,5 @@
 import { terminalArtifactTool } from "./terminalArtifactTool";
+import { documentGenerationTool, imageGenerationTool, generateArtifactContent, generativeRequestKind } from "./generativeArtifactTools";
 import { governedVisualAnswerTool, governedVisualToolResultSchema } from "./governedVisualAnswer";
 import { z } from "zod";
 import { bindConversationExecutionSignal, linkAbortSignal } from "./exec/execution-scope";
@@ -101,6 +102,7 @@ import { searchExplicitProjectIntelligence } from "./p7CrossProjectRetrieval";
 import {
   isMarketCapabilityBundle,
   resolveConversationCapabilities,
+  extractConversationEntityQuery,
 } from "./conversationCapabilityResolver";
 import {
   isP5ProfessionalCapabilityId,
@@ -1180,6 +1182,8 @@ function registerBuiltinConversationTools(): void {
   registerConversationTool(artifactMaintenanceTool);
   registerConversationTool(terminalArtifactTool);
   registerConversationTool(webResearchArtifactTool);
+  registerConversationTool(imageGenerationTool);
+  registerConversationTool(documentGenerationTool);
   registerConversationTool(entityIntelligenceTool);
   registerConversationTool(privateEntityResearchTool);
   registerConversationTool(providerAccessTool);
@@ -1391,35 +1395,6 @@ export function buildConversationContext(input: Omit<ConversationRuntimeInput, "
   });
 }
 
-const COMMON_UPPERCASE_WORDS = new Set([
-  "A", "AI", "ALL", "AND", "ANY", "ASK", "DCF", "DOCUMENTS", "EACH", "EQUITY", "EVERY", "FILES", "FOR", "GAPS", "ISSUES", "MACD", "MISSING", "OF", "ON", "OR", "PRICE", "RECORDS", "RSI", "RISKS", "SHARES", "STOCK", "STRATEGY", "THE", "TICKER", "TO", "VAR", "WITH",
-]);
-
-function extractSymbol(message: string, context: ConversationRequest["context"]): string | null {
-  const contextual = context?.symbol?.trim() || context?.selection?.symbol?.trim();
-  if (contextual) return contextual.toUpperCase();
-
-  const dollarTicker = message.match(/\$([A-Za-z][A-Za-z0-9.\-]{0,15})\b/);
-  if (dollarTicker?.[1]) return dollarTicker[1].toUpperCase();
-
-  const exchangeTicker = message.match(/\b(\d{1,5}\.[A-Za-z]{1,3})\b/);
-  if (exchangeTicker?.[1]) return exchangeTicker[1].toUpperCase();
-
-  const explicitPatterns = [
-    /\b(?:backtest|back-test|historical simulation)\b.*?\b(?:for|on|of)\s+\$?([A-Za-z][A-Za-z0-9.\-]{0,15})\b/i,
-    /\btechnical\s+(?:analysis|chart)\s+(?:for\s+|of\s+)?([A-Za-z0-9.\-]{1,16})\b/i,
-    /^\s*(?:resolve|lookup|identify|chart|analy[sz]e|rsi|macd|quote|support|resistance)\s+(?:for\s+|of\s+)?([A-Za-z0-9.\-]{1,16})\b/i,
-  ];
-  for (const pattern of explicitPatterns) {
-    const explicit = message.match(pattern);
-    if (!explicit?.[1]) continue;
-    const candidate = explicit[1].toUpperCase();
-    if (!COMMON_UPPERCASE_WORDS.has(candidate)) return candidate;
-  }
-
-  const tokens = message.match(/\b[A-Z][A-Z0-9]{0,5}(?:\.[A-Z]{1,3}|-[A-Z]{3})?\b/g) ?? [];
-  return tokens.find((token) => !COMMON_UPPERCASE_WORDS.has(token)) ?? null;
-}
 
 function isTechnicalRequest(message: string): boolean {
   return /\b(technical|chart|rsi|macd|support|resistance|momentum|price action)\b/i.test(message);
@@ -1518,7 +1493,7 @@ function parseArtifactEditInstruction(message: string): ParsedArtifactEdit | nul
 export function planConversationWorkflow(requestInput: ConversationRequest): WorkflowPlan {
   const request = conversationRequestSchema.parse(requestInput);
   const legacyIntent = classifyAskLiosIntent(request.message);
-  const symbol = extractSymbol(request.message, request.context);
+  const { symbol } = extractConversationEntityQuery(request);
   let intent: StructuredConversationIntent;
   const steps: WorkflowPlan["steps"] = [];
   const resolvedCapabilities = resolveConversationCapabilities(request);
@@ -1530,6 +1505,7 @@ export function planConversationWorkflow(requestInput: ConversationRequest): Wor
   const artifactId = activeArtifactId(request.context);
   const artifactEdit = artifactId ? parseArtifactEditInstruction(request.message) : null;
   const naturalResearch = naturalResearchEntry(request.message);
+  const generationKind = generativeRequestKind(request.message);
 
   const runtimeDiagnosis = /^(?:please\s+)?(?:run\s+)?(?:lios\s+doctor|(?:check|diagnose|inspect)\s+(?:the\s+|my\s+)?(?:lios\s+)?(?:runtime|python(?:\s+runtime)?|core(?:\s+runtime)?)(?:\s+(?:health|readiness|status))?)[.!?]?\s*$/i.test(request.message.trim());
   if (request.recordedClaimReview) {
@@ -1642,6 +1618,10 @@ export function planConversationWorkflow(requestInput: ConversationRequest): Wor
       { id: "run-personal-finance", kind: "calculate", label: "Calculate deterministic personal-finance snapshot", componentId: "lios.personal-finance.core-v1", permissionClass: "safe_auto", dependsOn: ["validate-personal-finance-inputs"] },
       { id: "emit-personal-finance-artifact", kind: "artifact", label: "Create Personal Finance Decision Artifact", componentId: "lios.artifact-draft", permissionClass: "safe_auto", dependsOn: ["run-personal-finance"] },
     );
+  } else if (generationKind) {
+    capabilities = [];
+    intent = { action: "chat", confidence: 1, entityRefs: [], parameters: { workflow: "generative_artifact", generationKind }, requiresAI: true, requiresDeterministicCompute: false };
+    steps.push({ id: "generate-artifact", kind: "artifact", label: generationKind === "image" ? "Create an AI image" : "Write an editable document", componentId: generationKind === "image" ? imageGenerationTool.id : documentGenerationTool.id, permissionClass: "safe_auto", dependsOn: [] });
   } else if (p5ProfessionalCapabilities.length) {
     capabilities = p5ProfessionalCapabilities;
     const bundleEntity = p5ProfessionalCapabilities.find((item) => item.symbol || item.entityQuery);
@@ -4182,6 +4162,23 @@ async function executeArtifactEditProposal(
   return { text, label: "deterministic", plan, receiptIds: [receipt.id], artifacts: [], cancelled: false, awaitingApproval: false };
 }
 
+async function executeGeneratedArtifact(input: ConversationRuntimeInput, plan: WorkflowPlan, signal: AbortSignal): Promise<ConversationRuntimeResult> {
+  const kind = plan.intent.parameters.generationKind === "image" ? "image" : "document";
+  const format = /\b(?:table|spreadsheet)\b/i.test(input.request.message) ? "table" : "report";
+  const generated = await generateArtifactContent(input.tenant, kind, input.request.message, signal, format);
+  assertNotAborted(signal);
+  const draft = conversationArtifactDraftSchema.parse({
+    schemaVersion: "1", artifactId: crypto.randomUUID(), artifactType: generated.content.kind,
+    title: generated.title, projectId: input.projectId ?? null, sourceRefs: generated.sourceRefs,
+    executionReceiptIds: [], data: generated.content,
+    persistence: input.scope === "temporary" ? "ephemeral" : input.scope === "project" ? "project_candidate" : "chat_candidate",
+  });
+  const text = kind === "image" ? "Created an AI-generated image." : "Created an editable AI-written draft. Review factual claims before use.";
+  await emit(input, { ...eventBase(input.request.requestId), type: "artifact", artifact: draft });
+  await emit(input, { ...eventBase(input.request.requestId), type: "text", text, label: "ai_derived" });
+  return { text, label: "ai_derived", plan, receiptIds: [], artifacts: [draft], cancelled: false, awaitingApproval: false };
+}
+
 async function executeAI(
   input: ConversationRuntimeInput,
   context: ConversationContextEnvelope,
@@ -4216,6 +4213,7 @@ async function executeAI(
     preferredProvider: input.preferredProvider,
     preferredModel: input.preferredModel,
     signal,
+    webSearch: sourceScopeAllowsExternalData(request.sourceScope ?? "auto") && !privateAiContentReason(input, plan) && !input.memoryRecall && !request.attachments.length && request.transmissionPolicy.mode !== "local_only",
     dataClassification: request.transmissionPolicy.dataClassification === "public" ? "public" : "organization",
     providerPolicy: {
       localOnly: request.transmissionPolicy.mode === "local_only",
@@ -4226,10 +4224,12 @@ async function executeAI(
   });
   assertNotAborted(signal);
   const aiDirect = request.executionMode === "ai_direct";
-  const text = aiDirect ? `[AI-derived estimate — not deterministic]\n\n${result.text}`
-    : plan.intent.parameters.workflow === "ws26_natural_research"
-      ? `Research scope: configured AI synthesis only. No external sources were retrieved by this workflow; factual claims require independently recorded evidence.\n\n${result.text}`
-      : result.text;
+  const sources = result.webSearch?.sources ?? [];
+  const needsCurrent = /\b(?:latest|today|current|recent|news|search|research)\b/i.test(request.message);
+  const searchNote = needsCurrent && result.webSearch?.status !== "used"
+    ? "\n\nThis answer was not checked against live web sources." : "";
+  const sourceList = sources.length ? "\n\nSources:\n" + sources.map(source => `- [${source.title.replace(/[\[\]\r\n]/g, "")}](${source.url})`).join("\n") : "";
+  const text = (aiDirect ? `[AI-derived estimate — not deterministic]\n\n${result.text}` : result.text) + searchNote + sourceList;
   const attachmentWarnings = request.transmissionPolicy.allowResourceReferences
     ? attachmentTextTruncationWarnings(input.resolvedAttachments ?? [])
     : [];
@@ -4241,10 +4241,9 @@ async function executeAI(
     aiDerived: true,
     input: { message: request.message, providerPolicy: request.transmissionPolicy, context },
     output: { text, attribution: result.attribution },
-    sourceRefs: [...new Set([`ai-provider:${result.attribution.provider}`, ...transmittedContextSourceRefs(input)])],
+    sourceRefs: [...new Set([`ai-provider:${result.attribution.provider}`, ...sources.map(source => source.url), ...transmittedContextSourceRefs(input)])],
     warnings: [
       ...(aiDirect ? ["AI-direct estimate: user-authorized and not a deterministic LiOS engine result."] : []),
-      ...(plan.intent.parameters.workflow === "ws26_natural_research" ? ["WS-26 preliminary AI research: no automatic source retrieval or independent claim verification."] : []),
       ...attachmentWarnings,
     ],
   });
@@ -4956,7 +4955,8 @@ async function executeAgentLoop(
           await emit(input,{...eventBase(request.requestId),type:"visual",stepId:step.id,visual});
         }
         const publishesArtifact = step.toolId === terminalArtifactTool.id
-          || step.toolId === "lios.research.save_comparison" || step.toolId === "lios.research.to_report";
+          || step.toolId === "lios.research.save_comparison" || step.toolId === "lios.research.to_report"
+          || step.toolId === imageGenerationTool.id || step.toolId === documentGenerationTool.id;
         if (publishesArtifact && result.output && typeof result.output === "object") {
           const updated = z.object({ artifactId: z.string(), version: z.number().int().positive(), contentHash: z.string().optional() }).passthrough().parse(result.output);
           const artifact = await getArtifact(input.tenant, updated.artifactId);
@@ -4965,7 +4965,7 @@ async function executeAgentLoop(
           // The saved Artifact must belong to this conversation owner before it is published to the Chat.
           if (input.scope !== "project" && artifact.projectId !== null) throw new Error("Saved Artifact is outside this conversation owner.");
           await emit(input, { ...eventBase(request.requestId), type: "artifact",
-            artifact: { schemaVersion: "1", artifactId: crypto.randomUUID(), artifactType: step.toolId === terminalArtifactTool.id ? "screen" : "research", title: artifact.title, projectId: artifact.projectId, sourceRefs: version.sourceRefs, executionReceiptIds: version.executionReceiptIds, data: artifactContentSchema.parse(version.content) as unknown as Record<string, unknown>, persistence: input.scope === "project" ? "project_candidate" : "chat_candidate" },
+            artifact: { schemaVersion: "1", artifactId: crypto.randomUUID(), artifactType: artifactContentSchema.parse(version.content).kind, title: artifact.title, projectId: artifact.projectId, sourceRefs: version.sourceRefs, executionReceiptIds: version.executionReceiptIds, data: artifactContentSchema.parse(version.content) as unknown as Record<string, unknown>, persistence: input.scope === "project" ? "project_candidate" : "chat_candidate" },
             persistedArtifact: { id: artifact.id, version: version.version },
           });
         }
@@ -5359,6 +5359,8 @@ export async function executeConversationRuntime(input: ConversationRuntimeInput
       result = await executeNodeFinanceSnapshot(runtimeInput, plan, budgetSignal);
     } else if (["p6_project_continuity", "p7_project_search", "p7_project_changes", "p7_insight_lens"].includes(String(plan.intent.parameters.workflow || ""))) {
       result = await executeP7ProjectIntelligence(runtimeInput, plan, budgetSignal);
+    } else if (plan.intent.parameters.workflow === "generative_artifact") {
+      result = await executeGeneratedArtifact(runtimeInput, plan, budgetSignal);
     } else if (plan.intent.parameters.workflow === "p5_professional_bundle") {
       result = await executeP5ProfessionalBundle(runtimeInput, plan, budgetSignal);
     } else if (plan.intent.parameters.workflow === "p2_capability_bundle") {
@@ -5416,9 +5418,11 @@ export async function executeConversationRuntime(input: ConversationRuntimeInput
       await emit(runtimeInput, { ...eventBase(request.requestId), type: "done", status: "failed" });
       throw governedGap;
     }
-    const message = userSafeErrorMessage(error, "Conversation Runtime failed.");
-    if (message !== (error instanceof Error ? error.message : message)) console.error("Conversation Runtime failure", error);
-    await emit(runtimeInput, { ...eventBase(request.requestId), type: "error", message, code: "runtime_failed" });
+    const reconnect = error instanceof AIProviderError && (error.status === 401 || error.status === 403
+      || error.code === "not_configured" || error.code === "upstream_error" && /model.*(?:unavailable|not find)|rejected the API key/i.test(error.message));
+    const message = reconnect ? "Your AI connection needs attention. Reconnect your AI to continue." : userSafeErrorMessage(error, "Conversation Runtime failed.");
+    if (!reconnect && message !== (error instanceof Error ? error.message : message)) console.error("Conversation Runtime failure", error);
+    await emit(runtimeInput, { ...eventBase(request.requestId), type: "error", message, code: reconnect ? "ai_not_connected" : "runtime_failed" });
     await emit(runtimeInput, { ...eventBase(request.requestId), type: "done", status: "failed" });
     throw error;
   } finally {

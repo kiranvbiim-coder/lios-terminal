@@ -89,24 +89,17 @@ const SHARED_VIEWS = new Set<ViewMode>([
   "uide",
   "workspaces",
   "spreadsheet",
-  "developer",
-  "adminconsole",
   "consultinginbox",
   "publishdesk",
-  "qualitygate",
   "research",
   "consensus",
   "brain",
   "decisionengine",
-  "coveragemap",
   "advisory",
   "activity",
   "crossdomainfusion",
   "decisionmemory",
   "clientdata",
-  "connectors",
-  "enginereadiness",
-  "conflictdetector",
 ]);
 
 const CLIENT_NOT_YET_PORTED = new Set<ViewMode>(["workspaces", "spreadsheet"]);
@@ -175,6 +168,8 @@ function capabilityMatchesDomain(capability: TerminalCapability, domain: DomainS
 }
 
 function capabilityAllowed(capability: TerminalCapability, context: ProductNavigationContext): boolean {
+  // Settings › Advanced views (admin, developer, data plumbing) never appear in Workbench navigation.
+  if (capability.workspace === "settings") return false;
   if (!isCapabilityVisible(capability, context.isInternal)) return false;
   if (context.isClientBuild && CLIENT_NOT_YET_PORTED.has(capability.view)) return false;
   if (context.isTrial && TRIAL_CONSULTING_ONLY.has(capability.view)) return false;
@@ -228,7 +223,7 @@ export function getProductNavigation(context: ProductNavigationContext): readonl
     research: { label: "Research", description: "Investigate companies, filings, peers, and current evidence." },
     intelligence: { label: "Intelligence", description: "Use LIOS intelligence to interpret, challenge, and decide." },
     outputs: { label: "Outputs", description: "Package analysis into models, workspaces, and deliverables." },
-    advanced: { label: "Advanced", description: "Open specialist, monitoring, quant, and platform tools." },
+    advanced: { label: "Advanced", description: "Open specialist analysis and quant tools." },
   };
 
   return (["home", "finance", "modeling", "research", "intelligence", "outputs", "advanced"] as const).map((key) => {

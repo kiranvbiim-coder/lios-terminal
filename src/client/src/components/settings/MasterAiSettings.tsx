@@ -51,7 +51,6 @@ export default function MasterAiSettings({ providerName, providerAvailable, mode
   const enabled = stateQuery.data?.state === "on";
   const modelBlocked = modelAccess === "blocked";
   const providerReady = providerAvailable && Boolean(modelId.trim()) && !modelBlocked && chatVerified && !selectionBusy;
-  const cannotEnable = !enabled && !providerReady;
 
   useEffect(() => {
     const blockedKey = modelBlocked ? modelId.trim() : "";
@@ -64,64 +63,55 @@ export default function MasterAiSettings({ providerName, providerAvailable, mode
     saveMutation.mutate("off");
   }, [enabled, modelBlocked, modelId, saveMutation.isPending]);
 
+  const chatAiName = `${providerName ?? "Your AI"} · ${modelId.trim()}`;
+
   return (
     <section className="border border-border/60 bg-black/20 p-3 space-y-3" data-testid="connection-master-ai-settings">
       <div className="flex items-center gap-2">
         <Bot className="h-3.5 w-3.5 text-[hsl(38,95%,55%)]" />
-        <h3 className="font-terminal text-[8px] uppercase tracking-widest text-foreground">Master AI · BYOAI</h3>
-        <span className={`ml-auto font-terminal text-[8px] ${stateQuery.isError ? "text-rose-300" : enabled ? "text-emerald-300" : "text-muted-foreground"}`} role="status">
-          {stateQuery.isPending ? "CHECKING" : stateQuery.isError ? "UNAVAILABLE" : enabled ? "ON" : "OFF"}
-        </span>
+        <h3 className="font-terminal text-[8px] uppercase tracking-widest text-foreground">AI for Chat</h3>
       </div>
 
-      <div className="flex items-start justify-between gap-3">
-        <div className="min-w-0 space-y-1">
-          <p className="font-terminal text-[8px] text-foreground">Allow LiOS to use your connected AI provider</p>
-          <p className="font-terminal text-[7px] leading-relaxed text-muted-foreground">
-            When enabled, prompts and only context permitted for the active project may be sent to your selected provider. Review provider terms and project permissions. You can turn this off at any time.
-          </p>
+      {stateQuery.isPending ? (
+        <p className="font-terminal text-[8px] text-muted-foreground" role="status">Checking which AI Chat uses…</p>
+      ) : enabled && providerAvailable && modelId.trim() && !modelBlocked ? (
+        <p className="font-terminal text-[8px] text-emerald-300" role="status" data-testid="master-ai-in-use">Chat is using {chatAiName}</p>
+      ) : providerReady ? (
+        <div className="flex items-center justify-between gap-3">
+          <p className="font-terminal text-[8px] text-foreground">{chatAiName} is verified.</p>
+          <button
+            type="button"
+            data-testid="master-ai-use-for-chat"
+            disabled={!stateQuery.data || saveMutation.isPending}
+            onClick={() => saveMutation.mutate("on")}
+            className="shrink-0 border border-[hsl(38,95%,50%)]/60 px-3 py-1.5 font-terminal text-[9px] uppercase text-[hsl(38,95%,55%)] hover:bg-[hsl(38,95%,50%)]/10 disabled:opacity-45"
+          >
+            Use for Chat
+          </button>
         </div>
-        <button
-          type="button"
-          role="switch"
-          aria-label="Master AI"
-          aria-checked={enabled ?? false}
-          data-testid="master-ai-switch"
-          disabled={stateQuery.isPending || !stateQuery.data || saveMutation.isPending || cannotEnable}
-          onClick={() => saveMutation.mutate(enabled ? "off" : "on")}
-          className={`relative mt-0.5 h-5 w-9 shrink-0 rounded-full border transition-colors disabled:cursor-not-allowed disabled:opacity-45 ${enabled ? "border-emerald-400/70 bg-emerald-500/30" : "border-border bg-black/50"}`}
-        >
-          <span className={`absolute top-0.5 h-3.5 w-3.5 rounded-full transition-all ${enabled ? "left-[18px] bg-emerald-300" : "left-0.5 bg-muted-foreground"}`} />
-        </button>
-      </div>
+      ) : (
+        <p className="font-terminal text-[8px] text-muted-foreground" role="status">
+          {modelBlocked
+            ? "Your provider did not list the selected model. Choose another model to use Chat."
+            : "Choose a provider and model, then verify it above to use it for Chat."}
+        </p>
+      )}
 
       <div className="flex items-start gap-1.5 border-t border-border/50 pt-2">
         <ShieldCheck className="mt-0.5 h-3 w-3 shrink-0 text-emerald-400" />
         <p className="font-terminal text-[7px] leading-relaxed text-muted-foreground">
-          Deterministic finance tools remain available while AI is off. AI-generated analysis is separate from LiOS deterministic results.
+          Your messages and only the context allowed for the active Project are sent to the AI you chose to answer them. Review your provider's terms and your Project permissions.
         </p>
       </div>
 
-      <p className="font-terminal text-[7px] text-muted-foreground">
-        {providerReady
-          ? `Selected: ${providerName ?? "Connected provider"} · ${modelId}`
-          : modelBlocked
-            ? "Master AI is blocked because complete provider discovery did not return the selected model."
-            : "Select a provider and model, then explicitly verify chat above before enabling Master AI. Configuration and model discovery alone are not verification."}
-        {onChangeProvider && (
-          <button type="button" onClick={onChangeProvider} data-testid="master-ai-change-provider" className="ml-2 underline underline-offset-2 text-[hsl(38,95%,55%)] hover:text-[hsl(38,95%,70%)]">
-            Change provider or model
-          </button>
-        )}
-      </p>
-      {modelBlocked && (
-        <p className="font-terminal text-[7px] leading-relaxed text-amber-200" role="alert" data-testid="master-ai-model-blocked">
-          Choose a model returned by the provider's complete discovery result, or disable the AI provider. LiOS attempts to turn Master AI OFF once for this blocked model; if saving fails, the previous setting remains and the error below must be resolved.
-        </p>
+      {onChangeProvider && (
+        <button type="button" onClick={onChangeProvider} data-testid="master-ai-change-provider" className="font-terminal text-[7px] underline underline-offset-2 text-[hsl(38,95%,55%)] hover:text-[hsl(38,95%,70%)]">
+          Change provider or model
+        </button>
       )}
-      {stateQuery.isError && <p className="font-terminal text-[7px] text-rose-300" role="alert">Master AI state could not be loaded. It remains unavailable until the authenticated preference service responds.</p>}
-      {saveMutation.isError && <p className="font-terminal text-[7px] text-rose-300" role="alert">Could not confirm your Master AI setting. LiOS is refreshing the current permission; review the state above and retry.</p>}
-      {saveMutation.isPending && <p className="font-terminal text-[7px] text-muted-foreground" role="status">Saving your account-scoped preference…</p>}
+      {stateQuery.isError && <p className="font-terminal text-[7px] text-rose-300" role="alert">Your AI setting could not be loaded. Try again shortly.</p>}
+      {saveMutation.isError && <p className="font-terminal text-[7px] text-rose-300" role="alert">Your AI setting could not be saved. Check it above and try again.</p>}
+      {saveMutation.isPending && <p className="font-terminal text-[7px] text-muted-foreground" role="status">Saving…</p>}
     </section>
   );
 }

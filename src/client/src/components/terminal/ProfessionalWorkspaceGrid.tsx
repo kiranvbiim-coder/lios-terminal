@@ -14,12 +14,13 @@ interface Props {
   onToggleMaximize: (paneId: PaneId) => void;
   onOpenActions: (paneId: PaneId, pane: PaneState, x: number, y: number) => void;
   renderPane: (paneId: PaneId, pane: PaneState) => ReactNode;
+  onAskLios?: (question: string, pane: PaneState) => void;
   density: TerminalDensity;
 }
 
 const PANE_CLASS = "min-h-0 min-w-0 overflow-hidden bg-[#050505]";
 
-export default function ProfessionalWorkspaceGrid({ workspace, isMobile, maximizedPane, onFocus, onClose, onToggleMaximize, onOpenActions, renderPane, density }: Props) {
+export default function ProfessionalWorkspaceGrid({ workspace, isMobile, maximizedPane, onFocus, onClose, onToggleMaximize, onOpenActions, onAskLios, renderPane, density }: Props) {
   const panes = getWorkspacePanes(workspace);
   const visiblePaneCount = maximizedPane ? 1 : panes.length;
   const compactChrome = visiblePaneCount > 1;
@@ -38,6 +39,7 @@ export default function ProfessionalWorkspaceGrid({ workspace, isMobile, maximiz
       isMaximized={maximizedPane === paneId}
       onToggleMaximize={() => onToggleMaximize(paneId)}
       onOpenActions={(x, y) => onOpenActions(paneId, pane, x, y)}
+      onAskLios={onAskLios}
     >
       {renderPane(paneId, pane)}
     </WorkspacePane>

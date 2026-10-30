@@ -267,27 +267,17 @@ async function assertWorkingContextArtifacts(
 
 async function resolveEffectiveConversationRequest(
   user: ConversationUser,
-  requestInput: ConversationRequest,
+  request: ConversationRequest,
 ): Promise<{ request: ConversationRequest; plan: WorkflowPlan }> {
-  let request = requestInput;
-  let plan = planConversationWorkflow(request);
-
+  const plan = planConversationWorkflow(request);
+  // An explicit deterministic request (staged personal-finance inputs, saved refreshes) needs no model.
   if (request.executionMode === "deterministic_first") return { request, plan };
 
+  // Chat never answers without the user's AI: an unconnected or stale connection is refused with a code
+  // the client turns into its Reconnect AI prompt, keeping the draft.
   const gate = await requireMasterAiOn(user);
   if (gate.ok) return { request, plan };
-
-  if (plan.intent.requiresAI) throw new ConversationStartError(gate.status, { error: gate.error });
-
-  // AI-assisted synthesis is optional for deterministic work. Respect an
-  // explicit AI-off preference (or unavailable preference service) by
-  // degrading to deterministic-only execution without blocking the task.
-  request = conversationRequestSchema.parse({
-    ...request,
-    executionMode: "deterministic_first",
-  });
-  plan = planConversationWorkflow(request);
-  return { request, plan };
+  throw new ConversationStartError(gate.status, { code: gate.code, error: gate.error, requestId: request.requestId });
 }
 
 function assertVoiceReviewed(
@@ -463,7 +453,7 @@ async function prepareRestartRun(input: {
       await getProjectChat(input.tenant, input.chatId);
       if (input.chat.projectId) await getProject(input.tenant, input.chat.projectId);
       const gate = await requireMasterAiOn(input.user);
-      if (!gate.ok) throw new ConversationStartError(gate.status, { error: gate.error, requestId: record.id });
+      if (!gate.ok) throw new ConversationStartError(gate.status, { code: gate.code, error: gate.error, requestId: record.id });
     },
   };
 }

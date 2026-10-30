@@ -12,6 +12,7 @@ interface ShortcutItem {
 const SHORTCUTS: readonly ShortcutItem[] = [
   { group: "Navigate", keys: "⌘/Ctrl K", label: "Omnibox", description: "Search tools, securities, favorites, recent analysis, and commands." },
   { group: "Navigate", keys: "⌘/Ctrl P", label: "Quick Switcher", description: "Switch between open tabs, favorites, and recent analytical contexts." },
+  { group: "Navigate", keys: "⌘/Ctrl U · ⌘/Ctrl ⇧ V", label: "Pulse", description: "Open Pulse: what changed, what matters, and what needs attention." },
   { group: "Tabs", keys: "⌘/Ctrl T", label: "New tab", description: "Open a new terminal tab." },
   { group: "Tabs", keys: "⌘/Ctrl ⇧ T", label: "Reopen tab", description: "Restore the most recently closed analytical tab." },
   { group: "Tabs", keys: "⌘/Ctrl W", label: "Close tab", description: "Close the active non-pinned tab." },

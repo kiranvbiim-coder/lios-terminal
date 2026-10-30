@@ -2,12 +2,13 @@ import { useMemo, useState } from "react";
 import { Check } from "lucide-react";
 import { proposalValuePreview, reviewArtifactProposal, type ProposalContentChange } from "@/lib/artifactProposalReview";
 import type { ProjectArtifactProposalRecord, ProjectArtifactVersionRecord } from "@/lib/useArtifacts";
+import { ReadableValue } from "@/components/ui/ReadableValue";
 
 function CompleteInspection({ label, value }: { label: string; value: unknown }) {
   const [open, setOpen] = useState(false);
   return <details className="mt-2 rounded border border-border/50 p-2" onToggle={event => setOpen(event.currentTarget.open)}>
     <summary className="cursor-pointer font-ui text-[13px]">{label}</summary>
-    {open && <pre className="mt-2 max-h-96 overflow-auto whitespace-pre-wrap break-words font-terminal text-[12px]">{JSON.stringify(value, null, 2)}</pre>}
+    {open && <ReadableValue value={value} exact className="mt-2 max-h-96 overflow-auto text-[12px]" />}
   </details>;
 }
 

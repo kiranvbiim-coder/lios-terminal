@@ -1,8 +1,8 @@
 /**
  * BYOAI Provider Router: user-controlled AI provider selection and
- * MCP tool permission layer. AI is optional — the terminal works
- * without it. When enabled, the user supplies their own API key,
- * selects a provider, and AI can only call explicitly approved tools.
+ * MCP tool permission layer. Chat requires one AI the user connects
+ * (their own cloud key or a local server); calculation engines still
+ * compute every number. AI can only call explicitly approved tools.
  *
  * Design rules:
  * - AI is subordinate to deterministic engines — it explains,

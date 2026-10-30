@@ -299,7 +299,7 @@
   }
 
   .panel-label {
-    @apply text-xs font-terminal font-semibold tracking-widest uppercase text-muted-foreground;
+    @apply text-xs font-ui font-semibold tracking-normal text-muted-foreground;
   }
 
   .ticker-flash-up {

@@ -33,6 +33,7 @@ import { quickMonitorDraft, workflowTriggerEditDefinition, workflowExecutionTrut
 import { P9NotificationHistory } from "./P9NotificationHistory";
 import { PortfolioMaterialityResult } from "./ArtifactPortfolioMateriality";
 import { CronScheduleFields } from "./CronScheduleFields";
+import { ReadableValue } from "@/components/ui/ReadableValue";
 
 function time(value: string | null, timeZone?: string): string {
   if (!value) return "—";
@@ -475,7 +476,7 @@ export function ProjectAutomationPanel({ projectId }: { projectId: number }) {
                     <summary className="cursor-pointer">Model source review · no automatic apply</summary>
                     <p className="break-all">Accepted {workflow.action.acceptedArtifact.artifactId} · v{workflow.action.acceptedArtifact.version} · {workflow.action.sourceProvider}</p>
                     <p>Open this model's existing reported-period maintenance surface to select, review and explicitly apply an eligible immutable snapshot. This monitor never overwrites your model.</p>
-                    {last?.output.review != null && <pre className="mt-2 max-h-96 overflow-auto whitespace-pre-wrap break-all">{JSON.stringify(last.output.review, null, 2)}</pre>}
+                    {last?.output.review != null && <ReadableValue value={last.output.review} className="mt-2 max-h-96 overflow-auto" />}
                   </details>}
                   {last?.output.kind === "portfolio_materiality" && <PortfolioMaterialityResult output={last.output} />}
                   {workflow.action.kind === "conversation_rerun" && workflow.action.acceptedArtifact && <details className="mt-2 text-xs text-muted-foreground">

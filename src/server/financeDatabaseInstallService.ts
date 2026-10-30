@@ -10,7 +10,7 @@ import path from "node:path";
 import { Readable } from "node:stream";
 import { createGunzip } from "node:zlib";
 import { run as runLocalImport } from "../script/import_financedatabase.cjs";
-import { resetFinanceDatabaseCatalogCache } from "./financeDatabaseCatalog";
+import { financeDatabaseCatalogPath, resetFinanceDatabaseCatalogCache } from "./financeDatabaseCatalog";
 import { resetInstrumentDirectoryCache } from "./instrumentDirectory";
 import { resetCommonInstrumentSearchIndexCache } from "./instrumentSearchIndexStore";
 
@@ -162,7 +162,7 @@ export async function installPublicFinanceDatabase(): Promise<InstallStatus> {
     job.state = "verifying";
     const report = runLocalImport(["--from-dir", temp, "--source-commit", PINNED_COMMIT,
       "--categories", "equities,etfs,funds,indices,cryptos,currencies,moneymarkets",
-      "--min", "300000"]);
+      "--min", "300000", "--dest", path.dirname(financeDatabaseCatalogPath())]);
     resetFinanceDatabaseCatalogCache();
     resetInstrumentDirectoryCache();
     resetCommonInstrumentSearchIndexCache();

@@ -82,6 +82,7 @@ import {
 } from "./decisionObjectArtifact";
 import { inspectArtifact } from "./artifactInspection";
 import { getProjectChat } from "./projectChatStore";
+import { generateImageHandler } from "./imageGeneration";
 
 const spreadsheetArtifactImportUpload = createMemoryUpload(
   ["xlsx", "csv", "xlsm"],
@@ -235,6 +236,7 @@ export function registerArtifactRoutes(app: Express): void {
     } catch (error) { fail(res, error); }
   });
 
+  app.post("/api/chats/:chatId/artifacts/generate-image", requireAuth, generateImageHandler);
   app.post("/api/chats/:chatId/artifacts/open-terminal", requireAuth, async (req, res) => {
     try { res.json(await openTerminalArtifact(ctx(req), pathId(req.params.chatId), req.body)); }
     catch (error) { fail(res, error); }

@@ -1,6 +1,6 @@
 import type { ViewMode } from "./terminalTypes";
 import { getExperienceViewLabel } from "./terminalExperience";
-import { getWorkspaceForView, type WorkspaceKey } from "./featureRegistry";
+import { getSettingsAdvancedViews, getWorkspaceForView, type WorkspaceKey } from "./featureRegistry";
 
 export type CapabilityAudience = "all" | "internal" | "client";
 export type CapabilityDomain = "finance" | "macro" | "supply-chain" | "sustainability" | "media" | "tourism" | "platform" | "delivery";
@@ -317,6 +317,13 @@ export function isCapabilityVisible(capability: TerminalCapability, isInternal: 
   if (capability.audience === "internal") return isInternal;
   if (capability.audience === "client") return !isInternal;
   return true;
+}
+
+/** Admin, developer and data-plumbing tools hosted in Settings › Advanced (never Workbench navigation). */
+export function getSettingsAdvancedCapabilities(isInternal: boolean): TerminalCapability[] {
+  return getSettingsAdvancedViews(isInternal ? "internal" : "client")
+    .map((view) => getTerminalCapability(view))
+    .filter((capability) => isCapabilityVisible(capability, isInternal));
 }
 
 export function getTerminalCapability(view: ViewMode): TerminalCapability {

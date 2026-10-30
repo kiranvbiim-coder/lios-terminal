@@ -10,7 +10,12 @@ import { randomUUID } from "node:crypto";
 
 import { assertCurrentCredentialSnapshot } from "./credentialVault";
 import { getProviderConfig } from "./byoaiRouter";
-const ASK_LIOS_OFF_ERROR = "Ask LiOS is off for this account. Turn Master AI on to use chat. Deterministic Workbench tools remain available.";
+const AI_NOT_CONNECTED_ERROR = "Connect your AI to use Chat.";
+const AI_RECONNECT_ERROR = "Your AI connection needs to be checked again. Reconnect AI to continue.";
+
+/** Chat refusal code the client maps to its Reconnect AI prompt. */
+export const AI_NOT_CONNECTED_CODE = "ai_not_connected";
+export type MasterAiGateFailure = { ok: false; status: number; code: typeof AI_NOT_CONNECTED_CODE | "ai_state_unavailable"; error: string };
 
 const authorizationRevisions = new Map<number, number>();
 export const masterAiAuthorizationGeneration = randomUUID();
@@ -32,7 +37,7 @@ export async function turnMasterAiOff(user: PersonaPreferenceUser, modeOverride?
   await setMasterAiPreference(user, { state: "off", mode, updatedAt: new Date().toISOString(), authorization: { generation: masterAiAuthorizationGeneration, revision } });
 }
 
-export async function requireMasterAiOn(user: PersonaPreferenceUser): Promise<{ ok: true; provider: string; model: string; verificationAttemptId: number } | { ok: false; status: number; error: string }> {
+export async function requireMasterAiOn(user: PersonaPreferenceUser): Promise<{ ok: true; provider: string; model: string; verificationAttemptId: number } | MasterAiGateFailure> {
   try {
     const preferences = await getPersonaPreferences(user);
     const raw = preferences.preferences.preferences.waveCMasterAi;
@@ -42,7 +47,7 @@ export async function requireMasterAiOn(user: PersonaPreferenceUser): Promise<{ 
         : undefined,
     );
     if (aiState.state !== "on") {
-      return { ok: false, status: 403, error: ASK_LIOS_OFF_ERROR };
+      return { ok: false, status: 403, code: AI_NOT_CONNECTED_CODE, error: AI_NOT_CONNECTED_ERROR };
     }
     const setup = await getEnvironmentSetupForUser(user.id);
     const providerConfig = setup?.aiProviderId ? getProviderConfig(setup.aiProviderId) : undefined;
@@ -52,12 +57,12 @@ export async function requireMasterAiOn(user: PersonaPreferenceUser): Promise<{ 
       ? (raw as { authorization?: { generation?: string; revision?: number; verificationAttemptId?: number } }).authorization : undefined;
     if (!setup?.aiProviderId || !setup.aiModelId || proofAttemptId === null || authorization?.revision !== masterAiAuthorizationRevision(user.id)
       || authorization.generation !== masterAiAuthorizationGeneration || authorization.verificationAttemptId !== proofAttemptId) {
-      return { ok: false, status: 403, error: "The saved AI selection is no longer verified. Explicitly test it in Connections before enabling AI." };
+      return { ok: false, status: 403, code: AI_NOT_CONNECTED_CODE, error: AI_RECONNECT_ERROR };
     }
     assertCredentialCurrent?.();
     return { ok: true, provider: setup.aiProviderId, model: setup.aiModelId, verificationAttemptId: proofAttemptId };
   } catch (error) {
-    return { ok: false, status: 503, error: error instanceof Error ? error.message : "Master AI state is unavailable." };
+    return { ok: false, status: 503, code: "ai_state_unavailable", error: error instanceof Error ? error.message : "AI connection status is unavailable." };
   }
 }
 
@@ -93,6 +98,6 @@ export function personaUserFromRequest(req: Request): PersonaPreferenceUser {
 export async function rejectIfMasterAiOff(req: Request, res: Response): Promise<boolean> {
   const gate = await requireMasterAiOn(personaUserFromRequest(req));
   if (gate.ok) return false;
-  res.status(gate.status).json({ error: gate.error });
+  res.status(gate.status).json({ error: gate.error, code: gate.code });
   return true;
 }

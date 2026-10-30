@@ -1,5 +1,5 @@
 import { useEffect, useState, type ReactNode } from "react";
-import { Columns2, Focus, Maximize2, Minimize2, MoreHorizontal, X } from "lucide-react";
+import { Columns2, Focus, Maximize2, Minimize2, MoreHorizontal, Sparkles, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { PaneId, PaneState } from "@/lib/terminalTypes";
 import type { TerminalDensity } from "@/lib/terminalUxPreferences";
@@ -25,6 +25,8 @@ interface Props {
   isMaximized?: boolean;
   onToggleMaximize?: () => void;
   onOpenActions?: (x: number, y: number) => void;
+  /** Stages a Chat draft about this pane; the pane is focused first so the draft uses its view and symbol. */
+  onAskLios?: (question: string, pane: PaneState) => void;
   children: ReactNode;
 }
 
@@ -41,6 +43,7 @@ export default function WorkspacePane({
   isMaximized = false,
   onToggleMaximize,
   onOpenActions,
+  onAskLios,
   children,
 }: Props) {
   const capability = getTerminalCapability(pane.view);
@@ -101,6 +104,16 @@ export default function WorkspacePane({
         )}
         <div className="ml-auto flex min-w-0 shrink-0 items-center gap-0.5" onMouseDown={(event) => event.stopPropagation()}>
           <PaneAnalyticalControls paneId={paneId} view={pane.view} symbol={capability.symbolAware ? pane.symbol : undefined} compact={compactHeader} />
+          {onAskLios && pane.view !== "agent" && (
+            <button
+              type="button"
+              onClick={(event) => { event.stopPropagation(); onAskLios(`What stands out in this ${capability.label.toLowerCase()} view${capability.symbolAware && pane.symbol ? ` for ${pane.symbol}` : ""}, and what should I check next?`, pane); }}
+              className="font-ui flex items-center gap-1 rounded-md border border-transparent px-1.5 py-1 text-[7px] font-medium tracking-wide text-muted-foreground/80 transition-colors hover:border-fuchsia-400/25 hover:bg-fuchsia-500/[0.04] hover:text-foreground"
+              data-testid={`workspace-ask-lios-${paneId}`}
+              title={`Ask LiOS about ${capability.label}${capability.symbolAware && pane.symbol ? ` for ${pane.symbol}` : ""}`}
+              aria-label={`Ask LiOS about ${capability.label}${capability.symbolAware && pane.symbol ? ` for ${pane.symbol}` : ""}`}
+            ><Sparkles className="h-3 w-3" /><span className="hidden xl:inline">Ask LiOS</span></button>
+          )}
           {onOpenActions && (
             <button onClick={(event) => { event.stopPropagation(); const rect = event.currentTarget.getBoundingClientRect(); onOpenActions(Math.max(8, rect.right - 350), rect.bottom + 4); }} className="rounded-md border border-transparent p-1 text-muted-foreground/70 transition-colors hover:border-border hover:bg-white/[0.035] hover:text-foreground" title="Analytical actions" aria-label="Open analytical context actions"><MoreHorizontal className="h-3 w-3" /></button>
           )}

@@ -24,6 +24,7 @@ import type {
   ReproducibilityReceipt,
   SessionChangeExplanation,
 } from "@shared/ledgerContracts";
+import { ReadableValue } from "@/components/ui/ReadableValue";
 
 function shortHash(value: string | null | undefined) {
   return value ? `${value.slice(0, 10)}…${value.slice(-6)}` : "—";
@@ -93,8 +94,8 @@ function ShowWork({ receipt }: { receipt: ReproducibilityReceipt }) {
       <details className="mt-3 rounded border border-border/40 bg-black/15 p-2">
         <summary className="cursor-pointer font-terminal text-[6px] uppercase text-muted-foreground">Inputs / outputs</summary>
         <div className="mt-2 grid gap-2 md:grid-cols-2">
-          <pre className="max-h-48 overflow-auto whitespace-pre-wrap break-words rounded bg-black/20 p-2 font-terminal text-[6px] leading-3 text-muted-foreground">{JSON.stringify(receipt.inputSnapshot, null, 2)}</pre>
-          <pre className="max-h-48 overflow-auto whitespace-pre-wrap break-words rounded bg-black/20 p-2 font-terminal text-[6px] leading-3 text-muted-foreground">{JSON.stringify(receipt.outputSnapshot, null, 2)}</pre>
+          <ReadableValue value={receipt.inputSnapshot} exact aria-label="Inputs" className="max-h-48 overflow-auto rounded bg-black/20 p-2 text-[12px]" />
+          <ReadableValue value={receipt.outputSnapshot} exact aria-label="Outputs" className="max-h-48 overflow-auto rounded bg-black/20 p-2 text-[12px]" />
         </div>
       </details>
       <div className="mt-3 grid gap-1 font-terminal text-[6px] text-muted-foreground">

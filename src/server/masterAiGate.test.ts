@@ -88,7 +88,10 @@ test("Master AI state persists per account, defaults OFF, and does not gate dete
   assert.equal((await requireMasterAiOn({ id: userA.id, email: userA.email, role: "internal_admin", organizationId: null })).ok, true);
   const deniedForB = await requireMasterAiOn({ id: userB.id, email: userB.email, role: "internal_admin", organizationId: null });
   assert.equal(deniedForB.ok, false);
-  if (!deniedForB.ok) assert.equal(deniedForB.status, 403);
+  if (!deniedForB.ok) {
+    assert.equal(deniedForB.status, 403);
+    assert.equal(deniedForB.code, "ai_not_connected", "Chat refusal carries the code the client maps to Reconnect AI");
+  }
 
   const personaUserA = { id: userA.id, email: userA.email, role: "internal_admin" as const, organizationId: null };
   const personaUserB = { id: userB.id, email: userB.email, role: "internal_admin" as const, organizationId: null };
@@ -106,9 +109,11 @@ test("Master AI state persists per account, defaults OFF, and does not gate dete
   const { requireMasterAiDispatchOn } = await import("./masterAiGate");
   const otherAttempt = beginAIChatVerification({ provider: "openai", userId: userA.id, organizationId: null });
   assert.equal(publishAIChatVerification(otherAttempt, "gpt-4o", crypto.createHash("sha256").update(process.env.OPENAI_API_KEY!).digest("hex")), true);
-  await assert.rejects(requireMasterAiDispatchOn(userA.id, null, "openai", "gpt-4o"), /verified|selection|authorization/i, "a surviving proof for another model is not the enabled model");
+  await assert.rejects(requireMasterAiDispatchOn(userA.id, null, "openai", "gpt-4o"), "a surviving proof for another model is not the enabled model");
   resetConnectorVerificationsForTests();
-  assert.equal((await requireMasterAiOn(personaUserA)).ok, false, "restart/reset cannot reuse persisted ON without current proof");
+  const afterReset = await requireMasterAiOn(personaUserA);
+  assert.equal(afterReset.ok, false, "restart/reset cannot reuse persisted ON without current proof");
+  if (!afterReset.ok) assert.equal(afterReset.code, "ai_not_connected", "a stale connection asks the user to reconnect");
   assert.equal(((await callRoute(getState, userA)).body as { state: string }).state, "off", "displayed state must match current authorization");
 
   const aiPlan = planConversationWorkflow({ requestId: "12b1dbe1-aafc-4f00-9caa-a822457eeec5", message: "Explain the current market outlook." });

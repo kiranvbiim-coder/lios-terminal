@@ -4,6 +4,7 @@ import { latestMarketCapture, type MarketCaptureComparison } from "@shared/marke
 import { useRecordedAsOfSnapshot } from "@/lib/useRecordedAsOfSnapshot";
 import { Database, RefreshCw, ShieldCheck, TriangleAlert } from "lucide-react";
 import type { MarketDatasetRevisionReport, PointInTimeMarketSnapshot } from "@shared/pointInTimeData";
+import { ReadableValue } from "@/components/ui/ReadableValue";
 
 async function json<T>(url: string, init?: RequestInit): Promise<T> {
   const response = await fetch(url, { credentials: "include", ...init, headers: { "Content-Type": "application/json", ...(init?.headers ?? {}) } });
@@ -236,7 +237,7 @@ export default function MarketDataFabricPanel({ symbol }: { symbol: string }) {
       <div className="min-h-0 flex-1 overflow-auto">
         {tab === "bars" && <table className="w-full font-mono text-xs"><thead className="sticky top-0 bg-black text-muted-foreground"><tr>{["DATE", "OPEN", "HIGH", "LOW", "CLOSE", "VOLUME", "PRICE RET", "LOG RET", "TOTAL RET"].map((item) => <th key={item} className="border-b border-border px-3 py-2 text-right first:text-left">{item}</th>)}</tr></thead><tbody>{bars.map((bar) => <tr key={bar.date} className="border-b border-border/50"><td className="px-3 py-1.5">{bar.date}</td>{[bar.open, bar.high, bar.low, bar.close, bar.volume].map((value, index) => <td key={index} className="px-3 py-1.5 text-right">{number(value, index === 4 ? 0 : 4)}</td>)}{[bar.priceReturn, bar.logReturn, bar.totalReturn].map((value, index) => <td key={index} className="px-3 py-1.5 text-right">{value === null ? "--" : `${(value * 100).toFixed(3)}%`}</td>)}</tr>)}</tbody></table>}
         {tab === "actions" && <table className="w-full font-mono text-xs"><thead className="sticky top-0 bg-black text-muted-foreground"><tr>{["EFFECTIVE", "TYPE", "CASH", "CURRENCY", "SPLIT", "SOURCE"].map((item) => <th key={item} className="border-b border-border px-3 py-2 text-left">{item}</th>)}</tr></thead><tbody>{current.payload.corporateActions.map((action, index) => <tr key={`${action.effectiveDate}-${action.type}-${index}`} className="border-b border-border/50"><td className="px-3 py-2">{action.effectiveDate}</td><td className="px-3 py-2">{action.type.toUpperCase()}</td><td className="px-3 py-2">{number(action.cashAmount)}</td><td className="px-3 py-2">{action.currency ?? "--"}</td><td className="px-3 py-2">{action.splitFrom && action.splitTo ? `${action.splitFrom}:${action.splitTo}` : "--"}</td><td className="px-3 py-2">{action.source}</td></tr>)}</tbody></table>}
-        {tab === "lineage" && <pre className="p-4 whitespace-pre-wrap font-mono text-xs leading-5 text-muted-foreground">{JSON.stringify({ snapshotId: current.id, parentSnapshotId: current.parentSnapshotId, datasetKey: current.datasetKey, retrievedAt: current.retrievedAt, availableAt: current.availableAt, lineage: current.lineage, revision }, null, 2)}</pre>}
+        {tab === "lineage" && <ReadableValue className="p-4" value={{ snapshotId: current.id, parentSnapshotId: current.parentSnapshotId, datasetKey: current.datasetKey, retrievedAt: current.retrievedAt, availableAt: current.availableAt, lineage: current.lineage, revision }} />}
       </div>
     </>}
   </div>;

@@ -32,6 +32,7 @@ import { compareArtifactVersionMetadata, metadataDeltaLabels } from "@/lib/p4Art
 import { artifactHistoryAnchor, canRestoreArtifactHistory, exactArtifactHistoryComparison, exactArtifactHistoryDetail, sameArtifactHistoryAnchor, type ArtifactHistoryAnchor } from "@/lib/artifactHistorySafety";
 import { ArtifactEngineInputReviewSession, initialEngineInputReviewState, isIntegratedModelWorkbook } from "@/lib/artifactEngineInputReview";
 import { apiRequest } from "@/lib/queryClient";
+import { generatedImageErrorMessage, generatedImageFileName, generatedImageFromContent, type GeneratedImageView } from "@/lib/generatedImageArtifact";
 import {
   artifactReportSourceError, canonicalArtifactReportTemplates, prepareArtifactReportRequest, recommendedArtifactReportTemplate,
 } from "@/lib/artifactReportChoice";
@@ -52,6 +53,7 @@ import { clearNativeArtifactDraft, useNativeArtifactDraftOwner, useNativeArtifac
 import NativeDraftRecoveryNotice from "./NativeDraftRecoveryNotice";
 import { stableSerialize } from "@/lib/analyticalCore";
 import { reconcileTerminalDraft } from "@/lib/terminalDraftReconciliation";
+import { ReadableValue } from "@/components/ui/ReadableValue";
 
 const UniverSpreadsheetEditor = lazy(() => import("./UniverSpreadsheetEditor"));
 const ArtifactChart = lazy(() => import("./ArtifactChart"));
@@ -437,7 +439,7 @@ function Body({artifactId,contentHash,content,revision,onSave,onDraft,onThesisRe
 }
 function FieldValue({ value, exact = false }: { value: unknown; exact?: boolean }) {
   if (value === null || value === undefined) return <span className="text-muted-foreground">—</span>;
-  if (typeof value === "object") return <details><summary className="cursor-pointer text-muted-foreground">View details</summary><pre className="mt-2 whitespace-pre-wrap break-words text-[12px]">{JSON.stringify(value, null, 2)}</pre></details>;
+  if (typeof value === "object") return <details><summary className="cursor-pointer text-muted-foreground">View details</summary><ReadableValue value={value} exact={exact} className="mt-2" /></details>;
   return <span>{typeof value === "number" && !exact ? value.toLocaleString(undefined, { maximumSignificantDigits: 12 }) : String(value)}</span>;
 }
 const TABLE_PAGE_SIZE = 100;
@@ -592,9 +594,9 @@ function IntegratedArtifactEngineInputs({ detail, onOpenOutput, blocked, onApply
         <div><dt className="inline text-muted-foreground">Normalized input hash: </dt><dd className="inline">{review.inputHash}</dd></div>
         <div><dt className="inline text-muted-foreground">Required review hash: </dt><dd className="inline">{review.reviewHash}</dd></div>
       </dl>
-      {review.changedFields.length ? <div className="overflow-auto"><table className="w-full text-left text-sm"><caption className="mb-2 text-left">{review.changedFields.length} engine input changes from the recorded source run · exact values, no percentage or display rounding</caption><thead><tr><th scope="col" className="p-2">Saved cell / input</th><th scope="col" className="p-2">Before</th><th scope="col" className="p-2">After</th></tr></thead><tbody>{review.changedFields.map((field) => <tr key={`${field.sheetId}:${field.cell}:${field.path}`}><th scope="row" className="border-t border-border/40 p-2 font-normal">{field.sheetId}!{field.cell}<br/>{field.path}</th><td className="border-t border-border/40 p-2 font-terminal">{JSON.stringify(field.before)}</td><td className="border-t border-border/40 p-2 font-terminal">{JSON.stringify(field.after)}</td></tr>)}</tbody></table></div> : <p className="text-sm text-muted-foreground">No engine input changes from the recorded source run. An explicit run still creates a separate output.</p>}
-      <details><summary className="cursor-pointer text-sm">Inspect all exact normalized assumptions and schedules</summary><pre className="mt-2 overflow-auto whitespace-pre-wrap break-words text-[12px]">{JSON.stringify({ assumptions: review.assumptions, schedules: review.schedules }, null, 2)}</pre></details>
-      <details><summary className="cursor-pointer text-sm">Recorded source references ({review.sourceRefs.length})</summary><pre className="mt-2 whitespace-pre-wrap break-all text-[12px]">{JSON.stringify(review.sourceRefs, null, 2)}</pre></details>
+      {review.changedFields.length ? <div className="overflow-auto"><table className="w-full text-left text-sm"><caption className="mb-2 text-left">{review.changedFields.length} engine input changes from the recorded source run · exact values, no percentage or display rounding</caption><thead><tr><th scope="col" className="p-2">Saved cell / input</th><th scope="col" className="p-2">Before</th><th scope="col" className="p-2">After</th></tr></thead><tbody>{review.changedFields.map((field) => <tr key={`${field.sheetId}:${field.cell}:${field.path}`}><th scope="row" className="border-t border-border/40 p-2 font-normal">{field.sheetId}!{field.cell}<br/>{field.path}</th><td className="border-t border-border/40 p-2"><ReadableValue value={field.before} exact /></td><td className="border-t border-border/40 p-2"><ReadableValue value={field.after} exact /></td></tr>)}</tbody></table></div> : <p className="text-sm text-muted-foreground">No engine input changes from the recorded source run. An explicit run still creates a separate output.</p>}
+      <details><summary className="cursor-pointer text-sm">Inspect all exact normalized assumptions and schedules</summary><ReadableValue value={{ assumptions: review.assumptions, schedules: review.schedules }} exact className="mt-2" /></details>
+      <details><summary className="cursor-pointer text-sm">Recorded source references ({review.sourceRefs.length})</summary><ReadableValue value={review.sourceRefs} exact className="mt-2" /></details>
       <p className="text-sm text-muted-foreground">Run rechecks the saved head, source permissions, engine revision, and both captured hashes before deterministic execution. This does not authorize host execution or provider refresh.</p>
       <button type="button" data-testid="artifact-run-reviewed-inputs" disabled={blocked || state.pending !== null || !current} onClick={() => void session.current?.run()} className="rounded border border-emerald-300/40 px-3 py-2 text-sm text-emerald-200 disabled:opacity-40">{state.pending === "run" ? "Running reviewed inputs…" : "Run reviewed inputs"}</button>
       {state.pending === "run" && <p role="status" className="text-sm text-muted-foreground">The explicit run is in flight. Leaving this inspector does not cancel server execution.</p>}
@@ -619,6 +621,55 @@ interface ArtifactPaneProps {
   onAsk: (id: string, title: string, stagedPrompt?: string) => void;
   onFocus?: (id: string, title: string) => void;
   onRerun?: (id: string, title: string, spec: ArtifactRefreshSpec) => void;
+  /** Opens a different Artifact (for example a newly generated image) in the same surface. */
+  onOpenArtifact?: (artifactId: string, version: number) => void;
+}
+
+function GeneratedImageArtifactView({ image, chatId, onOpenArtifact, onSaved }: {
+  image: GeneratedImageView;
+  chatId: number | null;
+  onOpenArtifact?: (artifactId: string, version: number) => void;
+  onSaved: () => void;
+}) {
+  const [busy, setBusy] = useState(false);
+  const [message, setMessage] = useState<{ tone: "error" | "status"; text: string } | null>(null);
+  const created = image.createdAt && !Number.isNaN(Date.parse(image.createdAt)) ? new Date(image.createdAt).toLocaleString() : null;
+  const source = [image.provider, image.model].filter(Boolean).join(" · ");
+  const download = () => {
+    const link = document.createElement("a");
+    link.href = image.src;
+    link.download = generatedImageFileName(image);
+    link.click();
+  };
+  const createAnother = async () => {
+    if (chatId === null || !image.prompt) return;
+    setBusy(true); setMessage(null);
+    try {
+      const res = await fetch(`/api/chats/${chatId}/artifacts/generate-image`, {
+        method: "POST", headers: { "Content-Type": "application/json" }, credentials: "include", body: JSON.stringify({ prompt: image.prompt }),
+      });
+      const body = await res.json().catch(() => null) as { artifact?: { id?: unknown; version?: unknown }; errorCode?: unknown; error?: unknown } | null;
+      if (!res.ok) { setMessage({ tone: "error", text: generatedImageErrorMessage(res.status, body) }); return; }
+      onSaved();
+      const id = body?.artifact?.id, version = body?.artifact?.version;
+      if (onOpenArtifact && typeof id === "string" && typeof version === "number") onOpenArtifact(id, version);
+      else setMessage({ tone: "status", text: "A new image was saved in this Chat." });
+    } catch {
+      setMessage({ tone: "error", text: "The image couldn't be created. Check your connection and try again." });
+    } finally { setBusy(false); }
+  };
+  return <figure data-testid="generated-image-artifact" className="space-y-3">
+    <img src={image.src} alt={image.alt} className="max-h-[60vh] w-full rounded-lg border border-border/50 bg-black/20 object-contain"/>
+    <figcaption className="space-y-1 font-ui text-[13px]">
+      {image.prompt && <p className="text-foreground">{image.prompt}</p>}
+      {(source || created) && <p className="text-muted-foreground">{[source, created].filter(Boolean).join(" · ")}</p>}
+    </figcaption>
+    <div className="flex flex-wrap gap-2">
+      <button type="button" onClick={download} className="inline-flex items-center gap-1.5 rounded-md border border-border/60 px-3 py-1.5 font-ui text-[13px] hover:bg-white/[0.04]"><Download className="h-3.5 w-3.5" aria-hidden="true"/>Download image</button>
+      {chatId !== null && image.prompt && <button type="button" onClick={() => void createAnother()} disabled={busy} className="inline-flex items-center gap-1.5 rounded-md border border-border/60 px-3 py-1.5 font-ui text-[13px] hover:bg-white/[0.04] disabled:opacity-60"><RefreshCw className="h-3.5 w-3.5" aria-hidden="true"/>{busy ? "Creating…" : "Create another"}</button>}
+    </div>
+    {message && <p role={message.tone === "error" ? "alert" : "status"} className={message.tone === "error" ? "text-sm text-red-300" : "text-sm text-muted-foreground"}>{message.text}</p>}
+  </figure>;
 }
 
 function ArtifactReportRequest({ detail, artifactId, projectId, onRerun }: {
@@ -703,6 +754,7 @@ function ArtifactPaneWorkspace({
   onClose,
   onAsk,
   onFocus,
+  onOpenArtifact,
   onRerun,
   onEngineOutput,
 }: ArtifactPaneProps & { onEngineOutput: (result: IntegratedModelArtifactRunResult) => void }) {
@@ -853,6 +905,7 @@ function ArtifactPaneWorkspace({
     onVersionChange?.(next);
   };
   const content=data.version.content;
+  const generatedImage = generatedImageFromContent(content);
   const downloadArtifact = async (format: ArtifactExportPlan["formats"][number]) => {
     if (exportInFlight.current) return;
     if (exportRights.blocked) { setError(exportRights.note); return; }
@@ -1005,7 +1058,7 @@ function ArtifactPaneWorkspace({
       {data.version.version !== data.artifact.headVersion && <p role="status" className="mb-3 text-sm">Viewing saved revision {data.version.version}; current revision is {data.artifact.headVersion}. <button type="button" className="underline" onClick={() => onVersionChange?.(null)}>Open current revision</button></p>}
       {content.kind === "portfolio" && <ArtifactPortfolioMateriality key={`${artifactId}:${data.version.version}:${data.version.contentHash}`} detail={data} blocked={spreadsheetDirty || spreadsheetSaving || spreadsheetPendingRevision || modelApplying}/>}
       <div data-artifact-id={artifactId} data-artifact-version={data.version.version} data-artifact-hash={data.version.contentHash}>
-      {content.kind==="data" ? <DataArtifactTable key={`${artifactId}:${data.version.version}:${data.version.contentHash}`} artifactId={artifactId} content={content}/> : <fieldset disabled={data.version.version !== data.artifact.headVersion} className="min-w-0"><Body key={content.kind==="table"||content.kind==="chart" ? `${artifactId}:${data.version.version}:${data.version.contentHash}` : artifactId} artifactId={artifactId} contentHash={data.version.contentHash} content={content} revision={data.version.version} onSave={save} onDraft={draft} onThesisRefresh={refreshThesis} onThesisPostmortem={thesisPostmortem} onSpreadsheetDirtyChange={setSpreadsheetDirty} spreadsheetDisabled={data.version.version !== data.artifact.headVersion || modelApplying || spreadsheetSaving || spreadsheetPendingRevision} facts={{savedAt:data.version.createdAt,sourceCount:data.version.sourceRefs.filter(ref=>!ref.startsWith("model:")).length,receiptCount:data.version.executionReceiptIds.length}} artifactSourceRefs={data.version.sourceRefs} onOpenExport={()=>setExportOpen(true)} onAsk={onAsk} owner={{projectId:data.artifact.projectId,owningChatId:data.artifact.owningChatId ?? null}} onNativeVersion={version=>{setSpreadsheetPendingRevision(true);onVersionChange?.(version);invalidate(projectId,artifactId);}}/></fieldset>}
+      {generatedImage ? <GeneratedImageArtifactView key={`${artifactId}:${data.version.version}`} image={generatedImage} chatId={data.artifact.owningChatId ?? owningChatId ?? null} onOpenArtifact={onOpenArtifact} onSaved={() => invalidate(projectId, artifactId)}/> : content.kind==="data" ? <DataArtifactTable key={`${artifactId}:${data.version.version}:${data.version.contentHash}`} artifactId={artifactId} content={content}/> : <fieldset disabled={data.version.version !== data.artifact.headVersion} className="min-w-0"><Body key={content.kind==="table"||content.kind==="chart" ? `${artifactId}:${data.version.version}:${data.version.contentHash}` : artifactId} artifactId={artifactId} contentHash={data.version.contentHash} content={content} revision={data.version.version} onSave={save} onDraft={draft} onThesisRefresh={refreshThesis} onThesisPostmortem={thesisPostmortem} onSpreadsheetDirtyChange={setSpreadsheetDirty} spreadsheetDisabled={data.version.version !== data.artifact.headVersion || modelApplying || spreadsheetSaving || spreadsheetPendingRevision} facts={{savedAt:data.version.createdAt,sourceCount:data.version.sourceRefs.filter(ref=>!ref.startsWith("model:")).length,receiptCount:data.version.executionReceiptIds.length}} artifactSourceRefs={data.version.sourceRefs} onOpenExport={()=>setExportOpen(true)} onAsk={onAsk} owner={{projectId:data.artifact.projectId,owningChatId:data.artifact.owningChatId ?? null}} onNativeVersion={version=>{setSpreadsheetPendingRevision(true);onVersionChange?.(version);invalidate(projectId,artifactId);}}/></fieldset>}
       </div>
       {projectId !== null && <ScenarioFormulaReview projectId={projectId} artifactId={artifactId} artifactKind={content.kind} headVersion={data.artifact.headVersion} forkedFromArtifactId={data.artifact.forkedFromArtifactId}/>}
       <details data-testid="artifact-more-actions" className="mt-4 rounded-lg border border-border/40 bg-black/10 p-3"><summary className="cursor-pointer font-ui text-[13px] text-muted-foreground">More actions · review, reports, maintenance and source inspection</summary>

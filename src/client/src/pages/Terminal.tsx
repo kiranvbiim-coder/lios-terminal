@@ -548,11 +548,13 @@ export default function Terminal({ session, onLogout, onOpenEnvironment, domain,
     recordCapabilityLaunch(view, "other");
   }, [canOpenView, handleSurface, onOpenEnvironment, setWorkspace]);
 
-  const handleAskLios = useCallback((initialQuestion?: string) => {
+  const handleAskLios = useCallback((initialQuestion?: string, target?: Pick<PaneState, "view" | "symbol">) => {
+    // A pane's own Ask LiOS button names its pane, so the draft never uses another focused pane.
+    const subject = target ?? activePane;
     if (isClient) {
       if (workbenchDirtyRef.current) return;
-      const capability = getTerminalCapability(activePane.view);
-      const prompt = workbenchQuestionDraft(initialQuestion, activePane.view, capability.symbolAware ? activePane.symbol : null, timeContext.enabled ? timeContext.asOfDate : null);
+      const capability = getTerminalCapability(subject.view);
+      const prompt = workbenchQuestionDraft(initialQuestion, subject.view, capability.symbolAware ? subject.symbol : null, timeContext.enabled ? timeContext.asOfDate : null);
       const handoff = artifactHandoffRef.current;
       if (handoff) {
         const exact = getWorkspacePanes(workspace).find(({ pane }) => pane.artifact?.artifactId === handoff.context.artifactId)?.pane.artifact;
@@ -567,16 +569,16 @@ export default function Terminal({ session, onLogout, onOpenEnvironment, domain,
       setUniversalChatHandoff(current => ({ request: (current?.request ?? 0) + 1, prompt }));
       return;
     }
-    if (activePane.view === "agent") {
+    if (subject.view === "agent") {
       if (initialQuestion?.trim()) setAskLiosPrompt(initialQuestion.trim());
       return;
     }
 
-    const capability = getTerminalCapability(activePane.view);
-    const contextSymbol = capability.symbolAware ? activePane.symbol?.trim().toUpperCase() || undefined : undefined;
+    const capability = getTerminalCapability(subject.view);
+    const contextSymbol = capability.symbolAware ? subject.symbol?.trim().toUpperCase() || undefined : undefined;
     setAskLiosContext({
       symbol: contextSymbol,
-      view: activePane.view,
+      view: subject.view,
       asOfDate: timeContext.enabled ? timeContext.asOfDate ?? undefined : undefined,
     });
     setAskLiosPrompt(initialQuestion?.trim() || null);
@@ -1120,6 +1122,7 @@ export default function Terminal({ session, onLogout, onOpenEnvironment, domain,
                 onToggleMaximize={(paneId) => setMaximizedPane((current) => current === paneId ? null : paneId)}
                 onOpenActions={(paneId, pane, x, y) => requestTerminalContextMenu({ paneId, view: pane.view, symbol: getTerminalCapability(pane.view).symbolAware ? pane.symbol : undefined, x, y })}
                 renderPane={renderPaneContent}
+                onAskLios={handleAskLios}
                 density={uxPreferences.density}
               />
             </div>

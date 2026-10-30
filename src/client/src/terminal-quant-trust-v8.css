@@ -11,10 +11,6 @@
   color: hsl(0 0% 64%);
 }
 
-.dark .panel-label {
-  letter-spacing: 0.14em;
-}
-
 /* Trust/provenance disclosures are operational metadata, not decoration. */
 .dark [role="dialog"] .text-muted-foreground {
   color: hsl(0 0% 62%);
