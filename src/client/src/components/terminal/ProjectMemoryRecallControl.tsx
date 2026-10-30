@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
 import { PROJECT_MEMORY_RECALL_CONSENT_VERSION, type ProjectMemoryRecallConsent } from "@shared/projectMemoryRecall";
+import ProjectMemoryNotesEditor from "./ProjectMemoryNotesEditor";
 
 export default function ProjectMemoryRecallControl({ projectId }: { projectId: number }) {
   const client = useQueryClient();
@@ -24,7 +25,7 @@ export default function ProjectMemoryRecallControl({ projectId }: { projectId: n
         ? { enabled: true, consent: true, consentVersion: PROJECT_MEMORY_RECALL_CONSENT_VERSION } : { enabled: false } });
       await client.invalidateQueries({ queryKey: key });
       setReview(false); setConsent(false);
-    } catch (cause) { setError(cause instanceof Error ? cause.message : "Recall consent could not be saved."); }
+    } catch { setError("Recall consent could not be saved."); }
     finally { setBusy(false); }
   }
   return <section aria-label="Project memory recall" className="space-y-2 border-b border-border/70 p-3 font-ui text-xs">
@@ -38,5 +39,6 @@ export default function ProjectMemoryRecallControl({ projectId }: { projectId: n
       <div className="flex flex-wrap gap-2"><button type="button" disabled={!consent || busy} onClick={() => void save(true)} className="min-h-9 rounded border px-2 disabled:opacity-50">Enable consented Project recall</button><button type="button" disabled={busy} onClick={() => { setReview(false); setConsent(false); }} className="min-h-9 rounded border px-2">Cancel recall consent</button></div>
     </fieldset>}
     {error && <p role="alert" className="text-destructive">{error}</p>}
+    <ProjectMemoryNotesEditor key={projectId} projectId={projectId} />
   </section>;
 }

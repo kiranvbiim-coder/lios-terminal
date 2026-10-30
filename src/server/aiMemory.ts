@@ -13,12 +13,13 @@ import { and, eq, isNull, or, sql } from "drizzle-orm";
 import {
   durableMemories,
   projects,
+  users,
   type DurableMemoryEpistemicStatus,
   type DurableMemoryOriginClass,
   type DurableMemoryRow,
 } from "@shared/schema";
 import { getRequestIdentity, type RequestIdentity } from "./requestContext";
-import { getDb } from "./db";
+import { getDb, type DrizzleDb } from "./db";
 import { stateDir } from "./dataRoot";
 
 const MAX_CONTENT_CHARS = 200_000;
@@ -218,7 +219,7 @@ async function ensureLegacyMemoryMigrated(identity: RequestIdentity): Promise<vo
   }
 }
 
-export async function appendDurableMemory(input: DurableMemoryInput): Promise<DurableMemoryRow | null> {
+export async function appendDurableMemory(input: DurableMemoryInput, admit?: (db: DurableMemoryAdmissionDatabase) => Promise<void>): Promise<DurableMemoryRow | null> {
   const identity = currentIdentity();
   if (!identity) return null;
   await ensureLegacyMemoryMigrated(identity);
@@ -260,6 +261,7 @@ export async function appendDurableMemory(input: DurableMemoryInput): Promise<Du
     }
   }
 
+  await admit?.(getDb());
   const insert = getDb().insert(durableMemories).values({
     id: rowId,
     memoryKey,
@@ -352,13 +354,33 @@ export async function getDurableMemoryHistory(input: {
   )).orderBy(sql`${durableMemories.revision} DESC`);
 }
 
+export class DurableMemoryMutationError extends Error {
+  constructor(readonly code: "missing" | "conflict") {
+    super(code === "conflict" ? "Durable memory revision is stale." : "Durable memory is not active or does not exist in this scope.");
+  }
+}
+
+export type DurableMemoryAdmissionDatabase = Pick<DrizzleDb, "select">;
+
+/** Server-only admission; callers cannot supply this guard through a memory payload. */
+export interface DurableMemoryMutationGuard {
+  admit(tx: DurableMemoryAdmissionDatabase): Promise<void>;
+  assertLineage(rows: DurableMemoryRow[]): void;
+}
+
+async function lockMemoryOwner(tx: DurableMemoryAdmissionDatabase, identity: RequestIdentity): Promise<void> {
+  // The owner row survives corrections and content-erasing deletion. Lock it before
+  // reading the head so simultaneous corrections/deletions cannot reuse a revision.
+  await tx.select({ id: users.id }).from(users).where(eq(users.id, identity.userId!)).for("update").limit(1);
+}
+
 export async function correctDurableMemory(input: {
   memoryKey: string;
   expectedRevision: number;
   content: string;
   projectId?: number | null;
   reason?: string | null;
-}): Promise<DurableMemoryRow> {
+}, guard?: DurableMemoryMutationGuard): Promise<DurableMemoryRow> {
   const identity = currentIdentity();
   if (!identity) throw new Error("Authenticated owner scope is required to correct durable memory.");
   await ensureLegacyMemoryMigrated(identity);
@@ -370,19 +392,20 @@ export async function correctDurableMemory(input: {
   }
   const content = cleanContent(input.content);
   const reason = cleanShort(input.reason, "Durable memory correction reason", 1_000);
-  const db: any = getDb();
+  const db = getDb();
 
-  return db.transaction(async (tx: any) => {
+  return db.transaction(async tx => {
+    await lockMemoryOwner(tx, identity);
+    await guard?.admit(tx);
     const rows: DurableMemoryRow[] = await tx.select().from(durableMemories).where(and(
       ownerFilter(identity),
       eq(durableMemories.memoryKey, memoryKey),
       memoryScopeFilter(projectId),
     )).orderBy(sql`${durableMemories.revision} DESC`);
     const current = rows.find((row) => row.state === "active");
-    if (!current) throw new Error("Durable memory is not active or does not exist in this scope.");
-    if (current.revision !== input.expectedRevision) {
-      throw new Error(`Durable memory revision is stale: expected r${input.expectedRevision}, current r${current.revision}.`);
-    }
+    if (!current) throw new DurableMemoryMutationError(rows[0]?.state === "deleted" ? "conflict" : "missing");
+    guard?.assertLineage(rows);
+    if (current.revision !== input.expectedRevision) throw new DurableMemoryMutationError("conflict");
 
     const now = new Date();
     const priorRef = memoryRevisionRef(memoryKey, current.revision);
@@ -433,7 +456,7 @@ export async function deleteDurableMemory(input: {
   expectedRevision: number;
   projectId?: number | null;
   reason?: string | null;
-}): Promise<DurableMemoryRow> {
+}, guard?: DurableMemoryMutationGuard): Promise<DurableMemoryRow> {
   const identity = currentIdentity();
   if (!identity) throw new Error("Authenticated owner scope is required to delete durable memory.");
   await ensureLegacyMemoryMigrated(identity);
@@ -444,19 +467,20 @@ export async function deleteDurableMemory(input: {
     throw new Error("Durable memory expectedRevision must be a positive integer.");
   }
   const reason = cleanShort(input.reason, "Durable memory deletion reason", 1_000);
-  const db: any = getDb();
+  const db = getDb();
 
-  return db.transaction(async (tx: any) => {
+  return db.transaction(async tx => {
+    await lockMemoryOwner(tx, identity);
+    await guard?.admit(tx);
     const rows: DurableMemoryRow[] = await tx.select().from(durableMemories).where(and(
       ownerFilter(identity),
       eq(durableMemories.memoryKey, memoryKey),
       memoryScopeFilter(projectId),
     )).orderBy(sql`${durableMemories.revision} DESC`);
     const current = rows.find((row) => row.state === "active");
-    if (!current) throw new Error("Durable memory is not active or does not exist in this scope.");
-    if (current.revision !== input.expectedRevision) {
-      throw new Error(`Durable memory revision is stale: expected r${input.expectedRevision}, current r${current.revision}.`);
-    }
+    if (!current) throw new DurableMemoryMutationError(rows[0]?.state === "deleted" ? "conflict" : "missing");
+    guard?.assertLineage(rows);
+    if (current.revision !== input.expectedRevision) throw new DurableMemoryMutationError("conflict");
 
     const deletedDigest = crypto.createHash("sha256")
       .update(rows.map((row) => `${row.revision}\0${row.state}\0${row.content}`).join("\n"))

@@ -7,6 +7,8 @@ import { tenantContext, type TenantContext } from "./tenantContext";
 import { requireAuth } from "./auth";
 import { projectMemoryRecallChoiceSchema } from "@shared/projectMemoryRecall";
 import { projectMemoryRecallConsent, setProjectMemoryRecallConsent } from "./projectMemoryRecall";
+import { createProjectMemoryNoteSchema, updateProjectMemoryNoteSchema, deleteProjectMemoryNoteSchema } from "@shared/projectMemoryNotes";
+import { createProjectMemoryNote, listProjectMemoryNotes, updateProjectMemoryNote, deleteProjectMemoryNote, ProjectMemoryNoteError } from "./projectMemoryNotes";
 import {
   archiveProject,
   createProject,
@@ -155,6 +157,15 @@ function fail(res: Response, error: unknown): void {
   console.error("Project route failure", error);
   res.status(500).json({ error: "Request failed." });
 }
+
+function memoryNoteFail(res: Response, error: unknown): void {
+  if (error instanceof z.ZodError) {
+    res.status(400).json({ error: "Invalid Project note request." });
+    return;
+  }
+  const refusal = error instanceof ProjectMemoryNoteError ? error : new ProjectMemoryNoteError(503);
+  res.status(refusal.status).json({ error: refusal.message });
+}
 export function registerProjectRoutes(app: Express): void {
   for (const prefix of ["/api/projects", "/api/project-chats", "/api/quick-chats", "/api/project-sessions", "/api/work-search"]) {
     app.use(prefix, requireAuth);
@@ -250,6 +261,44 @@ export function registerProjectRoutes(app: Express): void {
   app.post("/api/projects/migrate-legacy-workspaces", async (req, res) => {
     try { res.json(await migrateLegacyWorkspacesToProjects(ctx(req))); }
     catch (error) { fail(res, error); }
+  });
+
+  app.get("/api/projects/:projectId/memory-notes", async (req, res) => {
+    res.setHeader("Cache-Control", "private, no-store");
+    try {
+      const query = z.object({
+        after: z.string().min(1).max(2_000).refine(value => !value.includes("\u0000")).optional(),
+        limit: z.coerce.number().int().min(1).max(50).optional(),
+      }).strict().parse(req.query);
+      res.json(await listProjectMemoryNotes(ctx(req), pathId(req.params.projectId), query));
+    } catch (error) { memoryNoteFail(res, error); }
+  });
+
+  app.post("/api/projects/:projectId/memory-notes", async (req, res) => {
+    res.setHeader("Cache-Control", "private, no-store");
+    try {
+      const body = createProjectMemoryNoteSchema.parse(req.body);
+      res.status(201).json({ note: await createProjectMemoryNote(ctx(req), pathId(req.params.projectId), body.content) });
+    } catch (error) { memoryNoteFail(res, error); }
+  });
+
+  app.patch("/api/projects/:projectId/memory-notes/:memoryKey", async (req, res) => {
+    res.setHeader("Cache-Control", "private, no-store");
+    try {
+      const body = updateProjectMemoryNoteSchema.parse(req.body);
+      const memoryKey = z.string().min(1).max(2_000).refine(value => !value.includes("\u0000")).parse(req.params.memoryKey);
+      res.json({ note: await updateProjectMemoryNote(ctx(req), pathId(req.params.projectId), memoryKey, body.expectedRevision, body.content) });
+    } catch (error) { memoryNoteFail(res, error); }
+  });
+
+  app.delete("/api/projects/:projectId/memory-notes/:memoryKey", async (req, res) => {
+    res.setHeader("Cache-Control", "private, no-store");
+    try {
+      const body = deleteProjectMemoryNoteSchema.parse(req.body);
+      const memoryKey = z.string().min(1).max(2_000).refine(value => !value.includes("\u0000")).parse(req.params.memoryKey);
+      await deleteProjectMemoryNote(ctx(req), pathId(req.params.projectId), memoryKey, body.expectedRevision);
+      res.json({ deleted: true });
+    } catch (error) { memoryNoteFail(res, error); }
   });
 
   app.get("/api/projects/:projectId/dependencies", async (req, res) => {

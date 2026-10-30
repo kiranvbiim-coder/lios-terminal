@@ -5721,6 +5721,54 @@
    "unprobed": false
   },
   {
+   "method": "GET",
+   "path": "/api/projects/:projectId/memory-notes",
+   "reachableBy": [
+    "client_user",
+    "client_admin",
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "POST",
+   "path": "/api/projects/:projectId/memory-notes",
+   "reachableBy": [
+    "client_user",
+    "client_admin",
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "DELETE",
+   "path": "/api/projects/:projectId/memory-notes/:memoryKey",
+   "reachableBy": [
+    "client_user",
+    "client_admin",
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "PATCH",
+   "path": "/api/projects/:projectId/memory-notes/:memoryKey",
+   "reachableBy": [
+    "client_user",
+    "client_admin",
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
    "method": "DELETE",
    "path": "/api/projects/:projectId/permanent",
    "reachableBy": [
