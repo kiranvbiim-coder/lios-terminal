@@ -9,7 +9,7 @@
   "controlledForkCount": 10,
   "sourceSnapshot": {
     "baselineSha": "ad77f2d53189a7d98583e9d9996d532b79e4686d",
-    "componentsSha": "bc50c1ad275b14ee52dcb5a495e9195374e51e66",
+    "componentsSha": "3b1026da6b374cbf5027136805b702d0400481f2",
     "upstreamPinsSha": "1c25218f617efddd8ae9300aeb6aafb9809e8169",
     "controlledForkSha": "142ff14c5e6b5d6804b20a346d5e31435db2f33b"
   },
@@ -2132,6 +2132,8 @@
         "src/process/bounded-line-framer.test.ts",
         "src/cron/service/jobs-scheduling.ts",
         "src/cron/service/auto-disable.ts",
+        "src/cron/service/timer-catchup.ts",
+        "src/cron/service/timer-execution-timeout.ts",
         "src/cron/schedule.ts",
         "src/cron/schedule.test.ts",
         "src/infra/format-time/parse-offsetless-zoned-datetime.ts",
@@ -2258,6 +2260,8 @@
         "client/src/lib/telegramConnectionForm.ts",
         "server/p9AutomationEngine.ts",
         "server/p9AutomationStore.ts",
+        "server/p9Catchup.test.ts",
+        "server/p9ScheduledAuthority.test.ts",
         "shared/p9AutomationContracts.ts",
         "shared/p9CronSchedule.ts",
         "client/src/components/terminal/CronScheduleFields.tsx",
