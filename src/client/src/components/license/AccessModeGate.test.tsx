@@ -35,3 +35,11 @@ test("first run offers Start 7-day trial and Enter license key, with labelled co
   assert.match(html, />Start 7-day trial</);
   assert.match(html, />Enter license key</);
 });
+
+test("self-serve customer activation offers a trial without Home license import controls", () => {
+  const html = page(createElement(FirstRunLicenseChoice, { canImportLicense: false }));
+  assert.match(html, />Start 7-day trial</);
+  assert.match(html, /License keys are managed by this Home/);
+  assert.doesNotMatch(html, />Enter license key</);
+  assert.doesNotMatch(html, /Paste your license key/);
+});

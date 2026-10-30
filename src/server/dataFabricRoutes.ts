@@ -3,6 +3,7 @@ import { z } from "zod";
 import { alternativeSnapshotInputSchema, estimatesPayloadSchema } from "@shared/pointInTimeAlternativeData";
 import { integratedModelRequestSchema, runIntegratedFinancialModel } from "@shared/integratedFinancialModel";
 import { requireRole } from "./auth";
+import { assertExecutionAllowed, respondReadOnly } from "./accessMode";
 import { auditActor, recordAuditEvent } from "./auditEvents";
 import {
   captureFinancialDatasetSnapshot,
@@ -542,6 +543,7 @@ export function registerDataFabricRoutes(app: Express): void {
     const parsed = integratedModelRequestSchema.safeParse(req.body);
     if (!parsed.success) return res.status(400).json({ error: parsed.error.flatten() });
     try {
+      await assertExecutionAllowed("analysis");
       const ctx = tenantContext(req.user!);
       const { snapshot, result, inputHash, resultHash, run } = await getDb().transaction(async tx => {
         const source = await loadIntegratedModelDatasetSource(ctx, parsed.data.datasetSnapshotId, ["model_input", "display", "derived_output"], tx, true);
@@ -594,6 +596,7 @@ export function registerDataFabricRoutes(app: Express): void {
     });
     res.json({ result, receipt: { runId: run.id, resultHash, datasetSnapshotId: snapshot.id, datasetContentHash: snapshot.contentHash, inputHash, calculatedAt: run.createdAt.toISOString(), deterministic: true }, lineage: { modelInput: modelInputLineage, valuation: valuationLineage } });
     } catch (error) {
+      if (respondReadOnly(res, error)) return;
       if (error instanceof IntegratedModelArtifactError) return res.status(error.status).json({ error: error.message });
       throw error;
     }

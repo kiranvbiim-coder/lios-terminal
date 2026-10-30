@@ -3,6 +3,7 @@ import { generateKeyPairSync } from "node:crypto";
 import { spawnSync } from "node:child_process";
 import fs from "node:fs";
 import os from "node:os";
+import { createRequire } from "node:module";
 import path from "node:path";
 import test from "node:test";
 import { createSignedAsymmetricOfflineLicenseLease, licenseKeyId, verifyLeaseAgainstTrustAnchors } from "./licenseLease";
@@ -108,6 +109,7 @@ test("a key signed by a foreign signer, or an already-expired one, is refused an
 });
 
 const CLI = path.resolve(import.meta.dirname, "../script/license_key.cjs");
+const { issueKey } = createRequire(import.meta.url)(CLI);
 function cli(args: string[], input: string, env: Record<string, string> = {}) {
   const clean: Record<string, string> = {};
   for (const [name, value] of Object.entries(process.env)) if (value !== undefined && name !== "CI" && name !== "GITHUB_ACTIONS") clean[name] = value;
@@ -141,6 +143,60 @@ test("the owner's signing CLI creates a keypair and issues keys the app itself v
 
   assert.equal(importLicenseFile(key, freshEnv(), new Date(), { [id]: publicPem }).state, "valid");
   assert.match(refusal(() => importLicenseFile(key, freshEnv(), new Date(), anchors)), /trusted LiOS licence key/);
+});
+
+test("the offline issuer and app parser agree at the encoded key size boundary", () => {
+  const featureKeys = Array.from({ length: 512 }, (_, index) => `engine.custom_capability_${String(index).padStart(3, "0")}`);
+  const signed = lease({ entitlementMode: "allowlist", featureKeys });
+  const keyForFeatures = (features: string[]) => serializeLicenseKey({
+    ...signed,
+    payload: { ...signed.payload, featureKeys: features },
+  });
+  let allowed = 0;
+  let oversized = featureKeys.length;
+  assert.ok(keyForFeatures(featureKeys).length > MAX_LICENSE_KEY_CHARS);
+  while (oversized - allowed > 1) {
+    const middle = Math.floor((allowed + oversized) / 2);
+    if (keyForFeatures(featureKeys.slice(0, middle)).length <= MAX_LICENSE_KEY_CHARS) allowed = middle;
+    else oversized = middle;
+  }
+  const boundedFeatures = featureKeys.slice(0, allowed);
+  const last = boundedFeatures.length - 1;
+  while (boundedFeatures[last].length < 128) {
+    const nextFeatures = [...boundedFeatures];
+    nextFeatures[last] += "x";
+    if (keyForFeatures(nextFeatures).length > MAX_LICENSE_KEY_CHARS) break;
+    boundedFeatures[last] = nextFeatures[last];
+  }
+  const oversizedFeatures = [...boundedFeatures];
+  oversizedFeatures[last] += "x";
+  assert.ok(oversizedFeatures[last].length <= 128);
+
+  const options = {
+    privateKeyPem: vendor.privatePem, organizationId: 1, licenseId: 7,
+    planCode: "pro", expires: "2027-10-30", now,
+  };
+  const issued = issueKey({ ...options, featureKeys: boundedFeatures });
+  assert.equal(issued.key.length, MAX_LICENSE_KEY_CHARS);
+  const parsed = parseLicenseKey(issued.key);
+  assert.deepEqual(parsed.payload.featureKeys, boundedFeatures);
+  assert.equal(verifyLeaseAgainstTrustAnchors(parsed, anchors, now).valid, true);
+  assert.throws(() => parseLicenseKey(keyForFeatures(oversizedFeatures)), LicenseImportError);
+  assert.throws(() => issueKey({ ...options, featureKeys: oversizedFeatures }));
+  assert.throws(() => issueKey({ ...options, featureKeys }));
+});
+
+test("an oversized signing request exits without emitting a key or success metadata", () => {
+  const featureKeys = Array.from({ length: 512 }, (_, index) => `engine.custom_capability_${String(index).padStart(3, "0")}`);
+  const expires = new Date(Date.now() + 90 * 86_400_000).toISOString().slice(0, 10);
+  const issued = cli([
+    "issue", "--org", "1", "--license", "7", "--plan", "pro",
+    "--expires", expires, "--features", featureKeys.join(","),
+  ], vendor.privatePem);
+  assert.equal(issued.status, 2);
+  assert.equal(issued.stdout, "");
+  assert.equal(issued.stderr.includes(vendor.privatePem), false);
+  assert.equal(issued.stderr.includes(vendor.keyId), false);
 });
 
 test("the signing CLI refuses CI, argv/env private keys, bad dates and unusable stdin", () => {

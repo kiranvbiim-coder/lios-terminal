@@ -1,17 +1,20 @@
 import type { Express, NextFunction, Request, Response } from "express";
 import { and, asc, eq, inArray, lt } from "drizzle-orm";
-import { organizationLicenses, organizations } from "@shared/schema";
+import { CLIENT_ROLES, organizationLicenses, organizations, users } from "@shared/schema";
 import {
   DEFAULT_TRIAL_DAYS,
   READ_ONLY_ERROR_CODE,
   TRIAL_PENDING_BILLING_STATE,
   resolveInstallationAccessMode,
   resolveTrialLifecycle,
+  isExecutableLicenseStatus,
   type InstallationAccessMode,
   type InstallationAccessReason,
 } from "@shared/commercialRuntime";
 import { getDb, isDbInitialized } from "./db";
 import { evaluateCachedOfflineAccess, readCachedOfflineLeaseBundle } from "./offlineLeaseCache";
+import { resolveRuntimeMode } from "./runtimeMode";
+import { getRequestIdentity } from "./requestContext";
 
 /**
  * The one place that decides whether this installation may start new work. Trial state (the Home's own database)
@@ -99,13 +102,17 @@ async function advanceClockMark(now: Date): Promise<void> {
     .where(and(eq(organizationLicenses.organizationId, organization.id), lt(organizationLicenses.updatedAt, new Date(now.getTime() - CLOCK_MARK_STEP_MS))));
 }
 
-/** The installation's trial is the earliest started client trial (else the earliest pending): a later account never restarts it. */
-async function installationTrial(now: Date) {
+/** Desktop accounts share one trial; server-Home customer trials never govern the installation or other tenants. */
+async function installationTrial(now: Date, env: NodeJS.ProcessEnv) {
   const rows = await getDb()
     .select({ billingState: organizationLicenses.billingState, trialEndsAt: organizationLicenses.trialEndsAt, createdAt: organizationLicenses.createdAt })
     .from(organizationLicenses)
     .innerJoin(organizations, eq(organizations.id, organizationLicenses.organizationId))
-    .where(and(inArray(organizationLicenses.billingState, TRIAL_BILLING_STATES), eq(organizations.lifecycleStage, "trial")))
+    .where(and(
+      inArray(organizationLicenses.billingState, TRIAL_BILLING_STATES),
+      eq(organizations.lifecycleStage, "trial"),
+      resolveRuntimeMode(env) === "user_home_server" ? eq(organizations.slug, INSTALLATION_ORG_SLUG) : undefined,
+    ))
     .orderBy(asc(organizationLicenses.createdAt), asc(organizationLicenses.id));
   const row = rows.find((candidate) => candidate.billingState === "trial") ?? rows[0];
   if (!row) return null;
@@ -139,12 +146,65 @@ export async function resolveInstallationAccess(now = new Date(), env: NodeJS.Pr
       expiresAt: expiresAt && Number.isFinite(expiresAt.getTime()) ? expiresAt : null,
       expired: decision.reason === "offline_lease_expired",
     },
-    trial: await installationTrial(effectiveNow),
+    trial: await installationTrial(effectiveNow, env),
+  });
+}
+
+/** Server-Home client access uses only that client's own trial, never the installation's or another customer's. */
+export async function resolveCustomerTrialAccess(organizationId: number | null, now = new Date(), env: NodeJS.ProcessEnv = process.env): Promise<InstallationAccessMode> {
+  const [row] = organizationId === null ? [] : await getDb()
+    .select({
+      organizationStatus: organizations.status,
+      lifecycleStage: organizations.lifecycleStage,
+      slug: organizations.slug,
+      licenseStatus: organizationLicenses.status,
+      billingState: organizationLicenses.billingState,
+      trialEndsAt: organizationLicenses.trialEndsAt,
+      createdAt: organizationLicenses.createdAt,
+    })
+    .from(organizations)
+    .leftJoin(organizationLicenses, eq(organizationLicenses.organizationId, organizations.id))
+    .where(eq(organizations.id, organizationId)).limit(1);
+  const installation = await resolveInstallationAccess(now, env);
+  if (row?.organizationStatus === "active" && row.slug !== INSTALLATION_ORG_SLUG && row.lifecycleStage === "client"
+    && row.licenseStatus !== null && isExecutableLicenseStatus(row.licenseStatus)) {
+    return { ...installation, canStartTrial: false };
+  }
+  const eligible = row?.organizationStatus === "active" && row.slug !== INSTALLATION_ORG_SLUG
+    && row.lifecycleStage === "trial" && row.licenseStatus !== null && isExecutableLicenseStatus(row.licenseStatus);
+  // A Home-imported signed key retains its existing conversion behavior; a customer cannot import one.
+  if (eligible && installation.reason === "license_valid") return { ...installation, canStartTrial: false };
+  const pending = eligible && row.billingState === TRIAL_PENDING_BILLING_STATE && row.trialEndsAt === null;
+  const endsAt = eligible && row.billingState === "trial" && row.createdAt
+    ? row.trialEndsAt ?? new Date(row.createdAt.getTime() + DEFAULT_TRIAL_DAYS * 86_400_000)
+    : null;
+  return resolveInstallationAccessMode({
+    now,
+    managed: true,
+    license: { present: false, valid: false, expiresAt: null, expired: false },
+    trial: pending ? { state: "not_started", endsAt: null }
+      : { state: endsAt && row?.createdAt ? resolveTrialLifecycle({ serverNow: now, startedAt: row.createdAt, endsAt }) : "revoked", endsAt },
   });
 }
 
 export async function assertExecutionAllowed(capability: ExecutionCapability, now = new Date()): Promise<void> {
-  const access = await resolveInstallationAccess(now);
+  const identity = getRequestIdentity();
+  let access: InstallationAccessMode;
+  if (resolveRuntimeMode() === "user_home_server" && identity?.userId != null && isDbInitialized()) {
+    const [actor] = await getDb().select({
+      role: users.role, organizationId: users.organizationId, active: users.active,
+      mustChangePassword: users.mustChangePassword, lockedUntil: users.lockedUntil,
+    }).from(users).where(eq(users.id, identity.userId)).limit(1);
+    if (!actor || CLIENT_ROLES.includes(actor.role as (typeof CLIENT_ROLES)[number])) {
+      const current = actor?.active && !actor.mustChangePassword && (!actor.lockedUntil || actor.lockedUntil <= now)
+        && actor.organizationId !== null && actor.organizationId === identity.organizationId;
+      access = await resolveCustomerTrialAccess(current ? actor!.organizationId : null, now);
+    } else {
+      access = await resolveInstallationAccess(now);
+    }
+  } else {
+    access = await resolveInstallationAccess(now);
+  }
   if (access.mode === "read_only") throw new ReadOnlyModeError(access.reason, capability, access);
 }
 
@@ -158,6 +218,11 @@ export function respondReadOnly(res: Response, error: unknown): boolean {
 const REFUSED_METHODS: Record<string, true> = { POST: true, PUT: true, PATCH: true };
 /** Withdrawing consent is never refused, whichever way the request is shaped. */
 const ALWAYS_ALLOWED_PATHS: Record<string, true> = { "/api/setup/community-data-consent": true };
+/** Only the existing cancellation endpoints may stop running work while the installation is read-only. */
+function isExecutionCancellation(req: Request): boolean {
+  return req.method === "POST"
+    && /^\/api\/(?:calculation-jobs|quant-lab\/runs)\/[^/]+\/cancel\/?$/i.test(req.originalUrl.split("?")[0] ?? "");
+}
 
 /**
  * Express guard for route families that run analysis or create connections. Only signed-in, state-changing
@@ -166,7 +231,7 @@ const ALWAYS_ALLOWED_PATHS: Record<string, true> = { "/api/setup/community-data-
 export function guardExecutionRoutes(app: Express, prefixes: readonly string[], capability: ExecutionCapability): void {
   for (const prefix of prefixes) {
     app.use(prefix, (req: Request, res: Response, next: NextFunction) => {
-      if (!REFUSED_METHODS[req.method] || !req.isAuthenticated?.() || ALWAYS_ALLOWED_PATHS[req.originalUrl.split("?")[0] ?? ""]) return next();
+      if (!REFUSED_METHODS[req.method] || !req.isAuthenticated?.() || ALWAYS_ALLOWED_PATHS[req.originalUrl.split("?")[0] ?? ""] || isExecutionCancellation(req)) return next();
       assertExecutionAllowed(capability).then(() => next(), (error) => {
         if (!respondReadOnly(res, error)) next(error);
       });

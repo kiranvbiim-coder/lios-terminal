@@ -8,8 +8,8 @@ import { serverErrorText } from "@/lib/apiErrorText";
 import { LICENSE_ACCESS_KEY, needsFirstRunChoice, readOnlyBannerText, useLicenseAccess, type LicenseAccess } from "@/lib/licenseAccess";
 import LicenseKeyEntry from "./LicenseKeyEntry";
 
-/** First run after the owner account exists: start the 7-day trial, or enter a license key. */
-export function FirstRunLicenseChoice() {
+/** First run after enrollment: start the trial; only the Home owner may also import a license key. */
+export function FirstRunLicenseChoice({ canImportLicense = true }: { canImportLicense?: boolean }) {
   const queryClient = useQueryClient();
   const [error, setError] = useState<string | null>(null);
   const [showKey, setShowKey] = useState(false);
@@ -27,8 +27,10 @@ export function FirstRunLicenseChoice() {
           <h1 id="first-run-license-title" className="text-sm font-bold uppercase tracking-widest">Get started with LiOS</h1>
         </div>
         <p className="text-[10px] leading-relaxed text-muted-foreground">
-          Your account is ready. Try everything free for 7 days, or enter a license key if you already have one.
-          Your work always stays on this computer and you can export it at any time.
+          {canImportLicense
+            ? "Your account is ready. Try everything free for 7 days, or enter a license key if you already have one."
+            : "Your account is ready. Start your organization's free 7-day trial. License keys are managed by this Home's owner."}
+          {" "}Your work stays in your Home and you can export it at any time.
         </p>
         <button
           type="button"
@@ -39,7 +41,7 @@ export function FirstRunLicenseChoice() {
           {startTrial.isPending ? "Starting trial…" : "Start 7-day trial"}
         </button>
         {error && <p role="alert" className="text-[9px] text-rose-300">{error}</p>}
-        {showKey ? (
+        {canImportLicense && (showKey ? (
           <LicenseKeyEntry />
         ) : (
           <button
@@ -49,7 +51,7 @@ export function FirstRunLicenseChoice() {
           >
             Enter license key
           </button>
-        )}
+        ))}
       </section>
     </main>
   );
@@ -99,10 +101,10 @@ export function ReadOnlyBanner({ access }: { access: LicenseAccess }) {
   );
 }
 
-/** Wraps the signed-in workspace: first-run choice for the owner, otherwise the workspace plus a read-only banner. */
+/** First-run activation follows its explicit permission; installation key entry remains owner-only. */
 export default function AccessModeGate({ enabled, children }: { enabled: boolean; children: ReactNode }) {
   const { data: access } = useLicenseAccess(enabled);
-  if (needsFirstRunChoice(access)) return <FirstRunLicenseChoice />;
+  if (access && needsFirstRunChoice(access)) return <FirstRunLicenseChoice canImportLicense={access.isOwner} />;
   return (
     <>
       {children}

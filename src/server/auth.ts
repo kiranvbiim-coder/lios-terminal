@@ -675,15 +675,17 @@ export function registerAuthRoutes(app: Express): void {
       return;
     }
 
-    // The trial belongs to the installation, not to an account: once its clock has run out without a licence, a new
-    // registration cannot restart it.
-    const licensed = evaluateCachedOfflineAccess().allowed;
-    const [trialStarted] = await db.select({ endsAt: organizationLicenses.trialEndsAt }).from(organizationLicenses)
-      .where(and(eq(organizationLicenses.billingState, "trial"), isNotNull(organizationLicenses.trialEndsAt)))
-      .orderBy(asc(organizationLicenses.trialEndsAt)).limit(1);
-    if (!licensed && trialStarted?.endsAt && trialStarted.endsAt.getTime() < Date.now()) {
-      res.status(402).json({ error: "The trial on this installation has ended. Import a LiOS licence to create more client accounts." });
-      return;
+    // Desktop accounts share the installation's one-time trial. Server-Home customers have independent trials:
+    // one customer's expiry must neither block another customer's enrollment nor restart the Home's clock.
+    if (resolveRuntimeMode() === "desktop_local") {
+      const licensed = evaluateCachedOfflineAccess().allowed;
+      const [trialStarted] = await db.select({ endsAt: organizationLicenses.trialEndsAt }).from(organizationLicenses)
+        .where(and(eq(organizationLicenses.billingState, "trial"), isNotNull(organizationLicenses.trialEndsAt)))
+        .orderBy(asc(organizationLicenses.trialEndsAt)).limit(1);
+      if (!licensed && trialStarted?.endsAt && trialStarted.endsAt.getTime() < Date.now()) {
+        res.status(402).json({ error: "The trial on this installation has ended. Import a LiOS licence to create more client accounts." });
+        return;
+      }
     }
 
     const [financeDomain] = await db.select().from(domains).where(eq(domains.slug, "finance")).limit(1);
@@ -725,8 +727,8 @@ export function registerAuthRoutes(app: Express): void {
         planId: null,
         status: "active",
         seatsPurchased: 1,
-        // The owner chooses next: "Start 7-day trial" (POST /api/license/trial/start) or enter a licence key.
-        // Until then the install is read-only and no trial clock runs.
+        // The administrator explicitly starts this trial next (POST /api/license/trial/start); until then no clock runs.
+        // Only the Home owner, not a server-Home customer administrator, may import an installation license key.
         billingState: TRIAL_PENDING_BILLING_STATE,
         trialEndsAt: null,
       });

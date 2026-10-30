@@ -19,9 +19,9 @@ export function useLicenseAccess(enabled: boolean) {
   });
 }
 
-/** True while the owner still has to choose between the 7-day trial and entering a key. */
+/** True while the server permits this administrator to explicitly start the not-yet-started trial. */
 export function needsFirstRunChoice(access: LicenseAccess | undefined): boolean {
-  return Boolean(access && access.mode === "read_only" && access.reason === "trial_not_started" && access.isOwner);
+  return Boolean(access && access.mode === "read_only" && access.reason === "trial_not_started" && access.canStartTrial);
 }
 
 const READ_ONLY_REASON_TEXT: Record<Exclude<InstallationAccessReason, "license_valid" | "trial_active" | "unmanaged">, string> = {

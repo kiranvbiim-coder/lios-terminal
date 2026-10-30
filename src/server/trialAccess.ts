@@ -11,7 +11,7 @@
 import type { Express, Request, Response, NextFunction } from "express";
 import { z } from "zod";
 import { and, eq, isNotNull, ne } from "drizzle-orm";
-import { getDb } from "./db";
+import { getDb, type DrizzleDb } from "./db";
 import {
   organizations,
   organizationLicenses,
@@ -19,6 +19,7 @@ import {
   domains,
   engagements,
   CLIENT_ROLES,
+  users,
 } from "@shared/schema";
 import {
   AI_RUNTIME_POLICY,
@@ -40,7 +41,9 @@ import { invokeAIProvider } from "./byoaiTransport";
 import { normalizeProviderId } from "./byoaiRouter";
 import { getEnvironmentSetupForUser } from "./environmentSetupService";
 import { evaluateCachedOfflineAccess } from "./offlineLeaseCache";
-import { ensureInstallationTrialRecord } from "./accessMode";
+import { ensureInstallationTrialRecord, INSTALLATION_ORG_SLUG } from "./accessMode";
+import { selfServeTrialsEnabled } from "./auth";
+import { resolveRuntimeMode } from "./runtimeMode";
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
@@ -64,14 +67,63 @@ export async function startLocalTrial(organizationId: number | null, now = new D
     const [license] = await tx.select().from(organizationLicenses).where(eq(organizationLicenses.organizationId, targetOrganizationId)).limit(1);
     if (!license) throw new TrialStartError(404, "This account has no trial to start.");
     if (license.billingState !== TRIAL_PENDING_BILLING_STATE) throw new TrialStartError(409, "A trial has already been started on this installation.");
-    const [used] = await tx.select({ id: organizationLicenses.id }).from(organizationLicenses)
-      .where(and(eq(organizationLicenses.billingState, "trial"), isNotNull(organizationLicenses.trialEndsAt), ne(organizationLicenses.organizationId, targetOrganizationId)))
-      .limit(1);
-    if (used) throw new TrialStartError(409, "The free trial on this installation has already been used. Enter a license key to continue.");
+    if (resolveRuntimeMode() === "desktop_local") {
+      const [used] = await tx.select({ id: organizationLicenses.id }).from(organizationLicenses)
+        .where(and(eq(organizationLicenses.billingState, "trial"), isNotNull(organizationLicenses.trialEndsAt), ne(organizationLicenses.organizationId, targetOrganizationId)))
+        .limit(1);
+      if (used) throw new TrialStartError(409, "The free trial on this installation has already been used. Enter a license key to continue.");
+    }
     const trialEndsAt = new Date(now.getTime() + DEFAULT_TRIAL_DAYS * DAY_MS);
     await tx.update(organizationLicenses)
       .set({ billingState: "trial", trialEndsAt, updatedAt: now })
       .where(and(eq(organizationLicenses.id, license.id), eq(organizationLicenses.billingState, TRIAL_PENDING_BILLING_STATE)));
+    return { trialEndsAt };
+  });
+}
+
+type TrialActor = Pick<Express.User, "id" | "role" | "organizationId">;
+type TrialDb = Pick<DrizzleDb, "select" | "update">;
+
+async function selfServeTrialTarget(user: TrialActor, db: TrialDb, now: Date, lock = false) {
+  if (resolveRuntimeMode() !== "user_home_server" || !selfServeTrialsEnabled() || user.role !== "client_admin" || user.organizationId === null) return null;
+  const query = db.select({
+    userRole: users.role, userOrganizationId: users.organizationId, active: users.active,
+    mustChangePassword: users.mustChangePassword, lockedUntil: users.lockedUntil,
+    organizationStatus: organizations.status, lifecycleStage: organizations.lifecycleStage, slug: organizations.slug,
+    licenseId: organizationLicenses.id, licenseStatus: organizationLicenses.status,
+    billingState: organizationLicenses.billingState, trialEndsAt: organizationLicenses.trialEndsAt,
+  }).from(users)
+    .innerJoin(organizations, eq(organizations.id, users.organizationId))
+    .innerJoin(organizationLicenses, eq(organizationLicenses.organizationId, organizations.id))
+    .where(eq(users.id, user.id)).limit(1);
+  const [row] = await (lock ? query.for("update") : query);
+  if (!row || row.userRole !== "client_admin" || row.userOrganizationId !== user.organizationId || !row.active
+    || row.mustChangePassword || (row.lockedUntil && row.lockedUntil > now)
+    || row.organizationStatus !== "active" || row.lifecycleStage !== "trial" || row.slug === INSTALLATION_ORG_SLUG
+    || row.licenseStatus !== "active") return null;
+  return row;
+}
+
+/** Permission to start this signed-in customer's own trial, not authority over the Home or its trust anchors. */
+export async function canStartSelfServeTrial(user: TrialActor, now = new Date()): Promise<boolean> {
+  const target = await selfServeTrialTarget(user, getDb(), now);
+  return target?.billingState === TRIAL_PENDING_BILLING_STATE && target.trialEndsAt === null;
+}
+
+/** Opted-in server-Home trials are per organization; no request-supplied target or clock is accepted. */
+export async function startSelfServeTrial(user: TrialActor, now = new Date()): Promise<{ trialEndsAt: Date }> {
+  return getDb().transaction(async (tx) => {
+    const target = await selfServeTrialTarget(user, tx, now, true);
+    if (!target) throw new TrialStartError(403, "This account cannot start a self-serve trial.");
+    if (target.billingState !== TRIAL_PENDING_BILLING_STATE || target.trialEndsAt !== null) {
+      throw new TrialStartError(409, "This organization's trial has already been started.");
+    }
+    const trialEndsAt = new Date(now.getTime() + DEFAULT_TRIAL_DAYS * DAY_MS);
+    const [started] = await tx.update(organizationLicenses).set({ billingState: "trial", trialEndsAt, updatedAt: now })
+      .where(and(eq(organizationLicenses.id, target.licenseId), eq(organizationLicenses.organizationId, user.organizationId!),
+        eq(organizationLicenses.billingState, TRIAL_PENDING_BILLING_STATE)))
+      .returning();
+    if (!started) throw new TrialStartError(409, "This organization's trial has already been started.");
     return { trialEndsAt };
   });
 }

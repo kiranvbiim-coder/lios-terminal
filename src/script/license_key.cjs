@@ -23,6 +23,8 @@ const fs = require("node:fs");
 const LICENSE_FILE_FORMAT = "lios-license/1";
 const LICENSE_KEY_PREFIX = "LIOS1-";
 const LICENSE_KEY_CHECKSUM_BYTES = 4;
+// Keep aligned with server/licenseFile.ts; licenseKey.test.ts exercises both sides of the boundary.
+const MAX_LICENSE_KEY_CHARS = 16 * 1024;
 const MAX_PRIVATE_KEY_BYTES = 8 * 1024;
 const MAX_VALIDITY_DAYS = 3650;
 const DAY_MS = 24 * 60 * 60 * 1000;
@@ -106,7 +108,9 @@ function issueKey({ privateKeyPem, organizationId, licenseId, planCode, expires,
     ...(features.length ? { featureKeys: [...features].sort() } : {}),
   };
   const signature = crypto.sign(null, Buffer.from(canonicalPayload(payload), "utf8"), privateKey).toString("base64url");
-  return { key: encodeLicenseKey({ algorithm: "Ed25519", payload, signature }), keyId, expiresAt: payload.expiresAt };
+  const key = encodeLicenseKey({ algorithm: "Ed25519", payload, signature });
+  if (key.length > MAX_LICENSE_KEY_CHARS) throw new UsageError(`The encoded license key exceeds the app's ${MAX_LICENSE_KEY_CHARS}-character limit. Reduce the number or length of --features entries and issue it again.`);
+  return { key, keyId, expiresAt: payload.expiresAt };
 }
 
 function parseIssueArgs(args) {

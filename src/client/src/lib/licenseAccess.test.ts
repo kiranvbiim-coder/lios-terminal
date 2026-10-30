@@ -13,10 +13,11 @@ test("read-only banner explains each way access ends and stays silent while work
   assert.match(readOnlyBannerText({ ...base, mode: "read_only", reason: "trial_not_started" }) ?? "", /Start 7-day trial/);
 });
 
-test("only the owner of a not-yet-started install sees the first-run choice", () => {
+test("first-run choice follows trial activation permission, independently of Home ownership", () => {
   const pending: LicenseAccess = { ...base, mode: "read_only", reason: "trial_not_started", canStartTrial: true };
   assert.equal(needsFirstRunChoice(pending), true);
-  assert.equal(needsFirstRunChoice({ ...pending, isOwner: false }), false);
+  assert.equal(needsFirstRunChoice({ ...pending, isOwner: false }), true);
+  assert.equal(needsFirstRunChoice({ ...pending, canStartTrial: false }), false);
   assert.equal(needsFirstRunChoice({ ...pending, reason: "trial_expired" }), false);
   assert.equal(needsFirstRunChoice(undefined), false);
 });

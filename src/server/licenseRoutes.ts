@@ -1,15 +1,23 @@
 import { notifyDataChanged } from "./gatewayRuntime";
-import type { Express } from "express";
+import type { Express, Request } from "express";
 import { z } from "zod";
-import { isHomeOwner, requireAuth, requireHomeOwner } from "./auth";
-import { resolveInstallationAccess } from "./accessMode";
+import { isHomeOwner, requireAuth, requireHomeOwner, requireRole } from "./auth";
+import { resolveCustomerTrialAccess, resolveInstallationAccess } from "./accessMode";
 import { importLicenseFile, LicenseImportError, licenseStatus } from "./licenseFile";
-import { startLocalTrial, TrialStartError } from "./trialAccess";
+import { canStartSelfServeTrial, startLocalTrial, startSelfServeTrial, TrialStartError } from "./trialAccess";
+import { resolveRuntimeMode } from "./runtimeMode";
 
-/**
- * Registered before the internal-account gate because a customer terminal's administrator (client_admin) imports the
- * licence too. The licence is a local, signed file or pasted key; no vendor call is made.
- */
+const trialStartRequestSchema = z.object({}).strict();
+
+async function accessForUser(req: Request) {
+  const isOwner = isHomeOwner(req.user);
+  const customer = resolveRuntimeMode() === "user_home_server" && req.user !== undefined && req.user.role.startsWith("client_");
+  const access = customer ? await resolveCustomerTrialAccess(req.user!.organizationId) : await resolveInstallationAccess();
+  const canStartTrial = isOwner ? access.canStartTrial : customer && await canStartSelfServeTrial(req.user!);
+  return { ...access, canStartTrial, isOwner };
+}
+
+/** Global license/trust controls stay Home-owner-only; self-serve customers may only activate their own trial. */
 export function registerLicenseRoutes(app: Express): void {
   app.get("/api/license/status", requireHomeOwner, (_req, res) => {
     res.json(licenseStatus());
@@ -19,15 +27,23 @@ export function registerLicenseRoutes(app: Express): void {
   app.get("/api/license/access", requireAuth, async (req, res, next) => {
     try {
       res.setHeader("Cache-Control", "no-store");
-      res.json({ ...(await resolveInstallationAccess()), isOwner: isHomeOwner(req.user) });
+      res.json(await accessForUser(req));
     } catch (error) { next(error); }
   });
 
-  app.post("/api/license/trial/start", requireHomeOwner, async (req, res, next) => {
+  app.post("/api/license/trial/start", requireAuth, requireRole("internal_admin", "client_admin"), async (req, res, next) => {
     try {
-      await startLocalTrial(req.user!.organizationId);
-      notifyDataChanged("license", { homeOwner: true });
-      return res.json({ ...(await resolveInstallationAccess()), isOwner: true });
+      if (!trialStartRequestSchema.safeParse(req.body ?? {}).success || Object.keys(req.query).length > 0) {
+        return res.status(400).json({ error: "Trial activation does not accept a target organization or trial clock." });
+      }
+      if (isHomeOwner(req.user)) {
+        await startLocalTrial(req.user!.organizationId);
+        notifyDataChanged("license", { homeOwner: true });
+      } else {
+        await startSelfServeTrial(req.user!);
+        notifyDataChanged("license", { userId: req.user!.id });
+      }
+      return res.json(await accessForUser(req));
     } catch (error) {
       if (error instanceof TrialStartError) return res.status(error.status).json({ error: error.message });
       next(error);
