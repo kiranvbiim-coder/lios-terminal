@@ -4393,6 +4393,9 @@
     "wasmSourceNoticeSha256": "8fa804d6b667ebcaec8c772549b025b718e2976da7f8f1c9b4753d32c3cdb96e",
     "verifiedBashProvenance": "tree-sitter-bash-verified-provenance.json",
     "verifiedNpmWasmProvenance": "wasm-npm-verified-provenance.json",
+    "conservativeWasiNoticeCorpus": "wasi-libc-notice-corpus-index.json",
+    "conservativeEmscriptenNoticeCorpus": "emscripten-notice-corpus-index.json",
+    "controlledSelectedBuild": "controlled-wasm-build-attribution.json",
     "scope": "Actual offline nested Canvas/Workboard graphs plus signed exact source/member identities. Exhaustive binary linked-object/toolchain and final runtime distribution clearance remain open."
   },
   "distributionCleared": false

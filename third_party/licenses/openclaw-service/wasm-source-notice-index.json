@@ -203,7 +203,30 @@
   ],
   "provenanceFiles": [
     "tree-sitter-bash-verified-provenance.json",
-    "wasm-npm-verified-provenance.json"
+    "wasm-npm-verified-provenance.json",
+    "controlled-wasm-build-attribution.json"
+  ],
+  "conservativeNoticeCorpora": [
+    {
+      "repo": "WebAssembly/wasi-libc",
+      "pin": "2fc32bc81b9f07f8d9525edea59bfbaf760c06d6",
+      "index": "wasi-libc-notice-corpus-index.json",
+      "corpus": "wasi-libc-notice-corpus.txt",
+      "sha256": "e5152d1b82f84a0e92339117c45ae0594f4e27fb476489b14ac4b26b0a0c9d0f",
+      "members": 2908,
+      "distinctBlocks": 83,
+      "role": "Intentionally overinclusive pinned-source notice custody; not historical linkage or distribution approval."
+    },
+    {
+      "repo": "emscripten-core/emscripten",
+      "pin": "09f52557f0d48b65b8c724853ed8f4e8bf80e669",
+      "index": "emscripten-notice-corpus-index.json",
+      "corpus": "emscripten-notice-corpus.txt",
+      "sha256": "211ae86dbbf2f339b8eea93c5aa33970a8eea24fd16be73a4a2c2925b401a11c",
+      "members": 5881,
+      "distinctBlocks": 2631,
+      "role": "Intentionally overinclusive pinned-source notice custody; UTF-16 source retains original bytes plus a lossless labelled UTF-8 projection, not unmarked normalization."
+    }
   ],
   "composition": {
     "quickjs": {
@@ -216,8 +239,8 @@
         "llvm": "4434dabb69916856b824f68a64b029c67175e532",
         "binaryen": "130.0.0"
       },
-      "encoding": "encoding.c only; wasm-ld shared/allow-undefined with host QuickJS/libc imports. URL/crypto/headers/structured-clone are separate outputs and are not the selected root assets.",
-      "remaining": "Actual consumed SDK archive digest and exact main-WASM linked objects/source-specific notice closure; source provenance and recipe are verified, not an exhaustive link manifest."
+      "encoding": "A bounded offline exact-source/SDK32/Binaryen130 build reproduced the installed encoding.so byte-for-byte (7715bytes, d501aa2a8410ee07c196103f0d169b226ec61c922883713510fd723fe14036c3). Actual retained link map uses encoding.c/encoding.o only, shared/allow-undefined and host QuickJS/libc imports, with no library archive argument. This is reproducibility evidence, not historical compiler attestation. URL/crypto/headers/structured-clone remain separate unselected outputs.",
+      "remaining": "The controlled main WASM is638390bytes/79505123d7f65bd01202f41b40c2166952454950573402ef23b0bbf557775c82, not the observed637405-byte main asset. Its actual link map/archive trace must not be represented as historical composition. Historical SDK/compiler/archive identity and original main linked objects remain unestablished; finite pinned-source notice scopes now have conservative corpus custody."
     },
     "treeSitter": {
       "runtimeSource": "6070dbfefd326bd735e5683eb128cc1b57dad0c0",
