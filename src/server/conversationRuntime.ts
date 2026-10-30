@@ -641,6 +641,7 @@ async function invokeGovernedAgentDelegation(
     return receiptRef;
   };
   let invoked = false;
+  let childReturned = false;
   let failureStatus: "failed" | "cancelled" | "timed_out" = "failed";
   let evidenceAttempted = false;
   try {
@@ -658,6 +659,7 @@ async function invokeGovernedAgentDelegation(
         else failureStatus = state.status;
       },
     });
+    childReturned = true;
     assertNotAborted(signal);
     if (!runtime.usage) {
       throw new Error("Delegated agent adapter did not report bounded usage.");
@@ -682,7 +684,9 @@ async function invokeGovernedAgentDelegation(
     if (invoked && !evidenceAttempted) {
       evidenceAttempted = true;
       try {
-        await retainReceipt(createAgentDelegationReceipt(record, { status: failureStatus, used: null }));
+        // A parent Stop can arrive after child cleanup but before this continuation releases the result.
+        const status = childReturned && signal.aborted ? "cancelled" : failureStatus;
+        await retainReceipt(createAgentDelegationReceipt(record, { status, used: null }));
       } catch (writeError) {
         throw new AggregateError([error, writeError],
           "Delegation terminal evidence could not be retained; inspect the original run before retrying.", { cause: error });

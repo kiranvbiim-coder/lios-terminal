@@ -145,7 +145,7 @@ test("delegation distinguishes trusted Stop and deadline from adapter errors and
   };
   const success = () => ({ output: { value: 42 }, deterministic: true, aiDerived: false,
     usage: { stepsUsed: 1, aiCallsUsed: 0, revisionsUsed: 0, durationMs: 1 } });
-  for (const scenario of ["before-entry", "stop", "deadline", "missing-usage", "invalid-usage", "checkpoint", "forged-abort", "journal-refused"] as const) {
+  for (const scenario of ["before-entry", "stop", "late-stop", "deadline", "missing-usage", "invalid-usage", "checkpoint", "forged-abort", "journal-refused"] as const) {
     await t.test(scenario, async () => {
       const requestId = crypto.randomUUID();
       await journal.begin({ id: requestId, owner, label: "Bounded delegate outcome", agentRun: true });
@@ -178,6 +178,11 @@ test("delegation distinguishes trusted Stop and deadline from adapter errors and
           return success();
         },
         ...(scenario === "checkpoint" ? { checkpoint: async () => { throw original; } } : {}),
+        ...(scenario === "late-stop" ? { checkpoint: async () => {
+          // Child validation/cleanup finishes before the parent continuation is allowed to release its result.
+          queueMicrotask(() => queueMicrotask(() => controller.abort("private late Stop")));
+          return null;
+        } } : {}),
       });
       if (scenario === "before-entry") controller.abort("private pre-entry reason");
       const tool = getConversationTool("lios.agent.delegate")!;
@@ -206,7 +211,7 @@ test("delegation distinguishes trusted Stop and deadline from adapter errors and
       assert.equal(writes, scenario === "before-entry" ? 0 : 1);
       assert.equal(evidence.length, scenario === "before-entry" || scenario === "journal-refused" ? 0 : 1);
       if (evidence.length) {
-        const status = scenario === "stop" ? "cancelled" : scenario === "deadline" ? "timed_out" : "failed";
+        const status = scenario === "stop" || scenario === "late-stop" ? "cancelled" : scenario === "deadline" ? "timed_out" : "failed";
         assert.match(evidence[0].ref, new RegExp(`:research:${status}:unknown:`));
       }
       assert.equal(JSON.stringify(retained).includes("private"), false);
