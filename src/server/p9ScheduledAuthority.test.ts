@@ -5,6 +5,7 @@ import os from "node:os";
 import path from "node:path";
 import test from "node:test";
 import { eq } from "drizzle-orm";
+import { nextP9CronRun } from "@shared/p9CronSchedule";
 const root = fs.mkdtempSync(path.join(os.tmpdir(), "lios-scheduled-authority-"));
 process.env.LIOS_DATA_ROOT = root;
 process.env.LIMURIA_DATA_DIR = root;
@@ -13,7 +14,7 @@ const { initDb, closeDb, getDb } = await import("./db");
 const { users, projectAutomationRuns, projectAutomationWorkflows, sourceConnections } = await import("@shared/schema");
 const { createProject } = await import("./projectStore");
 const { createProjectChat } = await import("./projectChatStore");
-const { createP9Workflow, replaceP9Workflow, setP9WorkflowEnabled } = await import("./p9AutomationStore");
+const { claimDueP9Workflows, createP9Workflow, getP9Workflow, replaceP9Workflow, setP9WorkflowEnabled } = await import("./p9AutomationStore");
 const { p9WorkflowActionSchema } = await import("@shared/p9AutomationContracts");
 const { executeP9Workflow, runDueP9Workflows, runP9FilingObserverCycle } = await import("./p9AutomationService");
 const { getRequestIdentity } = await import("./requestContext");
@@ -175,6 +176,74 @@ test("scheduled automation rechecks pause and isolates an owner authority denial
     assert.equal(result.run, null);
     assert.equal((await getDb().select().from(projectAutomationRuns).where(eq(projectAutomationRuns.workflowId, workflow.id))).length, 0);
     await setP9WorkflowEnabled(ctx, workflow.id, true);
+  });
+  await t.test("zoned cron cold reopen claims one overdue slot and executes canonical provider health without AI", async () => {
+    const { workflow, ctx } = workflows[1]!;
+    const schedule = { kind: "cron" as const, expression: "*/5 * * * *", timeZone: "America/New_York" };
+    let cron = await createP9Workflow(ctx, workflow.projectId, {
+      name: "Zoned provider health", enabled: false, trigger: { type: "schedule", schedule },
+      action: { kind: "provider_health" }, notificationPolicy: { enabled: false },
+    });
+    assert.equal(cron.nextRunAt, null);
+    cron = await setP9WorkflowEnabled(ctx, cron.id, true, cron.updatedAt.toISOString());
+    assert.equal(cron.nextRunAt?.getTime(), nextP9CronRun(schedule, cron.updatedAt)?.getTime());
+    const overdue = new Date(Date.now() - 7 * 86_400_000);
+    await getDb().update(projectAutomationWorkflows).set({ nextRunAt: overdue }).where(eq(projectAutomationWorkflows.id, cron.id));
+    await closeDb();
+    await initDb();
+    cron = await getP9Workflow(ctx, cron.id);
+    assert.deepEqual(cron.trigger, { type: "schedule", schedule });
+    const now = new Date();
+    const batches = await Promise.all([claimDueP9Workflows(now), claimDueP9Workflows(now)]);
+    const claims = batches.flat().filter(item => item.workflow.id === cron.id);
+    assert.equal(claims.length, 1, "the canonical claim excludes a second worker, not one run per missed slot");
+    const claim = claims[0]!;
+    const outcome = await executeP9Workflow({
+      workflow: claim.workflow, triggerType: "schedule",
+      triggerDetail: { dueAt: claim.workflow.nextRunAt!.toISOString() }, claimToken: claim.claimToken,
+    });
+    assert.equal(outcome.run?.status, "succeeded");
+    assert.equal(outcome.error, null);
+    assert.ok(outcome.result);
+    assert.deepEqual(outcome.run?.executionReceiptIds, [], "a local health snapshot must not invent an engine or AI receipt");
+    cron = await getP9Workflow(ctx, cron.id);
+    assert.equal(cron.claimToken, null);
+    assert.equal(cron.nextRunAt?.getTime(), nextP9CronRun(schedule, outcome.run!.completedAt!)?.getTime());
+    assert.ok(cron.nextRunAt && cron.nextRunAt > now);
+    assert.equal((await claimDueP9Workflows(new Date())).some(item => item.workflow.id === cron.id), false, "missed slots are not replayed");
+    const runs = await getDb().select().from(projectAutomationRuns).where(eq(projectAutomationRuns.workflowId, cron.id));
+    assert.equal(runs.length, 1);
+    assert.equal(runs[0]!.triggerDetail.dueAt, overdue.toISOString());
+    await assert.rejects(getP9Workflow(workflows[0]!.ctx, cron.id), /not found|not owned/);
+    await closeDb();
+    await initDb();
+    const retained = await getP9Workflow(ctx, cron.id);
+    assert.equal(retained.nextRunAt?.getTime(), cron.nextRunAt?.getTime());
+    assert.deepEqual(await runDueP9Workflows(), { claimed: 0, succeeded: 0, failed: 0 });
+    await setP9WorkflowEnabled(ctx, cron.id, false);
+  });
+  await t.test("invalid persisted cron refuses action admission without starving another due owner workflow", async () => {
+    const { workflow, ctx } = workflows[1]!;
+    const definition = {
+      name: "Persisted cron admission", enabled: true,
+      trigger: { type: "schedule", schedule: { kind: "cron", expression: "*/5 * * * *", timeZone: "UTC" } },
+      action: { kind: "provider_health" }, notificationPolicy: { enabled: false },
+    };
+    const broken = await createP9Workflow(ctx, workflow.projectId, definition);
+    const healthy = await createP9Workflow(ctx, workflow.projectId, { ...definition, name: "Healthy following cron" });
+    const due = new Date(Date.now() - 60_000);
+    await getDb().update(projectAutomationWorkflows).set({
+      trigger: { type: "schedule", schedule: { kind: "cron", expression: "0 9 31 FEB *", timeZone: "UTC" } },
+      nextRunAt: due,
+    }).where(eq(projectAutomationWorkflows.id, broken.id));
+    await getDb().update(projectAutomationWorkflows).set({ nextRunAt: due }).where(eq(projectAutomationWorkflows.id, healthy.id));
+    const persisted = await getP9Workflow(ctx, broken.id);
+    await assert.rejects(executeP9Workflow({ workflow: persisted, triggerType: "schedule" }), /no finite future occurrence/);
+    assert.deepEqual(await runDueP9Workflows(), { claimed: 2, succeeded: 1, failed: 1 });
+    assert.equal((await getDb().select().from(projectAutomationRuns).where(eq(projectAutomationRuns.workflowId, broken.id))).length, 0);
+    await assert.rejects(setP9WorkflowEnabled(ctx, broken.id, true), /no finite future occurrence/);
+    assert.equal((await setP9WorkflowEnabled(ctx, broken.id, false)).enabled, false, "a corrupt definition can still be paused explicitly");
+    await setP9WorkflowEnabled(ctx, healthy.id, false);
   });
   await t.test("a disabled owner does not prevent the next eligible scheduled workflow from producing its receipt", async () => {
     await getDb().update(users).set({ active: false }).where(eq(users.id, owners[0]!.id));

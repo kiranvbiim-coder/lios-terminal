@@ -10,6 +10,12 @@
       "license": "MPL-2.0"
     },
     {
+      "id": "croner",
+      "repository": "hexagon/croner",
+      "commitSha": "adc86215e92e4f7cceaf8127dfcd1b514ef7bafc",
+      "license": "MIT"
+    },
+    {
       "id": "js-yaml",
       "repository": "nodeca/js-yaml",
       "commitSha": "79ca68d90f333fbe6d9e42827527e62636200191",

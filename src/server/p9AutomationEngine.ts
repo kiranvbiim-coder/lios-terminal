@@ -5,11 +5,17 @@ import type {
   P9WorkflowRunResult,
   P9WorkflowTrigger,
 } from "@shared/p9AutomationContracts";
+import { nextP9CronRun } from "@shared/p9CronSchedule";
 
 export function nextP9ScheduledRun(trigger: P9WorkflowTrigger, from: Date): Date | null {
   if (trigger.type !== "schedule") return null;
   if (trigger.schedule.kind === "interval") {
     return new Date(from.getTime() + trigger.schedule.everyMinutes * 60_000);
+  }
+  if (trigger.schedule.kind === "cron") {
+    const next = nextP9CronRun(trigger.schedule, from);
+    if (!next) throw new Error("Invalid automation cron schedule or no finite future occurrence.");
+    return next;
   }
   const candidate = new Date(from);
   candidate.setUTCSeconds(0, 0);

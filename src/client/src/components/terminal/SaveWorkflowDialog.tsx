@@ -4,7 +4,9 @@ import { Clock3, Save, X } from "lucide-react";
 import type { ConversationRequest } from "@shared/conversationRuntime";
 import type { P9AutomationEventType, P9WorkflowTemplate, P9WorkflowTrigger } from "@shared/p9AutomationContracts";
 import { saveConversationAsP9Workflow } from "@/lib/useP9Automation";
-import { P9_ACCEPTED_FINANCE_TEMPLATES } from "@shared/p9AutomationContracts";
+import { P9_ACCEPTED_FINANCE_TEMPLATES, p9WorkflowTriggerSchema } from "@shared/p9AutomationContracts";
+import { workflowTriggerSummary } from "@/lib/workflowReviewTruth";
+import { CronScheduleFields } from "./CronScheduleFields";
 import { useArtifact } from "@/lib/useArtifacts";
 import { useQuery } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
@@ -47,12 +49,14 @@ export function SaveWorkflowDialog({
   const saveInFlight = useRef(false);
   const opener = useRef<HTMLElement | null>(typeof document !== "undefined" && document.activeElement instanceof HTMLElement ? document.activeElement : null);
   const [template, setTemplate] = useState<P9WorkflowTemplate>("custom");
-  const [triggerMode, setTriggerMode] = useState<"manual" | "interval" | "daily" | "event">("manual");
+  const [triggerMode, setTriggerMode] = useState<"manual" | "interval" | "daily" | "cron" | "event">("manual");
   const [activateAfterSave, setActivateAfterSave] = useState(false);
   const [activationReviewedKey, setActivationReviewedKey] = useState<string | null>(null);
   const [intervalMinutes, setIntervalMinutes] = useState(60);
   const [dailyHour, setDailyHour] = useState(9);
   const [dailyMinute, setDailyMinute] = useState(0);
+  const [cronExpression, setCronExpression] = useState("0 9 * * MON-FRI");
+  const [cronTimeZone, setCronTimeZone] = useState("UTC");
   const [eventType, setEventType] = useState<P9AutomationEventType>("data_refresh");
   const [eventFilterKey, setEventFilterKey] = useState(request.context?.symbol ? "symbol" : "");
   const [eventFilterValue, setEventFilterValue] = useState(request.context?.symbol ?? "");
@@ -79,20 +83,22 @@ export function SaveWorkflowDialog({
   const trigger = useMemo<P9WorkflowTrigger>(() => {
     if (triggerMode === "manual") return { type: "manual" };
     if (triggerMode === "interval") {
-      return { type: "schedule", schedule: { kind: "interval", everyMinutes: Math.min(Math.max(Math.round(intervalMinutes || 60), 5), 10_080) } };
+      return { type: "schedule", schedule: { kind: "interval", everyMinutes: intervalMinutes } };
     }
     if (triggerMode === "daily") {
       return { type: "schedule", schedule: { kind: "daily_utc", hour: dailyHour, minute: dailyMinute } };
     }
+    if (triggerMode === "cron") return { type: "schedule", schedule: { kind: "cron", expression: cronExpression, timeZone: cronTimeZone } };
     const filters: Record<string, string> = {};
     if (eventFilterKey.trim() && eventFilterValue.trim()) filters[eventFilterKey.trim()] = eventFilterValue.trim();
     return { type: "event", eventType, filters };
-  }, [dailyHour, dailyMinute, eventFilterKey, eventFilterValue, eventType, intervalMinutes, triggerMode]);
+  }, [dailyHour, dailyMinute, cronExpression, cronTimeZone, eventFilterKey, eventFilterValue, eventType, intervalMinutes, triggerMode]);
+  const validatedTrigger = p9WorkflowTriggerSchema.safeParse(trigger);
 
   const activationSignature = JSON.stringify([
     projectId, chatId, sourceRequestId, request.message,
     template, name.trim(), trigger, notify, minRelevance, cooldownMinutes,
-    request.executionMode, request.sourceScope, request.approvals, acceptedIdentity, followCurrentProfile,
+    request, acceptedIdentity, followCurrentProfile, currentProfileQuery.data?.resourceId,
   ]);
   const activationReviewed = activateAfterSave && activationReviewedKey === activationSignature;
 
@@ -104,6 +110,11 @@ export function SaveWorkflowDialog({
 
   const save = async () => {
     if (saveInFlight.current || !name.trim()) return;
+    const parsedTrigger = p9WorkflowTriggerSchema.safeParse(trigger);
+    if (!parsedTrigger.success) {
+      setError(parsedTrigger.error.issues[0]?.message ?? "Review a valid trigger before saving.");
+      return;
+    }
     if (activateAfterSave && !activationReviewed) {
       setError("Review the exact trigger, scope and approvals before activating this workflow.");
       return;
@@ -135,7 +146,7 @@ export function SaveWorkflowDialog({
         } } : {}),
         ...(canFollowProfile && followCurrentProfile && currentProfileQuery.data?.resourceId
           ? { currentPersonalFinanceResourceId: currentProfileQuery.data.resourceId } : {}),
-        trigger,
+        trigger: parsedTrigger.data,
         notificationPolicy: {
           enabled: notify,
           channels: ["in_app"],
@@ -195,6 +206,7 @@ export function SaveWorkflowDialog({
                 <option value="manual">Manual / Run now</option>
                 <option value="interval">Schedule / interval</option>
                 <option value="daily">Schedule / daily UTC</option>
+                <option value="cron">Schedule / cron + time zone</option>
                 <option value="event">Event</option>
               </select>
             </label>
@@ -238,6 +250,10 @@ export function SaveWorkflowDialog({
             </div>
             <p className="mt-2 text-xs text-muted-foreground">Runs at this UTC time while your Home is running. After downtime, due work is reclaimed once; LiOS does not invent missed execution receipts or replay every missed day.</p>
           </fieldset>}
+          {triggerMode === "cron" && <CronScheduleFields
+            schedule={{ kind: "cron", expression: cronExpression, timeZone: cronTimeZone }} disabled={saving}
+            onChange={schedule => { setCronExpression(schedule.expression); setCronTimeZone(schedule.timeZone); }} />}
+          {!validatedTrigger.success && triggerMode !== "cron" && <p role="alert" className="text-xs text-amber-200">{validatedTrigger.error.issues[0]?.message}</p>}
 
           {triggerMode === "event" && (
             <div className="rounded border border-border/50 bg-black/15 p-3">
@@ -305,16 +321,12 @@ export function SaveWorkflowDialog({
             {activateAfterSave && <>
               <div className="space-y-1 rounded-md border border-amber-300/25 p-3 text-xs leading-5 text-muted-foreground">
                 <p className="font-semibold text-foreground">Activation scope to review</p>
-                <p>Trigger: {trigger.type === "manual" ? "manual only" : trigger.type === "event"
-                  ? `event ${trigger.eventType}`
-                  : trigger.schedule.kind === "daily_utc"
-                    ? `daily at ${String(trigger.schedule.hour).padStart(2,"0")}:${String(trigger.schedule.minute).padStart(2,"0")} UTC`
-                    : `every ${trigger.schedule.everyMinutes} minutes`}.</p>
+                <p>Trigger: {workflowTriggerSummary(trigger)}.</p>
                 <p>Template: {template}. Saved execution: {request.executionMode}. Notifications: {notify ? "in-app only" : "off"}.</p>
                 <p>Existing approvals are not new grants. High-impact actions require their own server-side review. Saved Home work may continue while the desktop app is closed.</p>
               </div>
               <label className="flex min-h-11 items-start gap-3 text-sm text-foreground">
-                <input type="checkbox" className="mt-1 h-4 w-4" checked={activationReviewed}
+                <input type="checkbox" className="mt-1 h-4 w-4" checked={activationReviewed} disabled={!validatedTrigger.success}
                   onChange={event => setActivationReviewedKey(event.target.checked ? activationSignature : null)} />
                 <span>I reviewed this exact trigger, Project and execution scope. Enable only this saved workflow after confirmation.</span>
               </label>
@@ -327,7 +339,7 @@ export function SaveWorkflowDialog({
 
           <div className="flex justify-end gap-2">
             <button type="button" disabled={saving} onClick={() => { if (!saveInFlight.current) onClose(); }} className="min-h-11 rounded px-3 py-2 font-ui text-sm text-muted-foreground hover:text-foreground">Cancel</button>
-            <button disabled={saving || !name.trim() || (financeMonitor && !acceptedCurrent) || (activateAfterSave && !activationReviewed)} onClick={() => void save()} className="rounded border border-amber-400/35 bg-amber-400/[0.08] px-3 py-2 font-ui text-xs font-medium text-amber-200 disabled:opacity-40">
+            <button disabled={saving || !name.trim() || !validatedTrigger.success || (financeMonitor && !acceptedCurrent) || (activateAfterSave && !activationReviewed)} onClick={() => void save()} className="rounded border border-amber-400/35 bg-amber-400/[0.08] px-3 py-2 font-ui text-xs font-medium text-amber-200 disabled:opacity-40">
               {saving ? "Saving…" : activationReviewed ? "Save and activate" : "Save inactive draft"}
             </button>
           </div>

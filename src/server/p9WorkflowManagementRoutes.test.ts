@@ -5,6 +5,7 @@ import path from "node:path";
 import { createServer } from "node:http";
 import express from "express";
 import test from "node:test";
+import { nextP9CronRun } from "@shared/p9CronSchedule";
 
 const root = fs.mkdtempSync(path.join(os.tmpdir(), "lios-workflow-management-"));
 process.env.LIOS_DATA_ROOT = root;
@@ -90,7 +91,21 @@ test("reviewed workflow mutations reject stale revisions and never record an unp
   assert.deepEqual(edited.trigger, { type: "schedule", schedule: { kind: "daily_utc", hour: 18, minute: 15 } });
   assert.deepEqual(edited.action, current.action);
   assert.deepEqual(edited.notificationPolicy, current.notificationPolicy);
-  const removed = await send(route, "DELETE", { expectedUpdatedAt: edited.updatedAt.toISOString() });
+  const cronTrigger = { type: "schedule", schedule: { kind: "cron", expression: "15 9 * * MON-FRI", timeZone: "America/New_York" } };
+  const cronChanged = await send(route, "PUT", { ...definition, enabled: true, trigger: cronTrigger, expectedUpdatedAt: edited.updatedAt.toISOString() });
+  assert.equal(cronChanged.status, 200);
+  const zoned = await getP9Workflow(ctx, workflow.id);
+  assert.deepEqual(zoned.trigger, cronTrigger);
+  assert.equal(zoned.nextRunAt?.toISOString(), nextP9CronRun({
+    kind: "cron", expression: "15 9 * * MON-FRI", timeZone: "America/New_York",
+  }, zoned.updatedAt)?.toISOString());
+  assert.deepEqual(zoned.action, current.action);
+  assert.equal((await send(route, "PUT", { ...definition, enabled: true, trigger: cronTrigger, expectedUpdatedAt: current.updatedAt.toISOString() })).status, 409);
+  assert.equal((await send(route, "PUT", { ...definition, trigger: { type: "schedule", schedule: { kind: "cron", expression: "* * * * *", timeZone: "UTC" } }, expectedUpdatedAt: zoned.updatedAt.toISOString() })).status, 400);
+  assert.deepEqual((await getP9Workflow(ctx, workflow.id)).trigger, cronTrigger, "rejected recurrence cannot replace the reviewed schedule");
+  assert.equal((await send(route, "PUT", { ...definition, trigger: cronTrigger, expectedUpdatedAt: zoned.updatedAt.toISOString() }, stranger.id)).status, 404);
+  assert.equal((await send(`${base}/${otherProject.id}/automation/workflows/${workflow.id}`, "PUT", { ...definition, trigger: cronTrigger, expectedUpdatedAt: zoned.updatedAt.toISOString() })).status, 404);
+  const removed = await send(route, "DELETE", { expectedUpdatedAt: zoned.updatedAt.toISOString() });
   assert.equal(removed.status, 200);
   await assert.rejects(getP9Workflow(ctx, workflow.id), /not found/);
   const deletedEvents = (await listProjectLedgerEvents(ctx, project.id)).filter(event => event.payload.workflowId === workflow.id && event.payload.action === "deleted");

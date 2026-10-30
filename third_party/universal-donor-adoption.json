@@ -9,8 +9,8 @@
   "controlledForkCount": 10,
   "sourceSnapshot": {
     "baselineSha": "ad77f2d53189a7d98583e9d9996d532b79e4686d",
-    "componentsSha": "17207738184e69b71d747ecc2c3f6aef53f9c577",
-    "upstreamPinsSha": "d8f791d15aa9c1008bc4a47a604d9e6bd89ac657",
+    "componentsSha": "ac21dab5bef926e1a4399b83d553b52abdde8e09",
+    "upstreamPinsSha": "1c25218f617efddd8ae9300aeb6aafb9809e8169",
     "controlledForkSha": "142ff14c5e6b5d6804b20a346d5e31435db2f33b"
   },
   "releaseClaims": {
@@ -2132,6 +2132,10 @@
         "src/process/bounded-line-framer.test.ts",
         "src/cron/service/jobs-scheduling.ts",
         "src/cron/service/auto-disable.ts",
+        "src/cron/schedule.ts",
+        "src/cron/schedule.test.ts",
+        "src/infra/format-time/parse-offsetless-zoned-datetime.ts",
+        "src/infra/format-time/parse-offsetless-zoned-datetime.test.ts",
         "src/agents/mcp-startup-backoff.ts",
         "src/web-search/runtime-execution.ts",
         "src/shared/bounded-buffer.test.ts",
@@ -2247,6 +2251,10 @@
         "server/p9AutomationEngine.ts",
         "server/p9AutomationStore.ts",
         "shared/p9AutomationContracts.ts",
+        "shared/p9CronSchedule.ts",
+        "client/src/components/terminal/CronScheduleFields.tsx",
+        "client/src/components/terminal/SaveWorkflowDialog.tsx",
+        "client/src/components/terminal/ProjectAutomationPanel.tsx",
         "server/mcpStartupBackoff.ts",
         "server/providerSdk.ts",
         "server/exec/bounded-buffer.test.ts",

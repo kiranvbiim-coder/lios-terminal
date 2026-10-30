@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import type { P9WorkflowRecord, P9RunRecord } from "./useP9Automation";
-import { quickMonitorDraft, workflowTriggerEditDefinition, workflowExecutionTruth, workflowScheduleSummary } from "./workflowReviewTruth";
+import { quickMonitorDraft, workflowTriggerEditDefinition, workflowExecutionTruth, workflowScheduleSummary, workflowCronPreview } from "./workflowReviewTruth";
 
 const workflow = (overrides: Partial<P9WorkflowRecord> = {}): P9WorkflowRecord => ({
   id: "workflow:alpha", projectId: 15, ownerUserId: 3, organizationId: null,
@@ -82,5 +82,44 @@ test("paused, manual and enabled schedules never invent future executions or las
   assert.match(workflowScheduleSummary(workflow({ trigger: { type: "event", eventType: "provider_health", filters: {} } })), /permissions required/);
   const conditional = workflowExecutionTruth(workflow({ enabled: true, trigger: { type: "event", eventType: "provider_health", filters: {} } }), undefined);
   assert.equal(conditional.next, "Event-driven · no fixed due time");
+});
+
+test("reviewed cron replacement preserves the current workflow's authority and definition", () => {
+  const original = workflow({ enabled: true, sourceRefs: ["source:existing"], artifactRefs: ["artifact:existing"] });
+  const trigger = { type: "schedule" as const, schedule: { kind: "cron" as const, expression: "0 9 * * MON-FRI", timeZone: "America/New_York" } };
+  const edited = workflowTriggerEditDefinition(original, trigger);
+  assert.deepEqual(edited.trigger, trigger);
+  for (const key of ["action", "notificationPolicy", "sourceRefs", "engineRefs", "artifactRefs", "enabled", "name", "template"] as const) {
+    assert.deepEqual(edited[key], original[key]);
+  }
+  assert.equal(original.projectId, 15);
+  assert.equal(original.updatedAt, "2026-10-24T09:00:00.000Z");
+  assert.equal(original.trigger.type === "schedule" && original.trigger.schedule.kind, "interval");
+});
+
+test("invalid cron definitions cannot enter a replacement review or produce a due preview", () => {
+  for (const schedule of [
+    { kind: "cron" as const, expression: "* * * * *", timeZone: "UTC" },
+    { kind: "cron" as const, expression: "0 0 9 * * *", timeZone: "UTC" },
+    { kind: "cron" as const, expression: "0 9 * * MON-FRI", timeZone: "not/a-zone" },
+    { kind: "cron" as const, expression: "", timeZone: "UTC" },
+  ]) {
+    const trigger = { type: "schedule" as const, schedule };
+    assert.throws(() => workflowTriggerEditDefinition(workflow(), trigger));
+    assert.equal(workflowCronPreview(trigger, new Date("2026-10-26T00:00:00Z")), null);
+  }
+});
+
+test("cron summaries and local previews retain the selected calendar and explicit zone", () => {
+  const trigger = { type: "schedule" as const, schedule: { kind: "cron" as const, expression: "0 9 * * MON-FRI", timeZone: "America/New_York" } };
+  const summary = workflowScheduleSummary(workflow({ trigger }));
+  assert.ok(summary.includes(trigger.schedule.expression));
+  assert.ok(summary.includes(trigger.schedule.timeZone));
+  assert.ok(!summary.includes("undefined"));
+  const preview = workflowCronPreview(trigger, new Date("2026-10-26T00:00:00Z"));
+  assert.equal(preview?.utc, "2026-10-26T13:00:00.000Z");
+  assert.ok(preview?.zoned.includes("09:00:00"));
+  const persisted = "2026-10-27T13:00:00.000Z";
+  assert.equal(workflowExecutionTruth(workflow({ trigger, enabled: true, nextRunAt: persisted }), undefined).next, persisted);
 });
 

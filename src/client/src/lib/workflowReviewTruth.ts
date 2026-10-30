@@ -2,6 +2,7 @@ import {
   p9WorkflowDefinitionInputSchema, p9WorkflowTriggerSchema,
   type P9WorkflowDefinitionInput, type P9WorkflowTrigger,
 } from "@shared/p9AutomationContracts";
+import { nextP9CronRun } from "@shared/p9CronSchedule";
 import type { P9WorkflowRecord, P9RunRecord } from "./useP9Automation";
 
 export type QuickMonitorKind = "provider" | "changes";
@@ -49,11 +50,29 @@ export function workflowTriggerEditDefinition(
 }
 
 export function workflowScheduleSummary(workflow: P9WorkflowRecord): string {
-  const t = workflow.trigger;
+  return workflowTriggerSummary(workflow.trigger);
+}
+
+export function workflowTriggerSummary(t: P9WorkflowTrigger): string {
   if (t.type === "manual") return "Manual only · never automatically scheduled";
   if (t.type === "event") return "Event-triggered · matching events and current permissions required";
   if (t.schedule.kind === "daily_utc") return `Daily ${String(t.schedule.hour).padStart(2, "0")}:${String(t.schedule.minute).padStart(2, "0")} UTC · Home must be running`;
+  if (t.schedule.kind === "cron") return `Cron ${t.schedule.expression} · ${t.schedule.timeZone} · Home must be running`;
   return `Every ${t.schedule.everyMinutes} minutes · Home must be running`;
+}
+
+/** Local review only; persisted nextRunAt always comes from Home. */
+export function workflowCronPreview(trigger: P9WorkflowTrigger, from: Date): { utc: string; zoned: string } | null {
+  const parsed = p9WorkflowTriggerSchema.safeParse(trigger);
+  if (!parsed.success || parsed.data.type !== "schedule" || parsed.data.schedule.kind !== "cron") return null;
+  const next = nextP9CronRun(parsed.data.schedule, from);
+  if (!next) return null;
+  return {
+    utc: next.toISOString(),
+    zoned: new Intl.DateTimeFormat("en-GB", {
+      timeZone: parsed.data.schedule.timeZone, dateStyle: "full", timeStyle: "long",
+    }).format(next),
+  };
 }
 
 export function workflowExecutionTruth(workflow: P9WorkflowRecord, last: P9RunRecord | undefined): {
