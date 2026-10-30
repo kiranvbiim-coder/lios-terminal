@@ -7,5 +7,5 @@
  * Key id = first 16 hex characters of SHA-256 over the exact PEM text below.
  */
 export const LICENSE_TRUST_ANCHORS: Readonly<Record<string, string>> = {
-  "9cd9a99c75e6afd2": "-----BEGIN PUBLIC KEY-----\nMCowBQYDK2VwAyEAWac5kX7PAcIctn6hxoSOKgFcYWRBF0JNPWfCeliV5Jg=\n-----END PUBLIC KEY-----\n",
+  "170917030f55c8da": "-----BEGIN PUBLIC KEY-----\nMCowBQYDK2VwAyEAgnPycOci3+qPb99yCaHMG5IqCOsaMbW3TzmgQMmzcTY=\n-----END PUBLIC KEY-----\n",
 };
