@@ -239,6 +239,8 @@ Procedure text is Home-wide and can enter permitted agent/model planning; that d
 
 **CJK Project memory (local, separate from PR398):** a real gap was inferred from `simple` tsvector semantics and then proven by the regression: contiguous Chinese/Japanese/Korean notes were not recallable by a different substring. Canonical `listDurableMemories` now also matches bounded (32) LIKE-escaped overlapping bigrams, ranked by match count, beside the unchanged ASCII tsquery; mixed `用React部署` keeps both halves and a lone particle returns nothing. Real PGlite regression: substring recall, Japanese kanji+kana, owner isolation, `%` refusal, ASCII unchanged and deleted notes not recalled; existing memory/recall tests passed. No migration, index, store or embedding.
 
+**Voice-input bounds (local, separate from PR398):** a real gap was confirmed: `/api/voice/transcribe` capped only upload bytes, so a multi-hour compressed recording was fully decoded (no `-t`, no output-size check, WAV passthrough unchecked) and the provider got `durationMs: null`. Approved donor limits now bound it: ffmpeg decodes at most 20 min +1s, a WAV header duration and the stat'd converted size are checked before reading, an over-length recording gets a clear 413, the real duration reaches the provider, and conversion has a 45s deadline. Ten behavior tests passed (header parsing incl. inflated/streamed/hostile chunks, ceiling boundary, a real managed-ffmpeg-path fake that proves `-t 1201` and temp cleanup, short success) plus the existing route tests; typecheck passed. No real ffmpeg is installed on this host, so decoding of real compressed audio and client-disconnect cancellation of conversion remain unexercised.
+
 
 
 
