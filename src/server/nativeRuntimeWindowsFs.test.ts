@@ -30,10 +30,10 @@ test("packaged CommonJS Windows custody reaches the native loader instead of fai
 
 test("native Windows custody enforces private ACLs, no-follow identity and pinned-directory lifetime", {
   skip: process.platform !== "win32" || process.arch !== "x64" ? "requires actual Windows x64" : false,
-  timeout: 240_000,
+  timeout: 290_000,
 }, () => {
   const result = spawnSync(process.execPath, [path.resolve("script/verify_windows_runtime_fs.cjs")], {
-    encoding: "utf8", timeout: 230_000,
+    encoding: "utf8", timeout: 280_000,
   });
   assert.equal(result.status, 0, result.stderr + result.stdout);
 });

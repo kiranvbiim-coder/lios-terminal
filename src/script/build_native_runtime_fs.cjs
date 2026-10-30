@@ -13,7 +13,8 @@ function buildNativeRuntimeFs({ projectDir = path.resolve(__dirname, ".."), arch
   const directory = path.join(projectDir, "native-runtime-fs");
   const args = [require.resolve("node-gyp/bin/node-gyp.js"), "rebuild", "--directory", directory, "--arch=x64"];
   if (electronVersion) args.push(`--target=${electronVersion}`, "--dist-url=https://electronjs.org/headers");
-  const result = spawnSync(process.execPath, args, { cwd: projectDir, stdio: "inherit", timeout: 180_000 });
+  // Include cold header download and MSVC startup; this is a build budget, not an execution grant.
+  const result = spawnSync(process.execPath, args, { cwd: projectDir, stdio: "inherit", timeout: 240_000 });
   if (result.error) throw result.error;
   if (result.status !== 0) throw new Error(`Windows runtime custody build failed (${result.status ?? result.signal}).`);
   const addon = path.join(directory, "build", "Release", "lios_native_runtime_fs.node");

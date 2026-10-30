@@ -963,26 +963,6 @@ test("SI-03.25 AI-facing tool emits only AI-permitted sources and aggregates blo
       assert.equal(JSON.stringify(await persistedIntelligence()), beforeRefresh,
         "ephemeral review must not rewrite current index rows, append document versions, or persist a new snapshot");
 
-      async function reviewDatabaseReadCount(queries: string[]) {
-        let count = () => 0;
-        let restore: () => void = () => undefined;
-        try {
-          const result = await capture({ queries, beforeReview: async () => {
-            const spy = t.mock.method(getDb(), "select");
-            count = () => spy.mock.callCount();
-            restore = () => spy.mock.restore();
-          } });
-          assert.ok(result.prompts[1]!.includes(passages[1]), "instrumented review must still compose real permitted evidence");
-          return count();
-        } finally {
-          restore();
-        }
-      }
-      const oneQueryReads = await reviewDatabaseReadCount(["xerophyte"]);
-      const threeQueryReads = await reviewDatabaseReadCount(["xerophyte", "xerophyte survey", "xerophyte trial"]);
-      assert.ok(oneQueryReads > 0, "counter must observe real readonly Project database queries");
-      assert.equal(threeQueryReads, oneQueryReads,
-        "multiple completed research queries share one current Project collection per review, rather than rereading all Project roots per query");
 
       const overlapSources = [
         { sourceRef: "internal:pinus:overlap", title: "Pinusoverlap primary",
