@@ -342,7 +342,7 @@ export default function NewsPanel({ symbol }: Props) {
                 {displayContextImage && !selectedContextImage && <p className="mt-2 font-ui text-xs text-muted-foreground">
                   Automatic Commons context preview · not a photograph of this event. Image rights are based on Commons CC0 metadata, not independently licensed for redistribution.
                 </p>}
-                <NewsImageDiscovery key={selectedItem.url} articleTitle={selectedItem.title}
+                <NewsImageDiscovery key={`context-image:${selectedItem.url}`} articleTitle={selectedItem.title}
                   selected={selectedContextImage}
                   onSelect={candidate => { recheckGenerationRef.current++; setContextImage({ storyUrl: selectedItem.url, candidate }); }}
                   onClear={() => { recheckGenerationRef.current++; setContextImage(null); }}
@@ -359,7 +359,7 @@ export default function NewsPanel({ symbol }: Props) {
                   {article?.excerpt || selectedItem.summary}
                 </p>
 
-                <NewsMediaPreview key={selectedItem.url} preview={selectedItem.mediaPreview} />
+                <NewsMediaPreview key={`media-preview:${selectedItem.url}`} preview={selectedItem.mediaPreview} />
                 <NewsStoryEvolution exactUrl={selectedItem.url} history={observedRevisions}
                   coverage={filtered} onSelectRelated={url => {
                     recheckGenerationRef.current++;
