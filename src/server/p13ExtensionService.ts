@@ -50,9 +50,10 @@ export class P13ExtensionService {
     const packageDigest = computePluginPackageDigest(bytes);
     let details: Omit<ExtensionPreview, "previewId" | "reviewHash" | "packageDigest" | "byteLength" | "expiresAt">;
     if (input.kind === "skill_document") {
-      const { manifest, warnings } = skillDocumentManifest(input.document, ownerId, input.toolIds, new Date(Date.parse(expiresAt) - PREVIEW_TTL_MS).toISOString());
+      const { manifest, warnings, findings } = skillDocumentManifest(input.document, ownerId, input.toolIds, new Date(Date.parse(expiresAt) - PREVIEW_TTL_MS).toISOString());
       const allowedTools = new Set(this.skillTools().map(tool => tool.id));
-      const reasons: string[] = [];
+      const reasons: string[] = findings.filter(finding => finding.severity === "critical")
+        .map(finding => `Critical finding ${finding.ruleId} at line ${finding.line}; remove it before adopting this document.`);
       if (input.toolIds.some(id => !allowedTools.has(id))) reasons.push("A selected tool is unavailable in the current canonical governed registry.");
       if (this.host.plugins.get(manifest.id)) reasons.push("This exact owner-adopted document is already installed.");
       if (this.host.trustStore.isDigestRevoked(packageDigest)) reasons.push("This document digest has been revoked.");
