@@ -107,13 +107,12 @@ A plugin can therefore fail without corrupting Project/Conversation/Session/Arti
 The merged source must continue to satisfy the following retained subsystem gates; their presence or historical merge record is not proof that every target release has passed:
 
 1. `npm run test:p13`
-2. `npm run acceptance:p13`
-3. `npm run check`
-4. real supervised-process broker proof passes;
-5. raw plugin network access is denied;
-6. environment secret noninheritance and symlink confinement tests pass;
-7. bounded network/credential broker behavior required by shipped connector capabilities is implemented and tested;
-8. the normal LiOS hardening workflow runs once at the final merge gate rather than being repeatedly polled.
+2. `npm run check`
+3. real supervised-process broker proof passes;
+4. raw plugin network access is denied;
+5. environment secret noninheritance and symlink confinement tests pass;
+6. bounded network/credential broker behavior required by shipped connector capabilities is implemented and tested;
+7. the normal LiOS hardening workflow runs once at the final merge gate rather than being repeatedly polled.
 
 The required outcome is that a governed connector, tool, artifact renderer or agent can be installed and removed without rewriting core Project, Conversation or Artifact state, while executable privilege, external exposure, compatibility, trust and data rights remain under LiOS control.
 

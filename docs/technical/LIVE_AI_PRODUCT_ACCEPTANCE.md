@@ -48,7 +48,6 @@ Normal CI must prove the pieces that do not require a real user credential or pa
 
 ```bash
 npm run test:flagship
-npm run acceptance:flagship
 ```
 
 This gate covers:

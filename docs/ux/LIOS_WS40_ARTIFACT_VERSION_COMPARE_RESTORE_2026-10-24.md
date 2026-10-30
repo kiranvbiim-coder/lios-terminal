@@ -26,7 +26,7 @@ node --import tsx --test client/src/lib/artifactHistorySafety.test.ts client/src
 npm run check
 npm run test:p4
 npm run test:ux
-npm run acceptance:ux
+npm run validate:visual-environments
 ```
 
 **Still pending:** exact-head GitHub Actions on Linux/Windows/macOS; signed-in exact historical Project/Quick access and cross-user denial tests, interrupted request/late-response browser races, native packaged history/undo and dirty-draft keyboard/screen-reader 200%-zoom tests, PR review and P14/SP release signoff. Authored test files are not the same as passed CI.

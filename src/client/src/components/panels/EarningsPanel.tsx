@@ -258,7 +258,7 @@ export default function EarningsPanel({ onSymbol }: { onSymbol?: (sym: string) =
           <span className="w-2 h-2 rounded-full bg-[hsl(38,95%,55%)]" />
           <span className="font-terminal text-[8px] text-muted-foreground">REPORTING TODAY</span>
         </div>
-        <span className="font-terminal text-[7px] text-muted-foreground ml-auto">DATA: LIMURIA INTELLIGENCE</span>
+        <span className="font-terminal text-[7px] text-muted-foreground ml-auto">DATA: LiOS INTELLIGENCE</span>
       </div>
     </div>
   );

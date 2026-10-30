@@ -11,7 +11,7 @@ Canonical owners reused:
 - `src/script/validate_p14_update_rollback_evidence.ts` — read-only validation of a supplied observation JSON file.
 - `src/script/write_p14_evidence.cjs` — sole final P14 evidence writer/hash authority; for `update_rollback` it now refuses to write unless the first source artifact passes the P14-03 validator.
 - `src/shared/p14ReleaseEvidence.ts` — final P14 category/task board authority.
-- `src/script/validate_p14_desktop_acceptance.ts` — final P14 board validation.
+- Final P14 board validation runs in the private release workflow (withheld from the public tree).
 
 ## Truth boundary
 

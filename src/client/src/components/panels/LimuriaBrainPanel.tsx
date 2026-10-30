@@ -92,12 +92,12 @@ export default function LimuriaBrainPanel({ symbol, role }: { symbol: string; ro
     onSuccess: async (updated) => { setEditingTaskId(null); setMessage("Task edited; downstream execution reset for replay."); await refresh(updated.id); },
     onError: (error: Error) => setMessage(error.message),
   });
-  const approve = (decision: "approved" | "rejected") => pendingApproval && action.mutate({ endpoint: `/api/brain/runs/${run!.id}/approvals/${pendingApproval.id}`, body: { decision, note: decision === "approved" ? "Evidence boundary reviewed in Limuria Brain." : "Evidence package rejected for revision." } });
+  const approve = (decision: "approved" | "rejected") => pendingApproval && action.mutate({ endpoint: `/api/brain/runs/${run!.id}/approvals/${pendingApproval.id}`, body: { decision, note: decision === "approved" ? "Evidence boundary reviewed in LiOS Brain." : "Evidence package rejected for revision." } });
 
   return <div className="h-full min-h-0 flex flex-col bg-[#050505]">
     <header className="shrink-0 px-4 py-3 border-b border-border bg-[#070707] flex flex-wrap items-center gap-3">
       <BrainCircuit className="w-4 h-4 text-amber-300" />
-      <div><div className="font-terminal text-[10px] tracking-widest">LIMURIA BRAIN</div><div className="font-terminal text-[7px] text-muted-foreground mt-0.5">INSPECTABLE PLANS, GOVERNED TOOLS, HUMAN APPROVAL, REPLAYABLE SYNTHESIS</div></div>
+      <div><div className="font-terminal text-[10px] tracking-widest">LiOS BRAIN</div><div className="font-terminal text-[7px] text-muted-foreground mt-0.5">INSPECTABLE PLANS, GOVERNED TOOLS, HUMAN APPROVAL, REPLAYABLE SYNTHESIS</div></div>
       <div className="ml-auto flex items-center gap-2"><span className="px-2 py-1 border border-emerald-400/30 text-emerald-300 font-terminal text-[7px]">PROVIDER NEUTRAL</span><span className="px-2 py-1 border border-amber-400/30 text-amber-300 font-terminal text-[7px]">NO UNSUPPORTED NUMBERS</span></div>
     </header>
 

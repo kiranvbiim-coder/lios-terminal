@@ -1,22 +1,17 @@
 "use strict";
 /**
- * Recover the exact private LiOS instrument snapshots into this checkout.
- * The public repository must never commit these assets or private repo history.
+ * Restore previously obtained LiOS instrument snapshots from a local directory into this checkout.
+ * The public repository must never commit these assets.
  *
- *   node script/recover_instrument_catalogs.cjs --restore --github
- *   node script/recover_instrument_catalogs.cjs --restore --from-dir /path/to/private/repo
+ *   node script/recover_instrument_catalogs.cjs --restore --from-dir /absolute/path/to/checkout-with-src/server/data
  *   node script/recover_instrument_catalogs.cjs --verify
  *
- * --github needs an existing authenticated GitHub CLI login with READ access
- * to kiranvbiim-coder/lios-v1.0.0. No credentials are accepted as arguments.
+ * No network access is performed and no credentials are accepted.
  */
 const fs = require("node:fs");
 const path = require("node:path");
-const os = require("node:os");
 const crypto = require("node:crypto");
-const { execFileSync } = require("node:child_process");
 
-const PRIVATE_SOURCE_REPO = "kiranvbiim-coder/lios-v1.0.0";
 const ROOT = path.resolve(__dirname, "..");
 const CATALOGS = Object.freeze([
   { name: "tickers.json", blob: "f9edacb9d8dc04485b868ab9ee44638fbbcf416d", bytes: 11882813, kind: "array", minEntries: 10000 },
@@ -43,7 +38,7 @@ function validateCatalog(file, spec) {
   const bytes = fs.readFileSync(file);
   const digest = gitBlobDigest(bytes);
   if (digest !== spec.blob) {
-    throw new Error(spec.name + ": source blob hash does not match pinned private repository snapshot");
+    throw new Error(spec.name + ": source blob hash does not match pinned snapshot");
   }
   const parsed = JSON.parse(bytes.toString("utf8"));
   const validCollection = spec.kind === "array"
@@ -98,41 +93,21 @@ function recoverDirectory(privateRoot, destinationRoot, specs = CATALOGS) {
   }
   return all;
 }
-function fromGitHub(consumer) {
-  const tempParent = fs.mkdtempSync(path.join(os.tmpdir(), "lios-catalog-restore-"));
-  const checkout = path.join(tempParent, "source");
-  try {
-    // Authentication remains entirely inside the user's existing gh/git setup.
-    // Sparse read-only clone never copies a private .git directory into public source.
-    execFileSync("gh", ["repo", "clone", PRIVATE_SOURCE_REPO, checkout, "--",
-      "--depth", "1", "--filter=blob:none", "--sparse"], { stdio: "pipe", timeout: 180000 });
-    execFileSync("git", ["-C", checkout, "sparse-checkout", "set", "src/server/data"],
-      { stdio: "pipe", timeout: 180000 });
-    return consumer(checkout);
-  } finally {
-    fs.rmSync(tempParent, { recursive: true, force: true });
-  }
-}
 function run(argv = process.argv.slice(2)) {
   const restore = argv.includes("--restore");
   const verify = argv.includes("--verify");
-  const github = argv.includes("--github");
   const sourceAt = argv.indexOf("--from-dir");
   const valid = (restore !== verify)
-    && (!verify || (!github && sourceAt === -1))
-    && (!restore || (github !== (sourceAt !== -1)))
-    && (sourceAt === -1 || Boolean(argv[sourceAt + 1]));
-  if (!valid) throw new Error("Usage: --verify OR --restore (--github | --from-dir ABSOLUTE_PRIVATE_CHECKOUT_PATH)");
-  const allowed = new Set(["--verify", "--restore", "--github", "--from-dir"]);
+    && (verify ? sourceAt === -1 : Boolean(argv[sourceAt + 1]));
+  if (!valid) throw new Error("Usage: --verify OR --restore --from-dir ABSOLUTE_SNAPSHOT_CHECKOUT_PATH");
+  const allowed = new Set(["--verify", "--restore", "--from-dir"]);
   if (sourceAt !== -1) allowed.add(argv[sourceAt + 1]);
   if (argv.some((a) => !allowed.has(a))) throw new Error("Unrecognized catalog recovery argument.");
   let verified;
   if (restore) {
-    const apply = (sourceRoot) => recoverDirectory(sourceRoot, ROOT);
-    verified = github ? fromGitHub(apply) : apply(path.resolve(argv[sourceAt + 1]));
+    verified = recoverDirectory(path.resolve(argv[sourceAt + 1]), ROOT);
   } else verified = verifyDirectory(ROOT);
   console.log(JSON.stringify({ ok: true, operation: restore ? "restored" : "verified",
-    privateSource: restore ? PRIVATE_SOURCE_REPO : undefined,
     catalogs: verified }, null, 2));
   return verified;
 }
@@ -140,7 +115,7 @@ if (require.main === module) {
   try { run(); }
   catch (error) {
     console.error("LiOS instrument catalog recovery gate failed: " + (error instanceof Error ? error.message : error));
-    console.error("Restore from the authenticated private repository with: node script/recover_instrument_catalogs.cjs --restore --github");
+    console.error("Restore from a local snapshot with: node script/recover_instrument_catalogs.cjs --restore --from-dir /absolute/path");
     process.exitCode = 1;
   }
 }

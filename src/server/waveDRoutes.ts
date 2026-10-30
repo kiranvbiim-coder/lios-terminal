@@ -997,7 +997,7 @@ export function registerWaveDRoutes(app: Express, sources: PulseSources = LIVE_P
     } catch (error) { res.status(502).json({ status: "unavailable", reason: error instanceof Error ? error.message : "Event Room action failed." }); }
   });
 
-  app.get("/api/wave-d/report-templates", requireRole(...READ_ROLES), (_req, res) => {
+  app.get("/api/wave-d/report-templates", requireWaveDRetailRead, (_req, res) => {
     res.json({ templates: WAVE_D_REPORT_TEMPLATES, existingTemplates: listReportTemplates() });
   });
 

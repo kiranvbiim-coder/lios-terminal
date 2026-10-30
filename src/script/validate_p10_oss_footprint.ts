@@ -29,7 +29,6 @@ const p10SourceFiles = [
   "server/p10Observability.ts",
   "server/p10OpenLineage.ts",
   "script/audit_p10_release.ts",
-  "script/validate_p10_release_acceptance.ts",
   "script/validate_p10_packaged_acceptance.ts",
   "script/lios_doctor.ts",
 ];

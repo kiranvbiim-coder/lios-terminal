@@ -24,7 +24,7 @@ node --import tsx --test shared/richArtifactDocument.test.ts
 npm run check
 npm run test:p4
 npm run test:ux
-npm run acceptance:ux
+npm run validate:visual-environments
 ```
 
 **Acceptance not complete:** exact-head hosted Windows/macOS/Linux checks, live Tiptap undo/redo, insert/delete/section move, accessibility (focus/keyboard/screen reader), 320–1440px and 200% zoom, signed-in historical revision/read-only UI, per-tenant P4 denial, concurrent author conflict, packaged Electron/native, P14/SP gate and independent review/merge. Authored tests are not reported as passed until CI confirms.

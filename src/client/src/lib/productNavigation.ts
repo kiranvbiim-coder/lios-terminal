@@ -154,7 +154,6 @@ const OUTPUT_VIEWS = new Set<ViewMode>([
   "advisory",
   "activity",
   "mnadesk",
-  "integration",
   "fpa",
 ]);
 

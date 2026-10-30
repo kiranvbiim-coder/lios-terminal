@@ -71,7 +71,7 @@ const DOMAIN_BY_VIEW: Partial<Record<ViewMode, CapabilityDomain>> = {
   environmentindicators: "sustainability", environmentdashboard: "sustainability", environmentquant: "sustainability",
   globalclimate: "sustainability", carbonintensity: "sustainability", environment: "platform",
   mediaindicators: "media", mediadashboard: "media", tourismindicators: "tourism", tourismdashboard: "tourism",
-  workspaces: "delivery", spreadsheet: "delivery", mnadesk: "delivery", integration: "delivery", fpa: "delivery",
+  workspaces: "delivery", spreadsheet: "delivery", mnadesk: "delivery", fpa: "delivery",
   advisory: "delivery", activity: "delivery", publishdesk: "delivery",
   uide: "platform", coveragemap: "platform", developer: "platform", adminconsole: "platform", consultinginbox: "platform",
   qualitygate: "platform", clientdata: "platform", quantregistry: "platform", quantlab: "platform", integratedmodel: "finance",
@@ -217,7 +217,6 @@ const GUIDANCE: Partial<Record<ViewMode, TerminalCapabilityGuidance>> = {
   consultinginbox: { why: "Client requests need a triage queue, not scattered messages.", outcome: "A queue of incoming client requests and projects for the consulting team to triage." },
   publishdesk: { why: "Client-facing deliverables need a controlled publishing step, not an ad hoc export.", outcome: "The publishing workflow for turning internal work into a client-facing deliverable." },
   uide: { why: "Every client sends data in a different shape; hand-mapping every file doesn't scale.", outcome: "Automatic ingestion, profiling, and classification of uploaded files across every sheet." },
-  integration: { why: "Post-merger integration has its own critical path and risks that a standard financial model doesn't track.", outcome: "A tracker for M&A integration milestones, critical-path risks, and dependencies." },
 };
 
 const KEYWORDS: Partial<Record<ViewMode, readonly string[]>> = {
@@ -277,7 +276,7 @@ const ALL_VIEWS: readonly ViewMode[] = [
   "options", "forex", "heatmap", "earnings", "ising", "optimizer", "valuation", "fixedincome", "fractal", "risknetwork",
   "filingintel", "quantum", "hawkes", "entropy", "flow", "macrostress", "sentiment", "yieldcurve", "peercomp", "ecalendar",
   "crossasset", "scanner", "morningbrief", "sectorrotation", "riskcalc", "portfoliostress", "dividends",
-  "shortinterest", "regime", "cryptochain", "tradeideas", "backtesting", "mnadesk", "integration", "fpa", "optionsflow",
+  "shortinterest", "regime", "cryptochain", "tradeideas", "backtesting", "mnadesk", "fpa", "optionsflow",
   "insiders", "developer", "adminconsole", "consultinginbox", "publishdesk", "cotpositioning",
   "globalindicators", "companyfundamentals", "financialstatements", "globaldevelopment", "globalclimate", "datastats",
   "assetpricing", "advancedrisk", "quantworkbench", "portfolioattribution", "riskreturn", "marketbreadth", "indicatorexplorer",

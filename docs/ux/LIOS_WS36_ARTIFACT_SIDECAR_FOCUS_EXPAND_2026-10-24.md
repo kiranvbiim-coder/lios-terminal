@@ -27,7 +27,7 @@ From `src/`:
 node --import tsx --test client/src/lib/artifactSidecarSizing.test.ts
 npm run check
 npm run test:ux
-npm run acceptance:ux
+npm run validate:visual-environments
 ```
 
 On the **separate #127 WS-08 branch**, run `node --test script/validate_ws08_responsive_shell.test.mjs`; that script is not part of parent #98 or this isolated WS-36 child until the two stacks are integrated.

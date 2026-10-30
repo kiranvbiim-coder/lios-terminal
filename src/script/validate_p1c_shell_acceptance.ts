@@ -18,14 +18,13 @@ function requireAbsent(source: string, pattern: RegExp, message: string): void {
 // P1A — anonymous execution is gone and authentication is the executable boundary.
 const app = read("client/src/App.tsx");
 const publicPreview = read("client/src/pages/PublicProductPreview.tsx");
-const publicRoutes = read("server/publicRoutes.ts");
 requireMatch(app, /PublicProductPreview/, "P1C certification: signed-out entry must remain the non-executable public preview.");
 requireAbsent(app, /GuestConversationHome/, "P1C certification: executable guest conversation must not return.");
 requireAbsent(app, /PersonaOnboarding|environmentSetupNeeded/, "P1C certification: persona/setup cannot gate first authenticated value.");
 requireMatch(app, /session && environmentSetupOpen/, "P1C certification: Connection Center must remain contextual after sign-in.");
 requireMatch(publicPreview, /DEMO DATA[\s\S]*Not a live calculation or\s+source receipt/, "P1C certification: public preview must disclose its non-executable boundary: illustrative content is not a live calculation or source receipt.");
 requireAbsent(publicPreview, /\/api\/public\/research\/quick|fetch\(/, "P1C certification: public preview must not execute research/data calls.");
-requireAbsent(publicRoutes, /\/api\/public\/research\/quick|runGuestPublicResearch|guestResearchRequestSchema/, "P1C certification: anonymous server research execution must remain removed.");
+requireAbsent(read("server/routes.ts"), /\/api\/public\/research\/quick|runGuestPublicResearch|guestResearchRequestSchema/, "P1C certification: anonymous server research execution must remain removed.");
 
 // P1B — canonical identity/access/session/ownership remains the shell foundation.
 const auth = read("server/auth.ts");

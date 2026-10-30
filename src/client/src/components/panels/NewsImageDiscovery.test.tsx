@@ -56,7 +56,7 @@ test("existing news card may preview selected context without persisting it as l
 
 test("chosen session illustration retains its authentic Commons source link after the search closes", () => {
   const html = render(React.createElement(CommonsContextIllustration, { candidate, showSource: true }));
-  assert.match(html, /Review Commons image and license/);
+  assert.match(html, /View image, credit and license on Commons/);
   assert.match(html, /href="https:\/\/commons\.wikimedia\.org\/wiki\/File:Illustrative_solar_field\.jpg"/);
   assert.match(html, /rel="noopener noreferrer"/);
   const cardHtml = render(React.createElement(NewsEditorialStoryCard, {

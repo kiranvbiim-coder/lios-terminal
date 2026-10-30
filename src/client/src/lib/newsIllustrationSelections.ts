@@ -4,7 +4,7 @@
  * source-verification grant. Remote pixels never load simply by restoring.
  */
 import type { CommonsCandidate } from "@shared/commonsMedia";
-import { safeCommonsFilePage, safeCommonsPreview } from "@shared/commonsMedia";
+import { commonsLicenseValid, safeCommonsFilePage, safeCommonsPreview } from "@shared/commonsMedia";
 import { safePulseSourceUrl } from "./pulseStoryPresentation";
 
 export const MAX_SAVED_NEWS_ILLUSTRATIONS = 12;
@@ -20,8 +20,7 @@ export function validNewsIllustration(storyUrl: string, candidate: unknown): can
   if (typeof storyUrl !== "string" || storyUrl.length > 2048 || safePulseSourceUrl(storyUrl) !== storyUrl) return false;
   if (!candidate || typeof candidate !== "object" || Array.isArray(candidate)) return false;
   const item = candidate as Partial<CommonsCandidate>;
-  return item.license === "CC0 1.0"
-    && item.licenseUrl === "https://creativecommons.org/publicdomain/zero/1.0/"
+  return commonsLicenseValid(item as CommonsCandidate)
     && typeof item.fileTitle === "string" && item.fileTitle.startsWith("File:") && item.fileTitle.length <= 260
     && typeof item.creator === "string" && item.creator.length <= 260
     && typeof item.filePage === "string" && item.filePage.length <= 2048

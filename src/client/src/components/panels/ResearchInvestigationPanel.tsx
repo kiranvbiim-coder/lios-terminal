@@ -269,8 +269,8 @@ export default function ResearchIntelligencePanel({ symbol, role, starterQuestio
         evidenceKind: "interpretation",
         title: noteTitle,
         excerpt: note,
-        sourceName: "Limuria internal research",
-        provider: "Limuria",
+        sourceName: "LiOS internal research",
+        provider: "LiOS",
         metadata: { symbol },
       });
     },

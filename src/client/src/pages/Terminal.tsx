@@ -128,7 +128,6 @@ const CryptoChainPanel = lazy(() => import("@/components/panels/CryptoChainPanel
 const TradeIdeaPanel = lazy(() => import("@/components/panels/TradeIdeaPanel"));
 const BacktestPanel = lazy(() => import("@/components/panels/BacktestPanel"));
 const MnaDealDeskPanel = lazy(() => import("@/components/panels/MnaDealDeskPanel"));
-const IntegrationTrackerPanel = lazy(() => import("@/components/panels/IntegrationTrackerPanel"));
 const FpaDashboardPanel = lazy(() => import("@/components/panels/FpaDashboardPanel"));
 const IndicatorExplorerPanel = lazy(() => import("@/components/panels/IndicatorExplorerPanel"));
 const MacroDashboardPanel = lazy(() => import("@/components/panels/MacroDashboardPanel"));
@@ -324,7 +323,7 @@ export default function Terminal({ session, onLogout, onOpenEnvironment, domain,
   // LiOS Power: three deliberate density tiers over one experienceSurface
   // value -- LIOS_EXECUTION_ROADMAP.md LIOS-P1-17, "conversation remains
   // primary and cockpit density appears only on demand".
-  //   "projects"                        -> cleanest: MinimalProjectsHeader only.
+  //   "projects"                        -> cleanest: no global header.
   //   "pulse"/"explore"/"signals"/"library" -> WaveCExperienceShell renders its
   //     own header (wordmark/Ask LiOS/Master AI); the outer TopBar would just
   //     duplicate it. WaveCExperienceShell's *internal* surface-switcher nav is
@@ -814,7 +813,7 @@ export default function Terminal({ session, onLogout, onOpenEnvironment, domain,
       case "crossasset": content = <CrossAssetPanel onSymbol={onSymbol} onNav={onNav} />; break;
       case "scanner": content = <ScannerPanel onSymbol={onSymbol} onNav={onNav} />; break;
       case "morningbrief": content = <MorningBriefPanel magnetization={magnetization} onSymbol={onSymbol} onNav={onNav} />; break;
-      case "developer": content = isInternal ? <DeveloperConsolePanel onSymbol={onSymbol} onNav={onNav} /> : null; break;
+      case "developer": content = isInternal ? <DeveloperConsolePanel /> : null; break;
       case "uide": content = isInternal ? <UideEnginePanel /> : null; break;
       case "workspaces": content = <WorkspacePanel onSymbol={onSymbol} onNav={onNav} />; break;
       case "spreadsheet": content = <SpreadsheetStudioPanel symbol={pane.symbol} />; break;
@@ -879,7 +878,6 @@ export default function Terminal({ session, onLogout, onOpenEnvironment, domain,
       case "tradeideas": content = <TradeIdeaPanel onSymbol={onSymbol} onNav={onNav} />; break;
       case "backtesting": content = <BacktestPanel symbol={pane.symbol || "AAPL"} onNav={onNav} />; break;
       case "mnadesk": content = <MnaDealDeskPanel />; break;
-      case "integration": content = <IntegrationTrackerPanel />; break;
       case "fpa": content = <FpaDashboardPanel />; break;
       case "advisory": content = isClient ? <AdvisoryPanel /> : null; break;
       case "activity": content = isClient ? <ActivityPanel role={session.role} /> : null; break;

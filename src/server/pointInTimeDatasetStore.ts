@@ -1,5 +1,5 @@
 import crypto from "crypto";
-import { and, desc, eq, lte } from "drizzle-orm";
+import { and, desc, eq, isNull, lte, or } from "drizzle-orm";
 import { datasetSnapshots } from "@shared/schema";
 import {
   financialDatasetPayloadSchema,
@@ -197,16 +197,21 @@ export async function captureFinancialDatasetSnapshot(symbol: string, createdByU
   return { snapshot: rowToSnapshot(created), created: true };
 }
 
-export async function getDatasetSnapshot(id: string): Promise<PointInTimeDatasetSnapshot | null> {
-  const [row] = await getDb().select().from(datasetSnapshots).where(and(eq(datasetSnapshots.id, id), eq(datasetSnapshots.dataClass, "financial_statements"))).limit(1);
+/** `organizationId` undefined = unscoped (server-internal callers); otherwise only global or that organization's snapshots are visible. */
+function organizationScope(organizationId: number | null | undefined) {
+  if (organizationId === undefined) return undefined;
+  return organizationId === null ? isNull(datasetSnapshots.organizationId) : or(isNull(datasetSnapshots.organizationId), eq(datasetSnapshots.organizationId, organizationId));
+}
+
+export async function getDatasetSnapshot(id: string, organizationId?: number | null): Promise<PointInTimeDatasetSnapshot | null> {
+  const [row] = await getDb().select().from(datasetSnapshots).where(and(eq(datasetSnapshots.id, id), eq(datasetSnapshots.dataClass, "financial_statements"), organizationScope(organizationId))).limit(1);
   return row ? rowToSnapshot(row) : null;
 }
 
-export async function listDatasetSnapshots(entityKey?: string, limit = 100): Promise<PointInTimeDatasetSnapshot[]> {
-  const query = getDb().select().from(datasetSnapshots);
-  const rows = entityKey
-    ? await query.where(and(eq(datasetSnapshots.entityKey, entityKey.toUpperCase()), eq(datasetSnapshots.dataClass, "financial_statements"))).orderBy(desc(datasetSnapshots.createdAt)).limit(limit)
-    : await query.where(eq(datasetSnapshots.dataClass, "financial_statements")).orderBy(desc(datasetSnapshots.createdAt)).limit(limit);
+export async function listDatasetSnapshots(entityKey?: string, limit = 100, organizationId?: number | null): Promise<PointInTimeDatasetSnapshot[]> {
+  const filters = [eq(datasetSnapshots.dataClass, "financial_statements"), organizationScope(organizationId)];
+  if (entityKey) filters.push(eq(datasetSnapshots.entityKey, entityKey.toUpperCase()));
+  const rows = await getDb().select().from(datasetSnapshots).where(and(...filters)).orderBy(desc(datasetSnapshots.createdAt)).limit(limit);
   return rows.map(rowToSnapshot);
 }
 

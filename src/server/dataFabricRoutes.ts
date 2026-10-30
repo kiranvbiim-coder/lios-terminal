@@ -1,4 +1,4 @@
-import type { Express } from "express";
+import type { Express, Request } from "express";
 import { z } from "zod";
 import { alternativeSnapshotInputSchema, estimatesPayloadSchema } from "@shared/pointInTimeAlternativeData";
 import { integratedModelRequestSchema, runIntegratedFinancialModel } from "@shared/integratedFinancialModel";
@@ -97,25 +97,34 @@ async function readAuthorizedCapturePair<T>(
 }
 
 export function registerDataFabricRoutes(app: Express): void {
+  // The organization scope always comes from the authenticated tenant; a
+  // differing client-supplied organizationId is rejected, never trusted.
+  const scopedOrganizationId = (req: Request): { ok: true; organizationId: number | null } | { ok: false } => {
+    const organizationId = tenantContext(req.user!).organizationId;
+    if (req.query.organizationId === undefined || req.query.organizationId === "") return { ok: true, organizationId };
+    const requested = z.coerce.number().int().positive().safeParse(req.query.organizationId);
+    return requested.success && requested.data === organizationId ? { ok: true, organizationId } : { ok: false };
+  };
+
   app.get("/api/alternative-data/:dataClass", requireRole(...READ_ROLES), async (req, res) => {
     const dataClass = alternativeClassSchema.safeParse(req.params.dataClass);
-    const organizationId = req.query.organizationId ? z.coerce.number().int().positive().safeParse(req.query.organizationId) : { success: true as const, data: null };
-    if (!dataClass.success || !organizationId.success) return res.status(400).json({ error: "A valid data class and organization ID are required." });
-    res.json(await listAlternativeDatasets(dataClass.data, req.query.entityKey ? String(req.query.entityKey) : undefined, organizationId.data, Math.min(Math.max(Number(req.query.limit) || 50, 1), 100)));
+    const scope = scopedOrganizationId(req);
+    if (!dataClass.success || !scope.ok) return res.status(400).json({ error: "A valid data class is required, and organizationId may only name your own organization." });
+    res.json(await listAlternativeDatasets(dataClass.data, req.query.entityKey ? String(req.query.entityKey) : undefined, scope.organizationId, Math.min(Math.max(Number(req.query.limit) || 50, 1), 100)));
   });
 
   app.get("/api/alternative-data/:dataClass/:entityKey/as-of", requireRole(...READ_ROLES), async (req, res) => {
     const dataClass = alternativeClassSchema.safeParse(req.params.dataClass); const asOf = z.coerce.date().safeParse(req.query.asOf ?? new Date());
-    const organizationId = req.query.organizationId ? z.coerce.number().int().positive().safeParse(req.query.organizationId) : { success: true as const, data: null };
-    if (!dataClass.success || !asOf.success || !organizationId.success) return res.status(400).json({ error: "A valid data class, entity, as-of time, and organization ID are required." });
-    const snapshot = await getAlternativeDatasetAsOf(dataClass.data, String(req.params.entityKey), asOf.data, organizationId.data);
+    const scope = scopedOrganizationId(req);
+    if (!dataClass.success || !asOf.success || !scope.ok) return res.status(400).json({ error: "A valid data class, entity and as-of time are required, and organizationId may only name your own organization." });
+    const snapshot = await getAlternativeDatasetAsOf(dataClass.data, String(req.params.entityKey), asOf.data, scope.organizationId);
     if (!snapshot) return res.status(404).json({ error: "No eligible snapshot was available at that time." }); res.json(snapshot);
   });
 
   app.get("/api/alternative-data/snapshots/:id", requireRole(...READ_ROLES), async (req, res) => {
-    const organizationId = req.query.organizationId ? z.coerce.number().int().positive().safeParse(req.query.organizationId) : { success: true as const, data: null };
-    if (!organizationId.success) return res.status(400).json({ error: "A valid organization ID is required." });
-    const snapshot = await getAlternativeDataset(String(req.params.id), organizationId.data); if (!snapshot) return res.status(404).json({ error: "Snapshot not found." }); res.json(snapshot);
+    const scope = scopedOrganizationId(req);
+    if (!scope.ok) return res.status(400).json({ error: "organizationId may only name your own organization." });
+    const snapshot = await getAlternativeDataset(String(req.params.id), scope.organizationId); if (!snapshot) return res.status(404).json({ error: "Snapshot not found." }); res.json(snapshot);
   });
 
   app.post("/api/alternative-data/import", requireRole(...AUTHOR_ROLES), async (req, res) => {
@@ -143,13 +152,13 @@ export function registerDataFabricRoutes(app: Express): void {
   });
 
   app.get("/api/alternative-data/estimates/:id/surprises", requireRole(...READ_ROLES), async (req, res) => {
-    const snapshot = await getAlternativeDataset(String(req.params.id), null); if (!snapshot || snapshot.dataClass !== "estimates") return res.status(404).json({ error: "Estimate snapshot not found." });
+    const snapshot = await getAlternativeDataset(String(req.params.id), tenantContext(req.user!).organizationId); if (!snapshot || snapshot.dataClass !== "estimates") return res.status(404).json({ error: "Estimate snapshot not found." });
     res.json(calculateEstimateSurprises(estimatesPayloadSchema.parse(snapshot.payload)));
   });
   app.get("/api/data-snapshots", requireRole(...READ_ROLES), async (req, res) => {
     const entityKey = req.query.entityKey ? String(req.query.entityKey) : undefined;
     const limit = Math.min(Math.max(Number(req.query.limit) || 100, 1), 250);
-    res.json(await listDatasetSnapshots(entityKey, limit));
+    res.json(await listDatasetSnapshots(entityKey, limit, tenantContext(req.user!).organizationId));
   });
 
   app.get("/api/data-snapshots/:id/revisions", requireRole(...READ_ROLES), async (req, res) => {
@@ -161,7 +170,7 @@ export function registerDataFabricRoutes(app: Express): void {
 
   app.get("/api/data-snapshots/:id", requireRole(...READ_ROLES), async (req, res) => {
     const id = String(req.params.id);
-    const snapshot = await getDatasetSnapshot(id) ?? await getMarketDatasetSnapshot(id) ?? await getEconomicDatasetSnapshot(id) ?? await getUniverseSnapshot(id);
+    const snapshot = await getDatasetSnapshot(id, tenantContext(req.user!).organizationId) ?? await getMarketDatasetSnapshot(id) ?? await getEconomicDatasetSnapshot(id) ?? await getUniverseSnapshot(id);
     if (!snapshot) return res.status(404).json({ error: "Dataset snapshot not found." });
     res.json(snapshot);
   });

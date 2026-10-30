@@ -318,6 +318,11 @@ function InternalAgentPanel({ magnetization = 0.0, orderIntensity = 1.0, onSymbo
           if (line.startsWith("data: ")) {
             try {
               const data = JSON.parse(line.slice(6));
+              if (data.unavailable) {
+                setStreaming(`⚠ ${data.error}`);
+                setIsStreaming(false);
+                continue;
+              }
               if (data.text) {
                 fullText += data.text;
                 setStreaming(fullText);

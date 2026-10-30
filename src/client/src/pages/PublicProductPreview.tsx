@@ -691,7 +691,7 @@ export default function PublicProductPreview({
                   background: "#d4a017",
                 }}
               />
-              LIMURIA INTELLIGENCE · V1.0.0
+              LiOS INTELLIGENCE · V1.0.0
             </div>
 
             <h1
@@ -1859,7 +1859,7 @@ export default function PublicProductPreview({
                   margin: 0,
                 }}
               >
-                Limuria Intelligence · Universal Intelligence Operating System ·
+                LiOS Intelligence · Universal Intelligence Operating System ·
                 v1.0.0
               </p>
             </div>
@@ -1931,7 +1931,7 @@ export default function PublicProductPreview({
                 letterSpacing: "0.08em",
               }}
             >
-              © 2026 LIMURIA INTELLIGENCE · ALL RIGHTS RESERVED
+              © 2026 LiOS INTELLIGENCE · ALL RIGHTS RESERVED
             </span>
             <span
               style={{

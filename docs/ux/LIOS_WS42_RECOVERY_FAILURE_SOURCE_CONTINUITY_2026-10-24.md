@@ -25,7 +25,7 @@ node --import tsx --test server/nativeDraftGrantRoutes.test.ts client/src/lib/ws
 npm run check
 npm run test:p4
 npm run test:ux
-npm run acceptance:ux
+npm run validate:visual-environments
 ```
 
 **Qualification:** Tests are committed, but until observed, do **not** label them passed. Exact-head hosted Linux/macOS/Windows TypeScript/source gates; signed-in packaged Windows/macOS crash, edit in two windows, OS keychain unavailable/locked, revocation after P4/Chat trash, stale version/conflict, source provider rights drift, 320px+200% zoom screen reader, new/old installed package interoperability, independent review, SP/P14 approval and merge to protected `main` remain pending. The native encrypted checkpoint is an intentionally best-effort recovery copy: a crash during the 250ms write debounce can lose the latest keystrokes, so canonical P4 Save remains explicit and authoritative.

@@ -178,7 +178,7 @@ export default function ClientDataPanel() {
       <div className="flex items-center justify-between flex-wrap gap-2">
         <div>
           <div className="panel-label">MY DATA</div>
-          <div className="font-terminal text-[9px] text-muted-foreground mt-1">Upload your own spreadsheets. Limuria validates and profiles the structure — your consultant sees it while working your engagement, no AI ever reads it raw.</div>
+          <div className="font-terminal text-[9px] text-muted-foreground mt-1">Upload your own spreadsheets. LiOS validates and profiles the structure — your consultant sees it while working your engagement, no AI ever reads it raw.</div>
         </div>
         <div>
           <input ref={fileInputRef} type="file" accept=".csv,.xlsx,.xls" className="hidden"

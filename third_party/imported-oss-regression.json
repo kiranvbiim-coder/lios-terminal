@@ -222,8 +222,7 @@
         "server/p10Observability.ts"
       ],
       "regressionEvidence": [
-        "server/p10Observability.test.ts",
-        "script/validate_p10_release_acceptance.ts"
+        "server/p10Observability.test.ts"
       ]
     },
     {
@@ -235,8 +234,7 @@
       ],
       "regressionEvidence": [
         "server/p10OpenLineage.test.ts",
-        "server/dataLineageService.test.ts",
-        "script/validate_p10_release_acceptance.ts"
+        "server/dataLineageService.test.ts"
       ]
     }
   ]

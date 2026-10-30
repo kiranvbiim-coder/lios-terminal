@@ -34,7 +34,7 @@ node --import tsx --test server/savedChatArtifactAnswer.test.ts server/conversat
 npm run check
 npm run test:p4
 npm run test:ux
-npm run acceptance:ux
+npm run validate:visual-environments
 ```
 
 **Status/qualification:** Exact-head GitHub Linux/macOS/Windows CI, authenticated real app replay/restart/owner tests, 320px keyboard screen-reader and native installed-app checks, full SP/P14 signoff and protected-main merge are pending until demonstrated. The parent PR #98 had green cross-platform checks on SHA `1725e1b`; those checks **do not** certify this increment.

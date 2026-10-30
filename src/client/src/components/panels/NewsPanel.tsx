@@ -41,7 +41,7 @@ export default function NewsPanel({ symbol }: Props) {
   const [to, setTo] = useTerminalArtifactState("NewsPanel.to", "");
   // Only explicitly remembered image REFERENCES live in the existing P4
   // authored panel state. Preview pixels are NEVER cached here or restored
-  // automatically: reopening requires a live user-triggered Commons CC0 check.
+  // automatically: reopening requires a live user-triggered Commons license check.
   const [savedImageState, setSavedImageState] = useTerminalArtifactState<SavedNewsIllustration[]>("NewsPanel.rememberedContextIllustrations", []);
   const savedIllustrations = useMemo(() => readSavedNewsIllustrations(savedImageState), [savedImageState]);
   const [contextImage, setContextImage] = useState<{ storyUrl: string; candidate: CommonsCandidate } | null>(null);
@@ -106,7 +106,7 @@ export default function NewsPanel({ symbol }: Props) {
     queries: contextualStories.map(story => ({
       queryKey: ["news-public-cc0-context", story.url, story.title],
       queryFn: async () => {
-        const response = await fetch("/api/media/commons/cc0?q=" + encodeURIComponent(story.term), {
+        const response = await fetch("/api/media/commons/images?q=" + encodeURIComponent(story.term), {
           credentials: "same-origin",
         });
         if (!response.ok) return null;
@@ -161,7 +161,7 @@ export default function NewsPanel({ symbol }: Props) {
     if (!savedSelection || !selectedItem || !canRememberIllustrations) return false;
     const requestedStory = selectedItem.url;
     const generation = ++recheckGenerationRef.current;
-    const response = await fetch("/api/media/commons/cc0/file?title=" + encodeURIComponent(savedSelection.candidate.fileTitle), {
+    const response = await fetch("/api/media/commons/images/file?title=" + encodeURIComponent(savedSelection.candidate.fileTitle), {
       credentials: "same-origin",
       cache: "no-store",
     });
@@ -206,7 +206,7 @@ export default function NewsPanel({ symbol }: Props) {
           <button type="button" aria-pressed={automaticContextOn}
             onClick={() => setAutomaticContextOn(value => !value)}
             className="mr-2 shrink-0 border border-border px-2.5 py-1 font-terminal text-[9px] tracking-wider text-foreground focus-visible:outline-2 focus-visible:outline-amber-300"
-            title="Search Wikimedia Commons CC0 for context illustrations for up to four public news stories per page; not photos of reported events">
+            title="Search Wikimedia Commons (CC0, public domain, CC BY, CC BY-SA) for context illustrations for up to four public news stories per page; not photos of reported events">
             CONTEXT IMAGES {automaticContextOn ? "ON" : "OFF"}
           </button>
           <button type="button" aria-pressed={photoOnly} onClick={() => setPhotoOnly(value => !value)}
@@ -340,7 +340,7 @@ export default function NewsPanel({ symbol }: Props) {
                   ? <LicensedEditorialImage media={selectedItem.media} sourceIds={[selectedItem.url]} className="my-4" />
                   : displayContextImage ? <CommonsContextIllustration candidate={displayContextImage} showSource /> : null}
                 {displayContextImage && !selectedContextImage && <p className="mt-2 font-ui text-xs text-muted-foreground">
-                  Automatic Commons context preview · not a photograph of this event. Image rights are based on Commons CC0 metadata, not independently licensed for redistribution.
+                  Automatic Commons context preview · not a photograph of this event. Shown with its credit and license from Commons metadata; LiOS does not bundle, re-host or export it.
                 </p>}
                 <NewsImageDiscovery key={`context-image:${selectedItem.url}`} articleTitle={selectedItem.title}
                   selected={selectedContextImage}

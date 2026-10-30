@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Terminal as TerminalIcon, TrendingUp, Landmark, Truck, Leaf, Megaphone, Palmtree } from "lucide-react";
+import { Terminal as TerminalIcon, TrendingUp, Landmark, Truck, Leaf } from "lucide-react";
 import type { DomainInfo } from "@/lib/domains";
 import { useAudience } from "@/lib/audience";
 
@@ -8,8 +8,6 @@ const DOMAIN_ICON: Record<string, typeof TrendingUp> = {
   economics_policy: Landmark,
   supply_chain: Truck,
   environment_sustainability: Leaf,
-  marketing_pr: Megaphone,
-  tourism_hospitality: Palmtree,
 };
 
 interface Props {
@@ -33,7 +31,7 @@ export default function DomainPicker({ session, onChoose, onLogout, onCancel }: 
       .then((result: unknown) => {
         if (controller.signal.aborted) return;
         if (!Array.isArray(result)) throw new Error("Invalid workspace response");
-        setDomains(result as DomainInfo[]);
+        setDomains((result as DomainInfo[]).filter((domain) => domain.active));
       })
       .catch(() => { if (!controller.signal.aborted) setError(true); });
     return () => controller.abort();
@@ -44,7 +42,7 @@ export default function DomainPicker({ session, onChoose, onLogout, onCancel }: 
       <button type="button" onClick={onCancel} className="mb-6 min-h-11 rounded border border-border px-4 py-2 font-ui text-sm text-foreground focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary">Back to Chat</button>
       <div className="flex items-center gap-2 mb-2">
         <TerminalIcon className="w-4 h-4 text-[hsl(38,95%,55%)]" />
-        <span className="font-terminal text-[13px] tracking-[0.25em] text-foreground uppercase">Limuria Intelligence</span>
+        <span className="font-terminal text-[13px] tracking-[0.25em] text-foreground uppercase">LiOS Intelligence</span>
       </div>
       <h1 className="mt-4 font-display text-3xl text-foreground">Specialist workspaces</h1>
       <p className="mb-8 mt-3 max-w-xl font-ui text-sm leading-6 text-muted-foreground">
@@ -68,21 +66,13 @@ export default function DomainPicker({ session, onChoose, onLogout, onCancel }: 
             return (
               <button
                 key={d.id}
-                disabled={!d.active}
-                onClick={() => d.active && onChoose(d)}
+                onClick={() => onChoose(d)}
                 data-testid={`domain-tile-${d.slug}`}
-                aria-label={d.active ? `Open ${d.name} workspace` : `${d.name} workspace is coming soon`}
-                className={`flex min-h-36 flex-col items-center justify-center gap-3 rounded border p-6 transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary ${
-                  d.active
-                    ? "border-border hover:border-[hsl(38,95%,50%)]/60 hover:bg-white/5 cursor-pointer"
-                    : "border-border/40 opacity-40 cursor-not-allowed"
-                }`}
+                aria-label={`Open ${d.name} workspace`}
+                className="flex min-h-36 cursor-pointer flex-col items-center justify-center gap-3 rounded border border-border p-6 transition-colors hover:border-[hsl(38,95%,50%)]/60 hover:bg-white/5 focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary"
               >
-                <Icon className={`w-7 h-7 ${d.active ? "text-[hsl(38,95%,55%)]" : "text-muted-foreground"}`} strokeWidth={1.5} />
+                <Icon className="w-7 h-7 text-[hsl(38,95%,55%)]" strokeWidth={1.5} />
                 <span className="font-ui text-base font-semibold text-center text-foreground">{d.name}</span>
-                {!d.active && (
-                  <span className="font-ui text-sm text-muted-foreground">Coming soon</span>
-                )}
               </button>
             );
           })}

@@ -17,13 +17,13 @@ test("Commons discovery is authenticated and rejects invalid search terms before
   await new Promise<void>(resolve => server.listen(0, "127.0.0.1", resolve));
   t.after(async () => { await new Promise<void>(resolve => server.close(() => resolve())); });
   const origin = "http://127.0.0.1:" + (server.address() as AddressInfo).port;
-  const denied = await fetch(origin + "/api/media/commons/cc0?q=solar");
+  const denied = await fetch(origin + "/api/media/commons/images?q=solar");
   assert.equal(denied.status, 401);
   authenticated = true;
-  const empty = await fetch(origin + "/api/media/commons/cc0?q=x");
+  const empty = await fetch(origin + "/api/media/commons/images?q=x");
   assert.equal(empty.status, 400);
   assert.match((await empty.json()).error, /Search must be/);
-  const huge = await fetch(origin + "/api/media/commons/cc0?q=" + "x".repeat(101));
+  const huge = await fetch(origin + "/api/media/commons/images?q=" + "x".repeat(101));
   assert.equal(huge.status, 400);
 });
 
@@ -40,15 +40,15 @@ test("saved Commons lookup endpoint requires auth and a bounded File: title befo
   await new Promise<void>(resolve => server.listen(0, "127.0.0.1", resolve));
   t.after(async () => { await new Promise<void>(resolve => server.close(() => resolve())); });
   const origin = "http://127.0.0.1:" + (server.address() as AddressInfo).port;
-  const denied = await fetch(origin + "/api/media/commons/cc0/file?title=File:Example.jpg");
+  const denied = await fetch(origin + "/api/media/commons/images/file?title=File:Example.jpg");
   assert.equal(denied.status, 401);
   allowed = true;
-  assert.equal((await fetch(origin + "/api/media/commons/cc0/file?title=bad")).status, 400);
-  assert.equal((await fetch(origin + "/api/media/commons/cc0/file?title=" + "a".repeat(300))).status, 400);
+  assert.equal((await fetch(origin + "/api/media/commons/images/file?title=bad")).status, 400);
+  assert.equal((await fetch(origin + "/api/media/commons/images/file?title=" + "a".repeat(300))).status, 400);
 });
 
 
-test("an authenticated editor receives only explicitly requested CC0 candidates, without downloading any photo", async t => {
+test("an authenticated editor receives only explicitly requested accepted-license candidates, without downloading any photo", async t => {
   const candidate = {
     fileTitle: "File:Policy illustration.jpg",
     filePage: "https://commons.wikimedia.org/wiki/File:Policy_illustration.jpg",
@@ -75,17 +75,17 @@ test("an authenticated editor receives only explicitly requested CC0 candidates,
   t.after(async () => { await new Promise<void>(resolve => server.close(() => resolve())); });
   const url = "http://127.0.0.1:" + (server.address() as AddressInfo).port;
   assert.deepEqual(trace, []);
-  const result = await fetch(url + "/api/media/commons/cc0?q=policy");
+  const result = await fetch(url + "/api/media/commons/images?q=policy");
   assert.equal(result.status, 200);
   const body = await result.json();
   assert.equal(body.status, "unreviewed");
   assert.deepEqual(body.results, [candidate]);
   assert.deepEqual(trace, ["search:policy"]);
-  const fresh = await fetch(url + "/api/media/commons/cc0/file?title=" + encodeURIComponent(candidate.fileTitle));
+  const fresh = await fetch(url + "/api/media/commons/images/file?title=" + encodeURIComponent(candidate.fileTitle));
   assert.equal(fresh.status, 200);
   assert.deepEqual((await fresh.json()).candidate, candidate);
   assert.deepEqual(trace, ["search:policy", "lookup:" + candidate.fileTitle]);
-  const denied = await fetch(url + "/api/media/commons/cc0/file?title=File:Revoked.jpg");
+  const denied = await fetch(url + "/api/media/commons/images/file?title=File:Revoked.jpg");
   assert.equal(denied.status, 502);
-  assert.match((await denied.json()).error, /no longer verified CC0/);
+  assert.match((await denied.json()).error, /no longer has an accepted license/);
 });

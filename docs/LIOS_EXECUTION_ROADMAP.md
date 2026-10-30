@@ -2480,7 +2480,7 @@ P7 architecture rule: **qualify, do not duplicate**. Existing identity/enterpris
 
 The dated 2026-09-27 P7 engineering completion is scoped to its source-controlled contract/acceptance program. It does not close subsequent TC/H/SI work, donor integration, Shipping Points or exact packaged release qualification.
 
-This does **not** claim that a customer release has already been certified. Final release certification remains external-evidence gated through `acceptance:p7:release` and the final P14 certification workflow. Required real-world evidence includes signed/notarized packages, Authenticode, clean-machine installation, packaged update/rollback/recovery, assistive-technology walkthroughs, production privacy/security review and exact release-rights evidence.
+This does **not** claim that a customer release has already been certified. Final release certification remains external-evidence gated through the private release-certification workflow and the final P14 certification workflow, both withheld from this public tree. Required real-world evidence includes signed/notarized packages, Authenticode, clean-machine installation, packaged update/rollback/recovery, assistive-technology walkthroughs, production privacy/security review and exact release-rights evidence.
 
 **Active P1–P7 engineering status: COMPLETE. External release certification: PENDING REAL RELEASE EVIDENCE.**
 

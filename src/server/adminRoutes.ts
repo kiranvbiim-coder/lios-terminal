@@ -1048,10 +1048,9 @@ export function registerAdminRoutes(app: Express): void {
     res.json(engagementId ? rows.filter((r) => r.engagementId === engagementId) : rows);
   });
 
-  // ─── LIOS Experience Center leads (Wave 2.5 rebuild) ─────────────────────
-  // Read-only: leads are written by the public, unauthenticated
-  // /api/public/leads route in publicRoutes.ts. This is just where internal
-  // staff review what that form has captured.
+  // ─── Retained leads (read-only) ──────────────────────────────────────────
+  // The public capture form was retired; this only lets internal staff review
+  // rows it captured earlier.
   app.get("/api/admin/leads", requireRole("internal_admin", "internal_analyst"), async (_req, res) => {
     const db = getDb();
     const rows = await db.select().from(leads).orderBy(desc(leads.createdAt));

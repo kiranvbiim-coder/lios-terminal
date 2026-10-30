@@ -86,9 +86,16 @@ async function generatePreMarketBrief() {
       getEconomicsSnapshot().catch(() => null),
       getForexQuotes().catch(() => []),
     ]);
+    // Data-only brief: headlines, macro snapshot and FX rates as fetched. No AI
+    // model writes any part of it. If every source failed there is nothing to
+    // brief, so no file is written and the previous brief (if any) is kept.
+    if (!news.length && !forex.length && !economics) {
+      log("Pre-market brief skipped: every data source failed; nothing cached.");
+      return;
+    }
     const brief = {
       generatedAt: new Date().toISOString(),
-      summary: "Limuria AI Automated Pre-Market Insight Briefing",
+      summary: "LiOS Pre-Market Data Briefing (data only; not AI-generated)",
       macroStatus: economics,
       movers: news.slice(0, 5).map(n => ({ title: n.title, source: n.source, url: n.url })),
       // ForexQuote uses pair/rate, not symbol/price -- map explicitly rather
@@ -102,6 +109,20 @@ async function generatePreMarketBrief() {
     log("Pre-market brief generated successfully.");
   } catch (err) {
     console.error("Failed to generate pre-market brief:", err);
+  }
+}
+
+const BRIEF_MAX_AGE_MS = 20 * 60 * 60 * 1000;
+
+/** A cached brief is reusable only if it parses, holds some data, and is recent. */
+function cachedBriefIsUsable(file: string): boolean {
+  try {
+    const brief = JSON.parse(fs.readFileSync(file, "utf8")) as { generatedAt?: string; macroStatus?: unknown; movers?: unknown[]; forexRate?: unknown[] };
+    const hasData = Boolean(brief.macroStatus) || Boolean(brief.movers?.length) || Boolean(brief.forexRate?.length);
+    const age = Date.now() - Date.parse(brief.generatedAt ?? "");
+    return hasData && Number.isFinite(age) && age < BRIEF_MAX_AGE_MS;
+  } catch {
+    return false;
   }
 }
 
@@ -374,7 +395,7 @@ app.use((req, res, next) => {
     }, 15_000);
 
     const briefFile = path.join(stateDir(), "premarket-brief.json");
-    if (!fs.existsSync(briefFile)) generatePreMarketBrief();
+    if (!cachedBriefIsUsable(briefFile)) void generatePreMarketBrief();
 
     // Schedule pre-market brief generator at 08:30 daily local time
     const briefTimer = setInterval(() => {

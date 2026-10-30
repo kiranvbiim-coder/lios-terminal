@@ -1626,7 +1626,7 @@ Verified present at the pinned commit `c074824a…` (file counts from the git tr
 - Per-route authorization remains a runtime/HTTP/route-manifest obligation; literal source-registration matches do not establish it.
 - Whether the packaged `dist/index.cjs` includes hosted-only routes (billing, webhooks, SAML) — inferred from the single bundle, not verified.
 - Callers of `chat_messages` vs `project_chat_messages`, and the owner split of the three decision systems.
-- Electron renderer font/CDN loads; remaining `localStorage` libs beyond those named; `.cursor/Dockerfile`.
+- Electron renderer font/CDN loads; remaining `localStorage` libs beyond those named.
 - Behaviour was audited by source reading only; **no application run, no packaged-app inspection, no network capture.**
 
 ### 32.9 Corrections made during the audit

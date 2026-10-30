@@ -121,7 +121,7 @@ export const PERSONA_REGISTRY: Record<PersonaId, PersonaProfile> = {
   corporate_strategy: {
     id: "corporate_strategy", label: "Corporate Strategist",
     description: "Structured market, competitor, operating, and strategic decision support.", defaultDomain: "finance",
-    preferredViews: ["research", "market", "screener", "peercomp", "mnadesk", "integration", "fpa", "workspaces", "advisory", "decisionengine"],
+    preferredViews: ["research", "market", "screener", "peercomp", "mnadesk", "fpa", "workspaces", "advisory", "decisionengine"],
     capabilities: ["company", "market_data", "financial_statements", "operations", "transactions", "macro", "research.investigation", "operations.driver_tree", "ai"],
     starterLabels: ["Market entry", "Competitive landscape", "Strategic options"], defaultAlertTypes: ["market_shift", "competitor_event", "operational_disruption"], defaultDeliverableTypes: ["brief", "report", "note"], allowedSecurityRoles: INTERNAL_AND_CLIENT_ROLES,
   },

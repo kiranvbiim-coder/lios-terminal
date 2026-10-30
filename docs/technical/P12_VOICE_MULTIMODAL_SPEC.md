@@ -30,7 +30,6 @@ Automated service/runtime/provider-shape coverage now includes an actual local d
 - `server/p12Multimodal.ts` — document/image/screenshot normalization and ConversationRequest bridge.
 - `server/p12RuntimeComponents.ts` — optional runtime components wired into the existing RuntimeRegistry.
 - `script/benchmark_p12_whisper_cpp.ts` — real optional-pack benchmark command.
-- `script/validate_p12_voice_multimodal_acceptance.ts` — phase acceptance.
 
 ## P12 invariants
 
@@ -119,7 +118,6 @@ For any claimed SP contribution, define a real Minimum Shippable Journey (for ex
 ```bash
 cd src
 npm run test:p12
-npm run acceptance:p12
 ```
 
 Optional local whisper.cpp release qualification:

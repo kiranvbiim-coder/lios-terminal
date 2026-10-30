@@ -312,25 +312,26 @@ function MnaDealDeskPanel() {
     ];
   }, [acquirerEPS, proFormaEPS]);
 
-  // HHI Market share calculation
-  const marketShares = [
-    { name: "Acquirer", share: 24 },
-    { name: "Target", share: 7 },
-    { name: "Competitor A", share: 22 },
-    { name: "Competitor B", share: 18 },
-    { name: "Competitor C", share: 11 },
-    { name: "Others (Unconcentrated)", share: 18 }
-  ];
-  
+  // HHI market shares are the analyst's own inputs (percent of the relevant market).
+  // Row 0 is the acquirer and row 1 the target; further rows are other competitors.
+  const [marketShares, setMarketShares] = useTerminalArtifactState<Array<{ name: string; share: number }>>("MnaDealDeskPanel.marketShares", [
+    { name: "Acquirer", share: 0 },
+    { name: "Target", share: 0 },
+  ]);
+  const updateShare = (index: number, patch: Partial<{ name: string; share: number }>) =>
+    setMarketShares(prev => prev.map((row, i) => (i === index ? { ...row, ...patch } : row)));
+  const shareTotal = marketShares.reduce((sum, item) => sum + item.share, 0);
+  const hasShares = shareTotal > 0;
+
   const hhiPre = useMemo(() => {
     return marketShares.reduce((sum, item) => sum + Math.pow(item.share, 2), 0);
-  }, []);
+  }, [marketShares]);
 
   const hhiPost = useMemo(() => {
-    const combinedShare = marketShares[0].share + marketShares[1].share; 
+    const combinedShare = marketShares[0].share + marketShares[1].share;
     const otherSum = marketShares.slice(2).reduce((sum, item) => sum + Math.pow(item.share, 2), 0);
     return Math.pow(combinedShare, 2) + otherSum;
-  }, []);
+  }, [marketShares]);
 
   const hhiChange = hhiPost - hhiPre;
 
@@ -1130,7 +1131,7 @@ function MnaDealDeskPanel() {
                     </div>
 
                     <div className={`p-3 border rounded text-xs text-center font-bold ${hhiRisk.color}`}>
-                      {hhiRisk.label}
+                      {hasShares ? hhiRisk.label : "ENTER MARKET SHARES TO ASSESS CONCENTRATION"}
                     </div>
 
                     <div className="text-[9px] text-muted-foreground mt-4 space-y-1">
@@ -1157,12 +1158,20 @@ function MnaDealDeskPanel() {
                       <TableBody>
                         {marketShares.map((item, idx) => (
                           <TableRow key={idx} className="border-b border-border/40">
-                            <TableCell className="p-1 text-xs">{item.name}</TableCell>
-                            <TableCell className="p-1 text-xs text-right font-bold">{item.share}%</TableCell>
+                            <TableCell className="p-1 text-xs">
+                              {idx < 2 ? item.name : <Input aria-label={`Competitor ${idx - 1} name`} value={item.name} onChange={(e) => updateShare(idx, { name: e.target.value })} className="h-7 text-xs" />}
+                            </TableCell>
+                            <TableCell className="p-1 text-xs text-right">
+                              <Input aria-label={`${item.name || "Competitor"} market share percent`} type="number" min={0} max={100} value={item.share} onChange={(e) => updateShare(idx, { share: Math.min(100, Math.max(0, Number(e.target.value) || 0)) })} className="ml-auto h-7 w-20 text-right text-xs" />
+                            </TableCell>
                           </TableRow>
                         ))}
                       </TableBody>
                     </Table>
+                    <div className="mt-2 flex items-center justify-between text-[9px] text-muted-foreground">
+                      <button type="button" onClick={() => setMarketShares(prev => [...prev, { name: `Competitor ${prev.length - 1}`, share: 0 }])} className="rounded border border-border px-2 py-1 hover:text-foreground">+ ADD COMPETITOR</button>
+                      <span className={shareTotal > 100 ? "text-rose-400" : undefined}>Total {shareTotal}%{shareTotal > 100 ? " — exceeds 100%" : ""}</span>
+                    </div>
                   </CardContent>
                 </Card>
               </div>

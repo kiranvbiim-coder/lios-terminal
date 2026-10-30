@@ -1,224 +1,144 @@
-import { useState, useEffect } from "react";
-import { Sliders, RefreshCw, Cpu, Server, Shield, Database, Activity, AlertTriangle } from "lucide-react";
-import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from "recharts";
+import { useQuery } from "@tanstack/react-query";
+import { Activity, Cpu, RefreshCw, Server, Shield } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 
-interface Props {
-  onNav: (v: any) => void;
-  onSymbol: (sym: string) => void;
+interface RuntimeHealthReport {
+  componentId: string;
+  state: string;
+  detail?: string;
+  checkedAt: string;
 }
 
-export default function DeveloperConsolePanel({ onNav, onSymbol }: Props) {
-  const [logs, setLogs] = useState<string[]>([
-    "12:00:00 AM [SYSTEM] Quantitative Engine initialized.",
-    "12:00:01 AM [CACHE] Ingested 57,350 compiled security ticker profiles.",
-    "12:00:02 AM [WS] Listening for live pricing streams on port 5052."
-  ]);
-  const [isFlushing, setIsFlushing] = useState(false);
-  const [isShocking, setIsShocking] = useState(false);
-  const [isEvaluating, setIsEvaluating] = useState(false);
-  const [heapHistory, setHeapHistory] = useState<Array<{ tick: number; heap: number }>>([]);
-  const [latency, setLatency] = useState(18.5);
+interface Measured<T> {
+  data: T;
+  /** Round-trip of the real request, measured in the renderer. */
+  roundTripMs: number;
+}
 
-  // Generate heap memory utilization history
-  useEffect(() => {
-    const history = [];
-    for (let i = 0; i < 20; i++) {
-      history.push({ tick: i, heap: 142 + Math.sin(i / 2) * 5 + Math.random() * 2 });
-    }
-    setHeapHistory(history);
+async function measuredJson<T>(url: string): Promise<Measured<T>> {
+  const started = performance.now();
+  const response = await fetch(url, { credentials: "include" });
+  if (!response.ok) throw new Error(`${url} returned ${response.status}`);
+  const data = (await response.json()) as T;
+  return { data, roundTripMs: performance.now() - started };
+}
 
-    const interval = setInterval(() => {
-      setHeapHistory((prev) => {
-        const nextTick = prev.length;
-        const currentHeap = 142 + Math.sin(nextTick / 2) * 5 + Math.random() * 2;
-        const updated = [...prev.slice(1), { tick: nextTick, heap: currentHeap }];
-        return updated;
-      });
-      setLatency(15 + Math.random() * 7);
-    }, 1500);
+const REFRESH_MS = 15_000;
 
-    return () => clearInterval(interval);
-  }, []);
+function NotMeasured({ reason }: { reason: string }) {
+  return <span className="text-[8px] text-muted-foreground">{reason}</span>;
+}
 
-  const addLog = (msg: string) => {
-    const timeStr = new Date().toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit", second: "2-digit" });
-    setLogs((prev) => [...prev, `${timeStr} ${msg}`]);
-  };
+export default function DeveloperConsolePanel() {
+  const cache = useQuery({ queryKey: ["developer-console", "cache"], queryFn: () => measuredJson<{ entries: number; inflight: number; limit: number }>("/api/data-fabric/cache"), refetchInterval: REFRESH_MS });
+  const health = useQuery({ queryKey: ["developer-console", "runtime-health"], queryFn: () => measuredJson<{ health: RuntimeHealthReport[] }>("/api/runtime/foundation/health"), refetchInterval: REFRESH_MS });
+  const control = useQuery({ queryKey: ["developer-console", "production-control"], queryFn: () => measuredJson<{ telemetryEnabled: boolean; counts: { diagnosticEvents: number; deletionReceipts: number; exportCustodyReceipts: number } }>("/api/admin/production-control/status"), refetchInterval: REFRESH_MS });
 
-  const handleFlushCache = () => {
-    setIsFlushing(true);
-    addLog("[CMD] Flushing Quantitative Cache profiles...");
-    setTimeout(() => {
-      setIsFlushing(false);
-      addLog("[CACHE] Cache flushed successfully. 57,350 tickers invalidated & re-indexed.");
-    }, 1200);
-  };
-
-  const handleTriggerShock = () => {
-    setIsShocking(true);
-    addLog("[SHOCK] Broadcasting Volatility Multiplier shock to pricing engine...");
-    setTimeout(() => {
-      setIsShocking(false);
-      addLog("[ENGINE] Volatility variance adjusted to 2.5x for all global exchanges. Dual-core liquidity alerts active.");
-    }, 1000);
-  };
-
-  const handleForceAlerts = async () => {
-    setIsEvaluating(true);
-    addLog("[CMD] Triggering manual alert evaluation cycle...");
-    try {
-      await fetch("/api/alerts"); // check server alive
-      setTimeout(() => {
-        setIsEvaluating(false);
-        addLog("[ALERTS] Evaluation cycle complete. Evaluated 24 pending triggers. 0 fired.");
-      }, 1000);
-    } catch {
-      setIsEvaluating(false);
-      addLog("[ERROR] Failed to connect to alerts worker check.");
-    }
-  };
+  const refetchAll = () => { void cache.refetch(); void health.refetch(); void control.refetch(); };
+  const fetching = cache.isFetching || health.isFetching || control.isFetching;
+  const reports = health.data?.data.health ?? [];
+  const stateCounts = reports.reduce<Record<string, number>>((acc, report) => ({ ...acc, [report.state]: (acc[report.state] ?? 0) + 1 }), {});
 
   return (
     <div className="h-full flex flex-col bg-[#050505] text-foreground overflow-hidden">
-      {/* Header */}
       <div className="flex items-center gap-2 px-4 py-2 border-b border-border bg-[#070707] shrink-0">
         <Server className="w-4 h-4 text-cyan-400" />
-        <span className="panel-label font-bold text-xs tracking-wider">QUANTITATIVE SYSTEM CONTROL ROOM</span>
-        <span className="ml-auto font-terminal text-[8px] text-muted-foreground tracking-widest">SYS ADMIN</span>
+        <span className="panel-label font-bold text-xs tracking-wider">SYSTEM STATUS</span>
+        <button type="button" onClick={refetchAll} disabled={fetching} className="ml-auto flex min-h-8 items-center gap-1.5 rounded border border-border px-2 font-terminal text-[8px] tracking-widest text-muted-foreground hover:text-foreground disabled:opacity-40" aria-label="Refresh system status">
+          <RefreshCw className={`h-3 w-3 ${fetching ? "animate-spin" : ""}`} /> REFRESH
+        </button>
       </div>
 
       <div className="flex-1 overflow-y-auto p-4 space-y-4 scrollbar-thin">
-        {/* KPI Panel */}
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
           <Card className="bg-[#070707] border-border font-terminal">
             <CardContent className="p-3 space-y-1">
-              <span className="text-[8.5px] text-muted-foreground tracking-wider uppercase block">CACHE STATUS</span>
-              <div className="flex items-baseline gap-2">
-                <span className="text-xl font-bold text-cyan-400">94.2%</span>
-                <span className="text-[8px] text-muted-foreground">(54k/57k Hits)</span>
-              </div>
+              <span className="text-[8.5px] text-muted-foreground tracking-wider uppercase block">PROVIDER CACHE</span>
+              {cache.data ? (
+                <div className="flex items-baseline gap-2">
+                  <span className="text-xl font-bold text-cyan-400">{cache.data.data.entries}</span>
+                  <span className="text-[8px] text-muted-foreground">/ {cache.data.data.limit} entries · {cache.data.data.inflight} in flight</span>
+                </div>
+              ) : <NotMeasured reason={cache.isError ? "Unavailable" : "Loading…"} />}
             </CardContent>
           </Card>
 
           <Card className="bg-[#070707] border-border font-terminal">
             <CardContent className="p-3 space-y-1">
-              <span className="text-[8.5px] text-muted-foreground tracking-wider uppercase block">LATENCY PROFILE</span>
-              <div className="flex items-baseline gap-2">
-                <span className="text-xl font-bold text-emerald-400">{latency.toFixed(1)}ms</span>
-                <span className="text-[8px] text-muted-foreground">(Direct Node.js)</span>
-              </div>
+              <span className="text-[8.5px] text-muted-foreground tracking-wider uppercase block">API ROUND TRIP</span>
+              {health.data ? (
+                <div className="flex items-baseline gap-2">
+                  <span className="text-xl font-bold text-emerald-400">{health.data.roundTripMs.toFixed(0)} ms</span>
+                  <span className="text-[8px] text-muted-foreground">runtime health request, last sample</span>
+                </div>
+              ) : <NotMeasured reason={health.isError ? "Unavailable" : "Loading…"} />}
             </CardContent>
           </Card>
 
           <Card className="bg-[#070707] border-border font-terminal">
             <CardContent className="p-3 space-y-1">
-              <span className="text-[8.5px] text-muted-foreground tracking-wider uppercase block">ACTIVE TAPS</span>
-              <div className="flex items-baseline gap-2">
-                <span className="text-xl font-bold text-amber-500">12 Streams</span>
-                <span className="text-[8px] text-muted-foreground">(HTTP polling/WS)</span>
-              </div>
+              <span className="text-[8.5px] text-muted-foreground tracking-wider uppercase block">RUNTIME COMPONENTS</span>
+              {health.data ? (
+                <div className="flex items-baseline gap-2">
+                  <span className="text-xl font-bold text-amber-500">{reports.length}</span>
+                  <span className="text-[8px] text-muted-foreground">{Object.entries(stateCounts).map(([state, count]) => `${count} ${state}`).join(" · ") || "none registered"}</span>
+                </div>
+              ) : <NotMeasured reason={health.isError ? "Unavailable" : "Loading…"} />}
             </CardContent>
           </Card>
 
           <Card className="bg-[#070707] border-border font-terminal">
             <CardContent className="p-3 space-y-1">
-              <span className="text-[8.5px] text-muted-foreground tracking-wider uppercase block">CPU HEAP LIMIT</span>
-              <div className="flex items-baseline gap-2">
-                <span className="text-xl font-bold text-cyan-400">142.5 MB</span>
-                <span className="text-[8px] text-muted-foreground">/ 512.0 MB</span>
-              </div>
+              <span className="text-[8.5px] text-muted-foreground tracking-wider uppercase block">HEAP / CPU</span>
+              <span className="text-sm font-bold text-muted-foreground">Not measured</span>
+              <div><NotMeasured reason="The server exposes no process memory or CPU endpoint." /></div>
             </CardContent>
           </Card>
         </div>
 
-        {/* Chart + Console Logs Grid */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-          {/* Memory Heap Chart */}
-          <div className="lg:col-span-2 border border-border p-4 bg-[#070707] flex flex-col justify-between h-[260px]">
-            <div className="flex items-center justify-between mb-2">
-              <div className="flex items-center gap-1.5">
-                <Cpu className="w-3.5 h-3.5 text-cyan-400" />
-                <span className="font-terminal text-[9px] font-bold text-muted-foreground uppercase">NODEJS HEAP memory allocation</span>
-              </div>
-              <span className="font-terminal text-[9px] text-muted-foreground">Ticking...</span>
+          <div className="lg:col-span-2 border border-border p-4 bg-[#070707]">
+            <div className="flex items-center gap-1.5 mb-3">
+              <Cpu className="w-3.5 h-3.5 text-cyan-400" />
+              <span className="font-terminal text-[9px] font-bold text-muted-foreground uppercase">Runtime component health</span>
             </div>
-            <div className="flex-1 min-h-0 relative">
-              <ResponsiveContainer width="100%" height="100%">
-                <AreaChart data={heapHistory} margin={{ top: 5, right: 5, left: -25, bottom: 5 }}>
-                  <CartesianGrid stroke="#111" strokeDasharray="3 3" />
-                  <XAxis dataKey="tick" hide />
-                  <YAxis domain={["auto", "auto"]} stroke="#333" tick={{ fontSize: 8, fontFamily: "'JetBrains Mono', monospace" }} />
-                  <Tooltip
-                    content={({ active, payload }: any) => {
-                      if (!active || !payload?.length) return null;
-                      return (
-                        <div className="bg-[#0f0f0f] border border-border p-2 font-terminal text-[9px]">
-                          <div>HEAP ALLOC: {payload[0].value.toFixed(2)} MB</div>
-                        </div>
-                      );
-                    }}
-                  />
-                  <Area type="monotone" dataKey="heap" stroke="hsl(186,80%,55%)" fill="rgba(6,182,212,0.1)" strokeWidth={1.5} />
-                </AreaChart>
-              </ResponsiveContainer>
-            </div>
+            {health.isError ? (
+              <div role="alert" className="font-terminal text-[9px] text-rose-300">Runtime health could not be loaded.</div>
+            ) : reports.length === 0 ? (
+              <div className="font-terminal text-[9px] text-muted-foreground">{health.isLoading ? "Loading…" : "No runtime components are registered."}</div>
+            ) : (
+              <ul className="space-y-1.5 max-h-64 overflow-y-auto scrollbar-thin">
+                {reports.map((report) => (
+                  <li key={report.componentId} className="font-terminal text-[9px]">
+                    <span className="text-foreground">{report.componentId}</span>
+                    <span className="ml-2 uppercase tracking-wider text-cyan-300">{report.state}</span>
+                    {report.detail && <div className="text-[8px] text-muted-foreground">{report.detail}</div>}
+                  </li>
+                ))}
+              </ul>
+            )}
           </div>
 
-          {/* Shock Controller & Triggers */}
-          <div className="border border-border p-4 bg-[#070707] flex flex-col justify-between h-[260px]">
-            <div>
-              <div className="flex items-center gap-1.5 mb-3">
-                <Sliders className="w-3.5 h-3.5 text-amber-500" />
-                <span className="font-terminal text-[9px] font-bold text-muted-foreground uppercase">ADMIN ENGINE INTERACTION</span>
-              </div>
-
-              <div className="space-y-2">
-                <button
-                  onClick={handleFlushCache}
-                  disabled={isFlushing}
-                  className="w-full flex items-center justify-center gap-1.5 py-1.5 bg-[#111] hover:bg-neutral-800 border border-border text-foreground font-terminal text-[9.5px] font-semibold transition-colors disabled:opacity-40"
-                >
-                  <Database className="w-3.5 h-3.5 text-cyan-400" /> {isFlushing ? "FLUSHING CACHE..." : "FLUSH TICKERS CACHE"}
-                </button>
-
-                <button
-                  onClick={handleTriggerShock}
-                  disabled={isShocking}
-                  className="w-full flex items-center justify-center gap-1.5 py-1.5 bg-[#111] hover:bg-neutral-800 border border-border text-foreground font-terminal text-[9.5px] font-semibold transition-colors disabled:opacity-40"
-                >
-                  <AlertTriangle className="w-3.5 h-3.5 text-rose-500" /> {isShocking ? "SHOCKING ENGINE..." : "TRIGGER VOLATILITY SHOCK"}
-                </button>
-
-                <button
-                  onClick={handleForceAlerts}
-                  disabled={isEvaluating}
-                  className="w-full flex items-center justify-center gap-1.5 py-1.5 bg-[#111] hover:bg-neutral-800 border border-border text-foreground font-terminal text-[9.5px] font-semibold transition-colors disabled:opacity-40"
-                >
-                  <RefreshCw className="w-3.5 h-3.5 text-amber-500" /> {isEvaluating ? "EVALUATING..." : "RUN ALERTS EVAL CYCLE"}
-                </button>
-              </div>
+          <div className="border border-border p-4 bg-[#070707]">
+            <div className="flex items-center gap-1.5 mb-3">
+              <Shield className="w-3.5 h-3.5 text-amber-500" />
+              <span className="font-terminal text-[9px] font-bold text-muted-foreground uppercase">Production control</span>
             </div>
-
-            <div className="text-[7.5px] font-terminal text-muted-foreground leading-normal italic border-t border-border/40 pt-2 mt-2">
-              * WARNING: Volatility shocks inject high dispersion walks into the pricing loop simulating extreme high-frequency event distributions.
-            </div>
+            {control.data ? (
+              <dl className="space-y-1.5 font-terminal text-[9px]">
+                <div className="flex justify-between"><dt className="text-muted-foreground">Telemetry</dt><dd>{control.data.data.telemetryEnabled ? "enabled" : "disabled"}</dd></div>
+                <div className="flex justify-between"><dt className="text-muted-foreground">Diagnostic events</dt><dd>{control.data.data.counts.diagnosticEvents}</dd></div>
+                <div className="flex justify-between"><dt className="text-muted-foreground">Deletion receipts</dt><dd>{control.data.data.counts.deletionReceipts}</dd></div>
+                <div className="flex justify-between"><dt className="text-muted-foreground">Export custody receipts</dt><dd>{control.data.data.counts.exportCustodyReceipts}</dd></div>
+              </dl>
+            ) : (
+              <NotMeasured reason={control.isError ? "Unavailable for this role." : "Loading…"} />
+            )}
           </div>
         </div>
 
-        {/* Diagnostic Logs */}
-        <div className="border border-border bg-[#070707] p-4 flex flex-col h-[180px]">
-          <div className="flex items-center gap-1.5 mb-2 font-terminal text-[9px] font-bold text-muted-foreground uppercase border-b border-border/40 pb-1.5">
-            <Activity className="w-3.5 h-3.5 text-cyan-400" />
-            <span>REAL-TIME SYSTEM DIAGNOSTIC LOG FEED</span>
-          </div>
-          <div className="flex-1 overflow-y-auto font-mono text-[8.5px] text-muted-foreground leading-normal space-y-1 scrollbar-thin">
-            {logs.map((log, index) => (
-              <div key={index} className={log.includes("SHOCK") || log.includes("ERROR") ? "text-rose-400" : log.includes("[CMD]") ? "text-amber-400" : ""}>
-                {log}
-              </div>
-            ))}
-          </div>
+        <div className="flex items-center gap-1.5 font-terminal text-[8px] text-muted-foreground">
+          <Activity className="w-3 h-3" /> Values refresh every {REFRESH_MS / 1000}s from the server; nothing on this screen is simulated.
         </div>
       </div>
     </div>

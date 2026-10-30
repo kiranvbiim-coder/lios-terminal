@@ -14,7 +14,6 @@ import GraphExplorer from "./GraphExplorer";
 import ImpactMap from "./ImpactMap";
 import ImmersiveDock from "./ImmersiveDock";
 import IntelligenceActionCoordinator from "./IntelligenceActionCoordinator";
-import IntelligencePulse from "./IntelligencePulse";
 import MiniInspector from "./MiniInspector";
 import ObjectWorkbench from "./ObjectWorkbench";
 import ProvenanceDrawer from "./ProvenanceDrawer";
@@ -96,6 +95,10 @@ export default function TerminalUxOverlays({ experienceSurface, activeView, acti
   const lastSessionFingerprint = useRef("");
 
   const openSurface = useCallback((next: TerminalUxSurface | null) => {
+    // Pulse and Workbench are experience-shell surfaces, not overlays: every entry
+    // point (event bus, dock, shortcuts) funnels through here.
+    if (next === "wave-c-shell") { setExperienceSurface("pulse"); next = null; }
+    else if (next === "workbench") { setExperienceSurface("workbench"); next = null; }
     if (next === "research-tray") setResearchOpened(true);
     setSurface(next);
     setContextMenu(null);
@@ -124,19 +127,7 @@ export default function TerminalUxOverlays({ experienceSurface, activeView, acti
     setInspector(request);
   }, []);
 
-  useEffect(() => subscribeTerminalUxSurface((next) => {
-    if (next === "wave-c-shell" || next === "intelligence-pulse") {
-      setExperienceSurface("pulse");
-      openSurface(null);
-      return;
-    }
-    if (next === "workbench") {
-      setExperienceSurface("workbench");
-      openSurface(null);
-      return;
-    }
-    openSurface(next);
-  }), [openSurface]);
+  useEffect(() => subscribeTerminalUxSurface(openSurface), [openSurface]);
   useEffect(() => subscribeTerminalContextMenu(openContextMenu), [openContextMenu]);
   useEffect(() => subscribeTerminalPeek(openPeek, () => openPeek(null)), [openPeek]);
   useEffect(() => subscribeTerminalInspector(openInspector), [openInspector]);
@@ -262,7 +253,6 @@ export default function TerminalUxOverlays({ experienceSurface, activeView, acti
       {peek && !surface && !contextMenu && !inspector && <AnalyticalPeek request={peek} isInternal={isInternal} onOpen={onOpen} onClose={() => setPeek(null)} />}
       {inspector && !surface && !contextMenu && <MiniInspector request={inspector} onOpen={onOpen} onClose={() => setInspector(null)} />}
       {surface === "cognitive-core" && <CognitiveCore activeView={activeView} activeSymbol={activeSymbol} onOpen={onOpen} onClose={() => setSurface(null)} />}
-      {surface === "intelligence-pulse" && <IntelligencePulse onOpen={onOpen} onStageAiReview={onStageAiReview} onClose={() => setSurface(null)} />}
       {surface === "impact-map" && <ImpactMap onOpen={onOpen} onClose={() => setSurface(null)} />}
       {surface === "trust-ledger" && <TrustLedger onClose={() => setSurface(null)} />}
       {surface === "decision-drift" && <DecisionDrift onClose={() => setSurface(null)} />}

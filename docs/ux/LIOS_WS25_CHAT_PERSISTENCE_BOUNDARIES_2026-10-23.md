@@ -27,7 +27,7 @@
 ```bash
 node --import tsx --test client/src/lib/chatPersistenceBoundary.test.ts script/validate_ws25_chat_persistence.test.mjs
 npm run test:ux
-npm run acceptance:ux
+npm run validate:visual-environments
 ```
 
 | Acceptance requirement | Status |

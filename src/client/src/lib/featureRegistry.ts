@@ -53,7 +53,7 @@ const WORKSPACE_VIEWS: Record<WorkspaceKey, readonly ViewMode[]> = {
     "conflictdetector",
   ],
   outputs: [
-    "workspaces", "spreadsheet", "mnadesk", "integration", "fpa", "publishdesk", "advisory",
+    "workspaces", "spreadsheet", "mnadesk", "fpa", "publishdesk", "advisory",
     "consultinginbox",
   ],
   advanced: [
