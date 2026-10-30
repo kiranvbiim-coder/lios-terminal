@@ -24,7 +24,7 @@ import { getDb } from "./db";
 import type { TenantContext } from "./tenantContext";
 import { getProject, touchProjectActivity } from "./projectStore";
 import { appendLedgerEvent } from "./ledgerStore";
-import { decideP9Notification, nextP9ScheduledRun, p9FailureBackoff, p9NotificationTitle } from "./p9AutomationEngine";
+import { decideP9Notification, nextP9ScheduledRun, p9FailureBackoff, p9NotificationTitle, planP9Catchup } from "./p9AutomationEngine";
 import { admitP9ApprovedManualRun } from "./p9ManualRunIdempotency";
 import { requireAcceptedP9Workflow, requireSuccessfulP9Recipe } from "./p9AcceptedWorkflow";
 import { requireP9ModelRefreshReview } from "./p9ModelRefresh";
@@ -255,8 +255,20 @@ export async function claimDueP9Workflows(now = new Date(), limit = 25): Promise
     or(isNull(projectAutomationWorkflows.claimExpiresAt), lt(projectAutomationWorkflows.claimExpiresAt, now)),
   )).orderBy(projectAutomationWorkflows.nextRunAt).limit(Math.min(Math.max(limit, 1), 100));
 
+  const plan = planP9Catchup(candidates, now);
+  // Missed rows beyond the per-claim cap only move later (compare-and-set on the exact row seen); they are never run,
+  // widened, re-enabled or pulled earlier, and an edited/claimed row is left alone.
+  for (const { row, nextRunAt } of plan.defer) {
+    await db.update(projectAutomationWorkflows).set({ nextRunAt }).where(and(
+      eq(projectAutomationWorkflows.id, row.id),
+      eq(projectAutomationWorkflows.enabled, true),
+      eq(projectAutomationWorkflows.updatedAt, row.updatedAt),
+      eq(projectAutomationWorkflows.nextRunAt, row.nextRunAt!),
+      or(isNull(projectAutomationWorkflows.claimExpiresAt), lt(projectAutomationWorkflows.claimExpiresAt, now)),
+    ));
+  }
   const claimed: ClaimedP9Workflow[] = [];
-  for (const candidate of candidates) {
+  for (const candidate of plan.claim) {
     const claimToken = crypto.randomUUID();
     const claimExpiresAt = new Date(now.getTime() + CLAIM_LEASE_MS);
     const [row] = await db.update(projectAutomationWorkflows).set({

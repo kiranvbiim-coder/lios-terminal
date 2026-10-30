@@ -25,6 +25,14 @@ import {
   refreshVoiceProviders,
   resolveVoiceFfmpegPath,
 } from "./voiceProviderSetup";
+import {
+  VOICE_FFMPEG_MAX_OUTPUT_CHARS,
+  VOICE_FFMPEG_TIMEOUT_MS,
+  VOICE_MAX_AUDIO_SECONDS,
+  VOICE_MAX_WAV_BYTES,
+  VoiceTooLongError,
+  wavDurationSeconds,
+} from "./voiceLimits";
 import { speechOutputPreferenceSchema } from "@shared/multimodalContracts";
 
 const VOICE_UPLOAD_LIMIT_BYTES = 25 * 1024 * 1024;
@@ -36,9 +44,14 @@ const DEFAULT_TRANSCRIPTION_PROVIDER_ID = "lios.voice.whisper-cpp";
 // Returns the original bytes unchanged if they already look like a WAV
 // container (RIFF/WAVE header) -- avoids an unnecessary round trip through
 // ffmpeg for the common case where a caller already sends WAV.
-async function convertToWav(bytes: Buffer, mimeType: string): Promise<Buffer> {
+export async function convertToWav(bytes: Buffer, mimeType: string): Promise<{ wav: Buffer; durationMs: number | null }> {
   const looksLikeWav = bytes.length >= 12 && bytes.toString("ascii", 0, 4) === "RIFF" && bytes.toString("ascii", 8, 12) === "WAVE";
-  if (looksLikeWav) return bytes;
+  if (looksLikeWav) {
+    // Passthrough still obeys the same ceiling; an unparseable header is left to the provider as before.
+    const seconds = wavDurationSeconds(bytes);
+    if (seconds !== null && seconds > VOICE_MAX_AUDIO_SECONDS) throw new VoiceTooLongError();
+    return { wav: bytes, durationMs: seconds === null ? null : Math.round(seconds * 1000) };
+  }
 
   const ffmpeg = resolveVoiceFfmpegPath();
   if (!ffmpeg) {
@@ -52,12 +65,17 @@ async function convertToWav(bytes: Buffer, mimeType: string): Promise<Buffer> {
   try {
     fs.writeFileSync(inputPath, bytes, { mode: 0o600 });
     await runCommand({
-      argv: [ffmpeg, "-y", "-i", inputPath, "-ar", "16000", "-ac", "1", "-f", "wav", outputPath],
-      timeoutMs: 60_000,
-      maxOutputChars: 64 * 1024,
+      // -t bounds decoded output to one second past the ceiling so an over-length recording is detected, not fully decoded.
+      argv: [ffmpeg, "-y", "-i", inputPath, "-t", String(VOICE_MAX_AUDIO_SECONDS + 1), "-ar", "16000", "-ac", "1", "-f", "wav", outputPath],
+      timeoutMs: VOICE_FFMPEG_TIMEOUT_MS,
+      maxOutputChars: VOICE_FFMPEG_MAX_OUTPUT_CHARS,
     });
     if (!fs.existsSync(outputPath)) throw new Error("ffmpeg returned without a converted audio file.");
-    return fs.readFileSync(outputPath);
+    const size = fs.statSync(outputPath).size;
+    if (size > VOICE_MAX_WAV_BYTES) throw new VoiceTooLongError();
+    const wav = fs.readFileSync(outputPath);
+    const seconds = wavDurationSeconds(wav);
+    return { wav, durationMs: seconds === null ? null : Math.round(seconds * 1000) };
   } finally {
     fs.rmSync(inputPath, { force: true });
     fs.rmSync(outputPath, { force: true });
@@ -97,16 +115,20 @@ export function registerVoiceRoutes(app: Express): void {
     const language = typeof req.body?.language === "string" && req.body.language.trim() ? req.body.language.trim() : null;
 
     try {
-      const wav = await convertToWav(req.file.buffer, req.file.mimetype || "application/octet-stream");
+      const { wav, durationMs } = await convertToWav(req.file.buffer, req.file.mimetype || "application/octet-stream");
       const transcript = await transcribeVoiceInput(providerId, {
         bytes: new Uint8Array(wav),
         mimeType: "audio/wav",
         fileName: req.file.originalname,
         language,
-        durationMs: null,
+        durationMs,
       });
       res.json({ transcript });
     } catch (error) {
+      if (error instanceof VoiceTooLongError) {
+        res.status(413).json({ error: error.message });
+        return;
+      }
       const message = error instanceof Error ? error.message : "Voice transcription failed.";
       res.status(422).json({ error: message });
     }

@@ -67,25 +67,29 @@ export class AIProviderError extends Error {
   readonly code: AIProviderErrorCode;
   readonly provider?: AIProviderType;
   readonly status?: number;
+  /** Provider-advised wait before retry, already clamped to a bounded range. Absent when no hint was sent. */
+  readonly retryAfterMs?: number;
 
   constructor(
     code: AIProviderErrorCode,
     message: string,
-    details: { provider?: AIProviderType; status?: number } = {},
+    details: { provider?: AIProviderType; status?: number; retryAfterMs?: number } = {},
   ) {
     super(message);
     this.name = "AIProviderError";
     this.code = code;
     this.provider = details.provider;
     this.status = details.status;
+    if (details.retryAfterMs !== undefined) this.retryAfterMs = details.retryAfterMs;
   }
 
-  toJSON(): { code: AIProviderErrorCode; message: string; provider?: AIProviderType; status?: number } {
+  toJSON(): { code: AIProviderErrorCode; message: string; provider?: AIProviderType; status?: number; retryAfterMs?: number } {
     return {
       code: this.code,
       message: this.message,
       ...(this.provider ? { provider: this.provider } : {}),
       ...(this.status === undefined ? {} : { status: this.status }),
+      ...(this.retryAfterMs === undefined ? {} : { retryAfterMs: this.retryAfterMs }),
     };
   }
 }

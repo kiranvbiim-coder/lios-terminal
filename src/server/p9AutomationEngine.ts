@@ -36,6 +36,35 @@ export function p9FailureBackoff(consecutiveFailures: number): number {
   return FAILURE_BACKOFF_MS[Math.min(consecutiveFailures - 1, FAILURE_BACKOFF_MS.length - 1)];
 }
 
+/**
+ * Adapted from OpenClaw src/cron/service/timer-catchup.ts + timer-execution-timeout.ts constants
+ * (c074824a27c96d3983043f9eeb33823cd1772d8c, MIT, Copyright (c) 2026 OpenClaw Foundation): bounded restart catch-up with
+ * staggered persisted next-run times. Only the concept ports; P9 keeps its own leases, claims and authority checks.
+ */
+export const P9_MAX_MISSED_PER_CLAIM = 5;
+export const P9_MISSED_STAGGER_MS = 5_000;
+export const P9_MISSED_GRACE_MS = 60_000;
+
+export interface P9CatchupCandidate { id: string; nextRunAt: Date | null }
+export interface P9CatchupPlan<T extends P9CatchupCandidate> {
+  claim: T[];
+  defer: Array<{ row: T; nextRunAt: Date }>;
+}
+
+/** Rows overdue by more than the grace are "missed" (downtime/restart); only a bounded few run now, the rest are spread forward. */
+export function planP9Catchup<T extends P9CatchupCandidate>(candidates: readonly T[], now: Date): P9CatchupPlan<T> {
+  const claim: T[] = [];
+  const defer: Array<{ row: T; nextRunAt: Date }> = [];
+  let missed = 0;
+  for (const row of candidates) {
+    const dueAt = row.nextRunAt?.getTime();
+    if (dueAt === undefined || dueAt >= now.getTime() - P9_MISSED_GRACE_MS) { claim.push(row); continue; }
+    if (missed++ < P9_MAX_MISSED_PER_CLAIM) { claim.push(row); continue; }
+    defer.push({ row, nextRunAt: new Date(now.getTime() + (defer.length + 1) * P9_MISSED_STAGGER_MS) });
+  }
+  return { claim, defer };
+}
+
 function comparable(value: string | number | boolean | null | undefined): string {
   if (typeof value === "string") return value.trim().toLowerCase();
   return String(value);
