@@ -331,3 +331,16 @@ test("delegate receipt has terminal-only status and nonnegative usage", () => {
     /stepsUsed is invalid/,
   );
 });
+
+test("only unsuccessful delegation receipts may retain unknown usage", () => {
+  const record = delegation();
+  assert.throws(() => createAgentDelegationReceipt(record, { status: "completed", used: null }),
+    /requires measured usage/);
+  for (const status of ["failed", "cancelled", "timed_out"] as const) {
+    const receipt = createAgentDelegationReceipt(record, { status, used: null });
+    assert.equal(receipt.status, status);
+    assert.equal(receipt.used, null);
+    assert.deepEqual(receipt.allocatedBudget, record.budget);
+    assert.equal(receipt.resultRef, null);
+  }
+});

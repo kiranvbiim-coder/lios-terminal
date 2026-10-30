@@ -631,45 +631,65 @@ async function invokeGovernedAgentDelegation(
     budget,
   });
 
-  const runtime = await runBoundedAgent({
-    adapterId: parsed.adapterId,
-    requestId,
-    role: parsed.role,
-    objective: parsed.objective,
-    context: parentContext,
-    budget: { ...budget },
-    maxDurationMs: budget.maxDurationMs,
-    signal,
-  });
-  assertNotAborted(signal);
-  if (!runtime.usage) {
-    throw new Error("Delegated agent adapter did not report bounded usage.");
-  }
-
-  const delegationReceipt = createAgentDelegationReceipt(record, {
-    status: "completed",
-    used: runtime.usage,
-    sourceRefs: runtime.receipt.sourceRefs,
-    toolReceiptRefs: [`execution-receipt:${runtime.receipt.id}`],
-    resultRef: `execution-receipt:${runtime.receipt.id}`,
-  });
-  const receiptDigest = crypto.createHash("sha256").update(JSON.stringify(delegationReceipt)).digest("hex");
-  const budgetDigest = crypto.createHash("sha256").update(JSON.stringify(record.budget)).digest("hex");
-  const delegationDigest = crypto.createHash("sha256").update(record.delegationId).digest("hex").slice(0, 32);
-  const parentDigest = crypto.createHash("sha256").update(record.parentDelegationId ?? "root").digest("hex").slice(0, 32);
-  const receiptRef = `delegate-receipt:v1:${delegationDigest}:${parentDigest}:${record.role}:${budgetDigest.slice(0, 32)}:${receiptDigest}`;
-  await trusted.recordReceipt?.(receiptRef);
-  assertNotAborted(signal);
-
-  return {
-    output: {
-      delegation: delegationReceipt,
-      result: runtime.output,
-    },
-    summary: `Delegated ${parsed.role} specialist completed within its bounded child budget.`,
-    deterministic: runtime.receipt.deterministic,
-    sourceRefs: [...new Set([receiptRef, ...runtime.receipt.sourceRefs])].slice(0, 100),
+  const retainReceipt = async (receipt: ReturnType<typeof createAgentDelegationReceipt>) => {
+    const receiptDigest = crypto.createHash("sha256").update(JSON.stringify(receipt)).digest("hex");
+    const budgetDigest = crypto.createHash("sha256").update(JSON.stringify(record.budget)).digest("hex");
+    const delegationDigest = crypto.createHash("sha256").update(record.delegationId).digest("hex").slice(0, 32);
+    const parentDigest = crypto.createHash("sha256").update(record.parentDelegationId ?? "root").digest("hex").slice(0, 32);
+    const receiptRef = `delegate-receipt:v2:${delegationDigest}:${parentDigest}:${record.role}:${receipt.status}:${receipt.used === null ? "unknown" : "reported"}:${budgetDigest.slice(0, 32)}:${receiptDigest}`;
+    await trusted.recordReceipt?.(receiptRef);
+    return receiptRef;
   };
+  let invoked = false;
+  let failureStatus: "failed" | "cancelled" | "timed_out" = "failed";
+  let evidenceAttempted = false;
+  try {
+    const runtime = await runBoundedAgent({
+      adapterId: parsed.adapterId,
+      requestId,
+      role: parsed.role,
+      objective: parsed.objective,
+      context: parentContext,
+      budget: { ...budget },
+      maxDurationMs: budget.maxDurationMs,
+      signal,
+      observeExecution: state => {
+        if (state.state === "started") invoked = true;
+        else failureStatus = state.status;
+      },
+    });
+    assertNotAborted(signal);
+    if (!runtime.usage) {
+      throw new Error("Delegated agent adapter did not report bounded usage.");
+    }
+    const delegationReceipt = createAgentDelegationReceipt(record, {
+      status: "completed",
+      used: runtime.usage,
+      sourceRefs: runtime.receipt.sourceRefs,
+      toolReceiptRefs: [`execution-receipt:${runtime.receipt.id}`],
+      resultRef: `execution-receipt:${runtime.receipt.id}`,
+    });
+    evidenceAttempted = true;
+    const receiptRef = await retainReceipt(delegationReceipt);
+    assertNotAborted(signal);
+    return {
+      output: { delegation: delegationReceipt, result: runtime.output },
+      summary: `Delegated ${parsed.role} specialist completed within its bounded child budget.`,
+      deterministic: runtime.receipt.deterministic,
+      sourceRefs: [...new Set([receiptRef, ...runtime.receipt.sourceRefs])].slice(0, 100),
+    };
+  } catch (error) {
+    if (invoked && !evidenceAttempted) {
+      evidenceAttempted = true;
+      try {
+        await retainReceipt(createAgentDelegationReceipt(record, { status: failureStatus, used: null }));
+      } catch (writeError) {
+        throw new AggregateError([error, writeError],
+          "Delegation terminal evidence could not be retained; inspect the original run before retrying.", { cause: error });
+      }
+    }
+    throw error;
+  }
 }
 
 function p7ToolScope(call: GovernedToolCall): { tenant: TenantContext; projectId: number } {
@@ -5503,17 +5523,23 @@ export async function checkpointAgentExecution(adapterId: string, requestId: str
 
 function boundedAgentChildSignal(parent: AbortSignal | undefined, maxDurationMs: number): {
   signal: AbortSignal;
+  termination: () => "cancelled" | "timed_out" | null;
   dispose: () => void;
 } {
   const controller = new AbortController();
   const timeout = AbortSignal.timeout(Math.min(Math.max(maxDurationMs, 1_000), 300_000));
+  let termination: "cancelled" | "timed_out" | null = null;
+  const recordTermination = () => { termination = parent?.aborted ? "cancelled" : "timed_out"; };
+  controller.signal.addEventListener("abort", recordTermination, { once: true });
   const detachParent = linkAbortSignal(parent, controller);
   const detachTimeout = linkAbortSignal(timeout, controller);
   return {
     signal: controller.signal,
+    termination: () => termination,
     dispose: () => {
       detachParent();
       detachTimeout();
+      controller.signal.removeEventListener("abort", recordTermination);
     },
   };
 }
@@ -5528,6 +5554,8 @@ export async function runBoundedAgent(input: {
   budget?: AgentDelegationBudget;
   maxDurationMs?: number;
   signal?: AbortSignal;
+  /** Server-only lifecycle facts; never supplied to the adapter or accepted from request/model input. */
+  observeExecution?: (state: { state: "started" } | { state: "failed"; status: "failed" | "cancelled" | "timed_out" }) => void;
 }): Promise<AgentRuntimeResult> {
   const adapter = getAgentFrameworkAdapter(input.adapterId);
   if (!adapter) throw new Error(`Agent adapter "${input.adapterId}" is not registered.`);
@@ -5540,7 +5568,11 @@ export async function runBoundedAgent(input: {
     maxDurationMs: Math.min(Math.max(input.maxDurationMs ?? 90_000, 1_000), 300_000),
   });
   const child = boundedAgentChildSignal(input.signal, budget.maxDurationMs);
+  let invoked = false;
   try {
+    assertNotAborted(child.signal);
+    invoked = true;
+    input.observeExecution?.({ state: "started" });
     const result = await adapter.execute({
       requestId: input.requestId,
       role: input.role,
@@ -5568,6 +5600,9 @@ export async function runBoundedAgent(input: {
         result,
       }),
     };
+  } catch (error) {
+    if (invoked) input.observeExecution?.({ state: "failed", status: child.termination() ?? "failed" });
+    throw error;
   } finally {
     child.dispose();
   }

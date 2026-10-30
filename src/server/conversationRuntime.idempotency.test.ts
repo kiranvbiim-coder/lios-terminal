@@ -502,7 +502,7 @@ test("governed delegation pauses, resumes once, records L5 dispatch and emits a 
   assert.ok(evidence?.kind === "evidence");
   assert.match(
     evidence.ref,
-    /^delegate-receipt:v1:[a-f0-9]{32}:[a-f0-9]{32}:research:[a-f0-9]{32}:[a-f0-9]{64}$/,
+    /^delegate-receipt:v2:[a-f0-9]{32}:[a-f0-9]{32}:research:completed:reported:[a-f0-9]{32}:[a-f0-9]{64}$/,
   );
 
   const replay = run(
