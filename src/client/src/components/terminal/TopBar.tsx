@@ -271,7 +271,7 @@ export default function TopBar({ activeSymbol, view, onNav, onSymbol, onOpenCmd,
   const dateStr = clock.toLocaleDateString("en-US", { month: "short", day: "2-digit", year: "numeric" }).toUpperCase();
 
   return (
-    <header className="flex items-center gap-0 h-9 min-w-0 bg-[#0a0a0a] border-b border-border shrink-0">
+    <header className="relative z-40 flex items-center gap-0 h-9 min-w-0 bg-[#0a0a0a] border-b border-border shrink-0">
       <div className="flex shrink-0 items-center gap-2 px-2 sm:px-3 h-full border-r border-border bg-[hsl(38,95%,50%)] sm:min-w-[140px]">
         <Terminal className="w-3.5 h-3.5 text-black" strokeWidth={2.5} />
         <span className="hidden sm:inline font-terminal text-[10px] font-extrabold uppercase tracking-[0.08em] text-black">LiOS Terminal</span>
