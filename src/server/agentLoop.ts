@@ -243,6 +243,7 @@ const REVIEW_SHAPE_GUIDANCE = [
   'Return exactly one JSON object and no other text.',
   'If the goal is satisfied, use exactly {"decision":"complete","answer":"<grounded answer>"} and no extra keys.',
   'If more tool work is required, use exactly {"decision":"revise","steps":[...]} and no extra keys.',
+  'A goal that asks to prepare, send, save, publish or otherwise act through a tool is NOT satisfied until that tool step has been planned, executed or paused for approval by LiOS. Never use "complete" to say an action is prepared, pending approval or done when no such step exists; use "revise" with the exact step from observed results.',
   'A revise step uses the same strict step fields as planning: "id", "toolId", "label", "input", "dependsOn", plus optional "skillId" only when actually used.',
   'Omit optional fields instead of emitting null. Do not emit markdown fences, commentary, reasoning, or trailing text.',
 ].join(" ");
