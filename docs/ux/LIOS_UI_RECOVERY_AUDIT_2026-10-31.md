@@ -35,3 +35,15 @@ Briefings shortcut opens Briefing Studio with an honest empty state; no renderer
 ## Needs owner confirmation
 The earlier session's UI deletions remain: the old `IntelligencePulse` overlay (Pulse now lives in the experience shell), `IntegrationTrackerPanel`,
 `MinimalProjectsHeader`, `SignatureEntryBackdrop`, `EnvironmentSetup`, `ExperienceCenter`, `PersonaOnboarding`, `ws-controls-smoke`, and `publicRoutes` (anonymous lead capture).
+
+## Second pass: the donor UI was imported but hidden (Discover integration)
+The owner reported seeing no UI/UX update. A separate check against the local 455-commit integration branch `omp/finance-terminal-chat` found only 208 of its 7,601 added client lines (2.7%) absent from this branch; the lines are older revisions of components main has since rewritten (receipt list, `ChatTerminalControl`, source-list href helper), so nothing needed recovery. The cause was reachability:
+
+- **Pulse discovery (the beUI tabs/citations and Watermelon story-card work, #264-#356) opened only with `Ctrl+Shift+U` (or `⌘⇧U`) and, when opened, swapped the whole app into the legacy sidebar and header.** Explore, Signals and Library had the same behaviour. The main navigation had no entry for any of them.
+- The relationship graph, impact map, scenarios, decisions, trust ledger, evidence and research tray overlays opened only through other keyboard chords.
+
+Change: `Discover` is now a section of the Chat shell (`DiscoverSurface`, hosting the existing `WaveCExperienceShell` with its legacy brand/Master-AI header removed and Pulse/Explore/Signals/Library as tabs). It sits in the same sidebar, compact rail and mobile sheet as Chat. "Ask LiOS" on a story stages the existing reviewed draft in Chat (nothing is sent). Every old entry point (shortcut, command palette, dock, stored surface) now lands in this section, and the duplicate full-screen mount in `Terminal.tsx` was removed. The seven analysis overlays have visible buttons in Discover and in the composer's Tools menu from one registry, `lib/intelligenceViews.ts`. `discover` is also a command-palette destination (aliases: pulse, explore, stories, news).
+
+Exercised in a fresh isolated source Home with local Ollama: Discover shows eight live-feed stories; the card Inspect / Follow / Mute / Ask / Open analysis controls render; Ask puts the story question in the composer; Explore tab and Relationship graph overlay open; 390 px width has no horizontal overflow. `npm run check` passes. The React render tests first failed here with "Cannot read properties of null (reading 'useMemo')" because the local worktree held a stray nested `node_modules/node_modules` (a second React copy from an earlier clone); after removing that local artifact the navigation test (now expecting the Discover label) and the licence-banner and editorial-image render tests pass.
+
+Not done: the Workbench keeps its dense terminal styling (it is the specialist surface); unimported beUI families (Sankey/treemap/funnel charts, tool-approval, streaming-response, prompt-input, toast stack) and further Watermelon dashboard pieces remain candidates, none claimed.
