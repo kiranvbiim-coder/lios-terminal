@@ -70,10 +70,10 @@ export default function LiosPulseStoryCard({ card, featured = false, changedSinc
           sourceIds={pulseStoryMediaSourceIds(evidence)}
           showSourceLink={false}
           className="mb-4"
-          fallback={<div aria-hidden="true" className="relative mb-4 flex h-28 items-center justify-between overflow-hidden rounded-lg border border-amber-200/10 bg-gradient-to-br from-amber-200/[0.09] via-zinc-500/[0.035] to-cyan-300/[0.045] px-6">
-            <div className="absolute -right-10 top-[-90px] h-52 w-52 rounded-full border border-amber-200/15" />
-            <div className="absolute -right-3 top-[-63px] h-44 w-44 rounded-full border border-amber-200/10" />
-            <Radar className="relative h-10 w-10 text-amber-200/65" strokeWidth={1} />
+          fallback={<div aria-hidden="true" className="relative mb-4 flex h-28 items-center justify-between overflow-hidden rounded-lg border border-border/60 bg-gradient-to-br from-muted/70 via-muted/30 to-transparent px-6">
+            <div className="absolute -right-10 top-[-90px] h-52 w-52 rounded-full border border-border" />
+            <div className="absolute -right-3 top-[-63px] h-44 w-44 rounded-full border border-border/70" />
+            <Radar className="relative h-10 w-10 text-muted-foreground" strokeWidth={1} />
             <span className="relative font-ui text-xs font-medium tracking-[0.19em] text-foreground/50">LIOS INTELLIGENCE</span>
           </div>} />}
         {!featured && <LicensedEditorialImage media={card.media} sourceIds={pulseStoryMediaSourceIds(evidence)} showSourceLink={false} variant="compact" className="mb-3 w-28" />}
