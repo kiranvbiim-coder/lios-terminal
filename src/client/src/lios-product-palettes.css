@@ -4,11 +4,7 @@
  * Do not add third-party logos, marks or product-specific layout mimics.
  * LiOS Classic inherits the canonical terminal-shell.css defaults.
  */
-html[data-lios-palette="chatgpt-dark"],
-html[data-lios-palette$="-light"] .terminal-root[data-surface="workbench"],
-html[data-lios-palette$="-light"] .terminal-root[data-surface="workbench"] .dark,
-html[data-lios-palette$="-light"] .lios-reference-login,
-html[data-lios-palette$="-light"] .lios-reference-entry {
+html[data-lios-palette="chatgpt-dark"] {
   color-scheme: dark;
   --lios-bg-app: #212121;
   --lios-bg-shell: #171717;
@@ -404,8 +400,8 @@ html[data-lios-palette]:not([data-lios-palette="lios-classic"]) .terminal-root .
 }
 /* Screen-reader and keyboard focus retain the canonical LiOS focus contract. */
 
-/* Light palettes: the specialist Workbench is one coherent graphite canvas (tokens above), never a half-light hybrid. */
-html[data-lios-palette$="-light"] .terminal-root[data-surface="workbench"] { color-scheme: dark; }
+/* Light palettes inherit their own surfaces in Chat, onboarding and Workbench.
+ * Isolated dark analytical tools must opt in rather than override a user preference. */
 
 /* Discover (Pulse/Explore/Signals/Library) uses literal dark fills in index.css; follow the palette instead. */
 html[data-lios-palette$="-light"] .fusion-pulse-board,
