@@ -7,7 +7,7 @@ import { prepareArtifactChart, selectArtifactChartViewport } from "@/lib/artifac
 import { chartRecordedContext, chartSourceCaveat } from "@/lib/artifactChartContext";
 import ArtifactChartRecordedTable from "./ArtifactChartRecordedTable";
 import { ExpertViewDisclosure } from "./ArtifactExpertView";
-import { ReadableValue } from "@/components/ui/ReadableValue";
+import { ReadableValueTable } from "@/components/terminal/ReadableValueTable";
 const EChartsArtifactPlot=lazy(()=>import("./EChartsArtifactPlot"));
 
 type ChartContent = Extract<ArtifactContent, { kind: "chart" }>;
@@ -104,7 +104,7 @@ export default function ArtifactChart({ content, artifactSourceRefs, ...mode }: 
       </details>}
     </section>
     {content.rendererPreference !== "recharts" && content.rendererPreference !== "echarts" && <p className="font-ui text-[13px] text-amber-200">This chart was saved with a different drawing preference ({content.rendererPreference}). It is shown with the standard chart view; saving the chart type keeps that preference.</p>}
-    {Object.keys(content.options).length > 0 && <ExpertViewDisclosure summary="Expert view" hint="Recorded chart settings not used by this view"><ReadableValue value={content.options} exact className="max-h-40 overflow-auto text-[12px]" /></ExpertViewDisclosure>}
+    {Object.keys(content.options).length > 0 && <ExpertViewDisclosure summary="Expert view" hint="Recorded chart settings not used by this view"><ReadableValueTable values={content.options} options={{ showExact: true }} className="max-h-40 overflow-auto text-[12px]" /></ExpertViewDisclosure>}
     {saveError && <p role="alert" data-testid="artifact-chart-save-error" className="text-sm text-red-200">{saveError}</p>}
     {saveMessage && <p role="status" className="text-sm text-emerald-200">{saveMessage}</p>}
     {prepared.status !== "ready" ? <p role="alert" data-testid="artifact-chart-unavailable" className="rounded border border-amber-300/20 p-3 text-sm text-amber-200">{prepared.message} The recorded Artifact is unchanged.</p>

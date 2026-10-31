@@ -10,7 +10,6 @@ import { ReadableChart } from "./ArtifactReadableChart";
 import { ArtifactFootnote, ArtifactTrustBadges, type ArtifactProvenanceFacts } from "./ArtifactTrustSummary";
 import { ReadableCell, ReadableValueTable, ScenarioComparisonTable } from "./ReadableValueTable";
 import { parseSensitivityGrid, SensitivityGridTable } from "./SensitivityGridTable";
-import { ReadableValue } from "@/components/ui/ReadableValue";
 
 type ValuationContent = Extract<ArtifactContent, { kind: "valuation" }>;
 
@@ -115,7 +114,7 @@ export default function ValuationArtifactView({ content, facts = {}, disabled = 
     <ArtifactFootnote facts={facts} model={modelVersion} fingerprint={outputHash} units={unitsNote} />
     <ExpertViewDisclosure defaultOpen={expertDefaultOpen} summary="Expert view" hint="Recorded valuation inputs and outputs · read only">
       <p className="mb-2 font-ui text-[12px] text-amber-200">This is recorded calculation evidence, not an input editor. It shows every stored value exactly. Use a governed recalculation to create new values and a new receipt.</p>
-      <ReadableValue value={content} exact aria-label="Recorded valuation data" className="max-h-96 overflow-auto rounded border border-border/50 p-3 text-[12px] text-muted-foreground" />
+      <ReadableValueTable values={content} options={{ showExact: true }} aria-label="Recorded valuation data" className="max-h-96 overflow-auto rounded border border-border/50 p-3 text-[12px] text-muted-foreground" />
     </ExpertViewDisclosure>
   </section>;
 }

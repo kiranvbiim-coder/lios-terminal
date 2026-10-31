@@ -54,7 +54,7 @@ import { clearNativeArtifactDraft, useNativeArtifactDraftOwner, useNativeArtifac
 import NativeDraftRecoveryNotice from "./NativeDraftRecoveryNotice";
 import { stableSerialize } from "@/lib/analyticalCore";
 import { reconcileTerminalDraft } from "@/lib/terminalDraftReconciliation";
-import { ReadableValue } from "@/components/ui/ReadableValue";
+import { ReadableValueTable } from "@/components/terminal/ReadableValueTable";
 
 const UniverSpreadsheetEditor = lazy(() => import("./UniverSpreadsheetEditor"));
 const ArtifactChart = lazy(() => import("./ArtifactChart"));
@@ -440,7 +440,7 @@ function Body({artifactId,contentHash,content,revision,onSave,onDraft,onThesisRe
 }
 function FieldValue({ value, exact = false }: { value: unknown; exact?: boolean }) {
   if (value === null || value === undefined) return <span className="text-muted-foreground">—</span>;
-  if (typeof value === "object") return <details><summary className="cursor-pointer text-muted-foreground">View details</summary><ReadableValue value={value} exact={exact} className="mt-2" /></details>;
+  if (typeof value === "object") return <details><summary className="cursor-pointer text-muted-foreground">View details</summary><ReadableValueTable values={value} options={{ showExact: exact }} className="mt-2" /></details>;
   return <span>{typeof value === "number" && !exact ? value.toLocaleString(undefined, { maximumSignificantDigits: 12 }) : String(value)}</span>;
 }
 const TABLE_PAGE_SIZE = 100;
@@ -595,9 +595,9 @@ function IntegratedArtifactEngineInputs({ detail, onOpenOutput, blocked, onApply
         <div><dt className="inline text-muted-foreground">Normalized input hash: </dt><dd className="inline">{review.inputHash}</dd></div>
         <div><dt className="inline text-muted-foreground">Required review hash: </dt><dd className="inline">{review.reviewHash}</dd></div>
       </dl>
-      {review.changedFields.length ? <div className="overflow-auto"><table className="w-full text-left text-sm"><caption className="mb-2 text-left">{review.changedFields.length} engine input changes from the recorded source run · exact values, no percentage or display rounding</caption><thead><tr><th scope="col" className="p-2">Saved cell / input</th><th scope="col" className="p-2">Before</th><th scope="col" className="p-2">After</th></tr></thead><tbody>{review.changedFields.map((field) => <tr key={`${field.sheetId}:${field.cell}:${field.path}`}><th scope="row" className="border-t border-border/40 p-2 font-normal">{field.sheetId}!{field.cell}<br/>{field.path}</th><td className="border-t border-border/40 p-2"><ReadableValue value={field.before} exact /></td><td className="border-t border-border/40 p-2"><ReadableValue value={field.after} exact /></td></tr>)}</tbody></table></div> : <p className="text-sm text-muted-foreground">No engine input changes from the recorded source run. An explicit run still creates a separate output.</p>}
-      <details><summary className="cursor-pointer text-sm">Inspect all exact normalized assumptions and schedules</summary><ReadableValue value={{ assumptions: review.assumptions, schedules: review.schedules }} exact className="mt-2" /></details>
-      <details><summary className="cursor-pointer text-sm">Recorded source references ({review.sourceRefs.length})</summary><ReadableValue value={review.sourceRefs} exact className="mt-2" /></details>
+      {review.changedFields.length ? <div className="overflow-auto"><table className="w-full text-left text-sm"><caption className="mb-2 text-left">{review.changedFields.length} engine input changes from the recorded source run · exact values, no percentage or display rounding</caption><thead><tr><th scope="col" className="p-2">Saved cell / input</th><th scope="col" className="p-2">Before</th><th scope="col" className="p-2">After</th></tr></thead><tbody>{review.changedFields.map((field) => <tr key={`${field.sheetId}:${field.cell}:${field.path}`}><th scope="row" className="border-t border-border/40 p-2 font-normal">{field.sheetId}!{field.cell}<br/>{field.path}</th><td className="border-t border-border/40 p-2"><ReadableValueTable values={field.before} options={{ showExact: true }} /></td><td className="border-t border-border/40 p-2"><ReadableValueTable values={field.after} options={{ showExact: true }} /></td></tr>)}</tbody></table></div> : <p className="text-sm text-muted-foreground">No engine input changes from the recorded source run. An explicit run still creates a separate output.</p>}
+      <details><summary className="cursor-pointer text-sm">Inspect all exact normalized assumptions and schedules</summary><ReadableValueTable values={{ assumptions: review.assumptions, schedules: review.schedules }} options={{ showExact: true }} className="mt-2" /></details>
+      <details><summary className="cursor-pointer text-sm">Recorded source references ({review.sourceRefs.length})</summary><ReadableValueTable values={review.sourceRefs} options={{ showExact: true }} className="mt-2" /></details>
       <p className="text-sm text-muted-foreground">Run rechecks the saved head, source permissions, engine revision, and both captured hashes before deterministic execution. This does not authorize host execution or provider refresh.</p>
       <button type="button" data-testid="artifact-run-reviewed-inputs" disabled={blocked || state.pending !== null || !current} onClick={() => void session.current?.run()} className="rounded border border-emerald-300/40 px-3 py-2 text-sm text-emerald-200 disabled:opacity-40">{state.pending === "run" ? "Running reviewed inputs…" : "Run reviewed inputs"}</button>
       {state.pending === "run" && <p role="status" className="text-sm text-muted-foreground">The explicit run is in flight. Leaving this inspector does not cancel server execution.</p>}

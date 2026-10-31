@@ -8,7 +8,7 @@ import BacktestArtifactView from "./BacktestArtifactView";
 import PortfolioArtifactView from "./PortfolioArtifactView";
 import ValuationArtifactView from "./ValuationArtifactView";
 import { dcfSensitivityValuation } from "./dcfSensitivityArtifact.fixture";
-import { ReadableRowsTable } from "./ReadableValueTable";
+import { ReadableRowsTable, ReadableValueTable } from "./ReadableValueTable";
 
 const save = async () => undefined;
 const facts = { savedAt: "2026-10-20T10:30:00.000Z", sourceCount: 0, receiptCount: 1 };
@@ -85,7 +85,7 @@ test("recorded valuation data is reachable only as read-only exact evidence, nev
   assert.doesNotMatch(closed, /<textarea/);
   const open = valuation({ expertDefaultOpen: true });
   assert.match(open, /aria-expanded="true"/);
-  assert.match(open, /<div[^>]*aria-label="Recorded valuation data"/);
+  assert.match(open, /<(?:div|section)[^>]*aria-label="Recorded valuation data"/);
   assert.match(open, />71\.370824940136 per share</);
   assert.doesNotMatch(open, RAW_JSON);
   assert.match(open, /This is recorded calculation evidence, not an input editor/);
@@ -203,4 +203,18 @@ test("columns recorded after the visible row page remain discoverable without wi
   const markup = renderToStaticMarkup(createElement(ReadableRowsTable, { title: "Trades", rows, limit: 100 }));
   assert.match(markup, /Late recorded metric/i);
   assert.equal((markup.match(/<tbody>[\s\S]*?<\/tbody>/)?.[0].match(/<tr/g) ?? []).length, 100);
+});
+
+test("ReadableValueTable reads nested records, arrays and plain values without a title or JSON", () => {
+  const nested = renderToStaticMarkup(createElement(ReadableValueTable, { values: { wacc: 0.0825, stages: [{ growth: 0.05 }, { growth: 0.03 }], notes: ["rounded", "annual"] }, "aria-label": "Inputs" }));
+  assert.match(nested, /aria-label="Inputs"/);
+  assert.doesNotMatch(nested, /<h3/);
+  assert.match(nested, />WACC</);
+  assert.match(nested, /Stages › #1 › Growth/);
+  assert.doesNotMatch(nested, RAW_JSON);
+  const plain = renderToStaticMarkup(createElement(ReadableValueTable, { values: ["argv", "--flag"], title: "Command" }));
+  assert.match(plain, />Command</);
+  assert.match(plain, /argv/);
+  const empty = renderToStaticMarkup(createElement(ReadableValueTable, { values: null, emptyText: "Nothing here." }));
+  assert.match(empty, /Nothing here\./);
 });

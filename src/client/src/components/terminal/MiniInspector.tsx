@@ -10,7 +10,7 @@ import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import type { ArtifactInspection, ArtifactInspectionTarget } from "@shared/artifactInspection";
 import { SpreadsheetCellSourceInspect } from "./SpreadsheetCellSourceInspect";
 import ConversationTrustPanel from "./ConversationTrustPanel";
-import { ReadableValue } from "@/components/ui/ReadableValue";
+import { ReadableValueTable } from "@/components/terminal/ReadableValueTable";
 
 interface Props {
   request: TerminalInspectorRequest;
@@ -55,11 +55,11 @@ function ExactArtifactInspector({ target }: { target: ArtifactInspectionTarget }
       <h3 className="font-semibold">{data.title} · {data.kind}</h3>
       <p className="text-sm text-muted-foreground">Saved historical custody, not a live freshness claim. Inspection, comments, P4 change acceptance, Decision review and execution remain separate authorities.</p>
       {data.cell && <SpreadsheetCellSourceInspect sheetName={data.cell.sheetName} cellRef={data.cell.ref} cell={data.cell.value}/>}
-      {target.cell?.kind === "table" && <div className="text-sm"><span>Exact table value: </span><ReadableValue value={data.tableValue} exact className="inline-block align-top" /></div>}
+      {target.cell?.kind === "table" && <div className="text-sm"><span>Exact table value: </span><ReadableValueTable values={data.tableValue} options={{ showExact: true }} className="inline-block align-top" /></div>}
       <section className="space-y-2"><h4>Recorded sources</h4>{data.sourceRefs.length ? data.sourceRefs.map(ref => <p key={ref} className="break-all font-mono text-xs">{ref}</p>) : <p>No source recorded; no trust classification inferred.</p>}</section>
-      <section><h4>Recorded numerical provenance</h4>{data.numericalEvidence.length ? data.numericalEvidence.map(item => <details key={item.id}><summary>{item.source.kind} · {item.source.field} · {item.normalizedValue}</summary><ReadableValue value={item} exact className="text-xs" /></details>) : <p className="text-sm text-muted-foreground">No bound numerical evidence at this target. Labels and values do not establish numerical class.</p>}</section>
+      <section><h4>Recorded numerical provenance</h4>{data.numericalEvidence.length ? data.numericalEvidence.map(item => <details key={item.id}><summary>{item.source.kind} · {item.source.field} · {item.normalizedValue}</summary><ReadableValueTable values={item} options={{ showExact: true }} className="text-xs" /></details>) : <p className="text-sm text-muted-foreground">No bound numerical evidence at this target. Labels and values do not establish numerical class.</p>}</section>
       {data.trustManifest && <ConversationTrustPanel manifest={data.trustManifest}/>}
-      <details><summary>Advanced custody, assumptions, transformations and downstream references</summary><ReadableValue value={{ receipts: data.executionReceiptIds, assumptions: data.assumptionRefs, dependencies: data.dependencyRefs, references: data.references, currentDisplayRights: data.rights }} exact className="text-xs" /></details>
+      <details><summary>Advanced custody, assumptions, transformations and downstream references</summary><ReadableValueTable values={{ receipts: data.executionReceiptIds, assumptions: data.assumptionRefs, dependencies: data.dependencyRefs, references: data.references, currentDisplayRights: data.rights }} options={{ showExact: true }} className="text-xs" /></details>
       <p className="text-xs text-muted-foreground">Advanced depth is presentation only. It grants no source access, review or execution permission.</p>
     </>}
   </div>;
