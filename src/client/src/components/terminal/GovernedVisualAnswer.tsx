@@ -19,11 +19,27 @@ class VisualBoundary extends Component<{children:React.ReactNode},{failed:boolea
  render(){return this.state.failed?<p role="alert">Visual renderer unavailable. The canonical saved source is unchanged; inspect it in its existing Project or Workbench.</p>:this.props.children;}
 }
 
+const VISUAL_LABELS: Record<GovernedVisualAnswerRequest["intent"]["kind"], string> = {
+ chart: "Chart",
+ table: "Table",
+ timeline: "Timeline",
+ table_map: "Map",
+ project_timeline: "Timeline",
+ insight_graph: "Evidence graph",
+ insight_map: "Evidence map",
+ revision_comparison: "Revision comparison",
+ scenario_comparison: "Scenario comparison",
+};
+
 export function GovernedVisualAnswer({request}:{request:GovernedVisualAnswerRequest}){
- const [expanded,setExpanded]=useState(false);
+ // A visual answer is the answer, not an advanced setting. Show its existing
+ // authorized projection in Chat immediately; keep collapse for compact work.
+ const [expanded,setExpanded]=useState(true);
  return <section aria-label="Governed visual answer from saved evidence" data-testid="governed-chat-visual-answer" className="mb-2 min-w-0 rounded-xl border border-border/55 bg-card/45 p-3">
-  <div className="flex flex-wrap items-center justify-between gap-3"><div><p className="font-ui text-sm font-semibold">Saved {request.intent.kind.replaceAll("_"," ")}</p><p className="text-xs text-muted-foreground">Exact saved identity, owner and current source permissions are rechecked before display.</p></div>
-  <button type="button" aria-expanded={expanded} onClick={()=>setExpanded(value=>!value)} className="min-h-11 rounded border px-3 focus-visible:ring-2">{expanded?"Hide visual":"View visual"}</button></div>
+  <div className="flex flex-wrap items-center justify-between gap-3">
+   <h3 className="font-ui text-sm font-semibold text-foreground">{VISUAL_LABELS[request.intent.kind] ?? "Visual answer"}</h3>
+   <button type="button" aria-expanded={expanded} onClick={()=>setExpanded(value=>!value)} className="min-h-10 rounded-lg border border-border/60 px-3 font-ui text-sm text-foreground hover:bg-accent/40 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary">{expanded?"Collapse":"Show visual"}</button>
+  </div>
   {expanded&&<SavedVisual key={JSON.stringify(request)} request={request}/>}
  </section>;
 }
