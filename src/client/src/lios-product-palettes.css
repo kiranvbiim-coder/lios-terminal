@@ -5,7 +5,6 @@
  * LiOS Classic inherits the canonical terminal-shell.css defaults.
  */
 html[data-lios-palette="chatgpt-dark"],
-html[data-lios-palette="chatgpt-dark"] .dark,
 html[data-lios-palette$="-light"] .terminal-root[data-surface="workbench"],
 html[data-lios-palette$="-light"] .terminal-root[data-surface="workbench"] .dark,
 html[data-lios-palette$="-light"] .lios-reference-login,
@@ -311,8 +310,7 @@ html[data-lios-palette="claude-light"] .dark {
   --amber: 14.77 63.11% 59.61%;
 }
 
-html[data-lios-palette="claude-dark"],
-html[data-lios-palette="claude-dark"] .dark {
+html[data-lios-palette="claude-dark"] {
   color-scheme: dark;
   --lios-bg-app: #262624;
   --lios-bg-shell: #1F1E1D;
