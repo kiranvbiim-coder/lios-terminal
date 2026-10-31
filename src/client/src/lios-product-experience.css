@@ -8,6 +8,21 @@
 
 /* Semantic *text* accent is intentionally distinct from the reference brand
  * color: Claude's #D97757 fails WCAG AA for small text on its ivory surface. */
+/* Studio Clean is a separate owner's choice, not a variant of ChatGPT white. */
+html[data-lios-palette="studio-light"] {
+  --lios-theme-accent-text: #202124;
+  --lios-theme-action: #202124;
+  --lios-theme-action-foreground: #FFFFFF;
+  --lios-theme-link: #2457A6;
+  --lios-theme-user-bg: #F2F3F5;
+  --lios-theme-assistant-bg: transparent;
+  --lios-theme-code-bg: #F7F8FA;
+  --lios-theme-error-text: #B42318;
+  --lios-theme-success-text: #137547;
+  --lios-theme-info-text: #12578A;
+  --lios-theme-violet-text: #6941A5;
+  --lios-theme-fuchsia-text: #873B8C;
+}
 html[data-lios-palette="chatgpt-dark"] {
   --lios-theme-accent-text: #F5F5F5;
   --lios-theme-action: #F5F5F5;
@@ -661,4 +676,73 @@ html[data-lios-palette="claude-light"] .terminal-root .lios-project-experience-s
   .lios-navigation-sheet .lios-history-action-menu {
     opacity: 1 !important;
   }
+}
+
+/* Studio Clean: calm white Playground-like contrast, not the classic
+ * amber terminal or any imitation of a proprietary product layout. */
+.lios-palette-swatch[data-lios-preview="studio-light"] {
+  --lios-palette-preview-surface: #FFFFFF;
+  --lios-palette-preview-panel: #F5F6F8;
+  --lios-palette-preview-accent: #202124;
+}
+html[data-lios-palette="studio-light"] .lios-visual-canvas {
+  background: #FFFFFF !important;
+}
+html[data-lios-palette="studio-light"] .lios-visual-canvas :is(
+  .lios-visual-canvas__image, .lios-visual-canvas__veil,
+  .lios-visual-canvas__light, .lios-visual-canvas__grain
+) {
+  opacity: 0 !important;
+  animation: none !important;
+}
+html[data-lios-palette="studio-light"] .terminal-root .lios-conversation-composer {
+  background: #FFFFFF !important;
+  border-color: #E3E5E8 !important;
+  border-radius: 16px !important;
+  box-shadow: 0 2px 5px rgb(24 28 35 / .06), 0 9px 25px rgb(24 28 35 / .045) !important;
+}
+html[data-lios-palette="studio-light"] .terminal-root .lios-conversation-composer:focus-within {
+  border-color: #B8C2D4 !important;
+  box-shadow: 0 2px 6px rgb(24 28 35 / .06), 0 10px 28px rgb(24 28 35 / .07) !important;
+}
+html[data-lios-palette="studio-light"] .terminal-root :is(
+  .lios-project-experience-shell > main, .lios-project-home-surface, .lios-project-chat-surface
+) {
+  color: #202124;
+}
+html[data-lios-palette="studio-light"] .terminal-root .lios-authenticated-navigation .lios-primary-navigation button[aria-current="page"],
+html[data-lios-palette="studio-light"] .lios-navigation-sheet .lios-primary-navigation button[aria-current="page"] {
+  background: #E9EAEE !important;
+  color: #202124 !important;
+}
+html[data-lios-palette="studio-light"] .terminal-root .lios-chat-starter {
+  background: #FFFFFF !important;
+  border-color: #E3E5E8 !important;
+  border-radius: 14px;
+}
+html[data-lios-palette="studio-light"] .terminal-root .lios-chat-starter:hover {
+  border-color: #C8CDD4 !important;
+  box-shadow: 0 5px 16px rgb(24 28 35 / .05);
+}
+html[data-lios-palette="studio-light"] .terminal-root :is(.lios-artifact-frame, .lios-artifact-sidecar) {
+  background: #FFFFFF !important;
+  border-color: #E3E5E8 !important;
+}
+html[data-lios-palette="studio-light"] .terminal-root .lios-project-experience-shell [class*="text-cyan-100"] {
+  color: var(--lios-theme-info-text) !important;
+}
+html[data-lios-palette="studio-light"] .terminal-root :is(.lios-project-experience-shell, .lios-project-home-surface) :is(.text-red-200,.text-red-300) {
+  color: var(--lios-theme-error-text) !important;
+}
+html[data-lios-palette="studio-light"] .terminal-root :is(.lios-project-experience-shell, .lios-project-home-surface) :is(.text-emerald-100,.text-emerald-200,.text-emerald-300) {
+  color: var(--lios-theme-success-text) !important;
+}
+html[data-lios-palette="studio-light"] .terminal-root :is(.lios-project-experience-shell, .lios-project-home-surface) :is(.text-cyan-100,.text-cyan-200,.text-cyan-300) {
+  color: var(--lios-theme-info-text) !important;
+}
+html[data-lios-palette="studio-light"] .terminal-root .lios-project-experience-shell :is(.text-violet-100,.text-violet-200) {
+  color: var(--lios-theme-violet-text) !important;
+}
+html[data-lios-palette="studio-light"] .terminal-root .lios-project-experience-shell :is(.text-fuchsia-200,.text-fuchsia-300) {
+  color: var(--lios-theme-fuchsia-text) !important;
 }
