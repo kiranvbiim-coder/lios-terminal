@@ -191,7 +191,7 @@ const ClientDataPanel = lazy(() => import("@/components/panels/ClientDataPanel")
 
 function PanelLoadingFallback() {
   return (
-    <div className="flex h-full items-center justify-center bg-[#050505]">
+    <div className="flex h-full items-center justify-center bg-background">
       <div className="flex items-center gap-2 font-terminal text-[9px] tracking-widest text-muted-foreground">
         <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-amber-300" /> HYDRATING ANALYTICAL SURFACE...
       </div>
@@ -1043,7 +1043,7 @@ export default function Terminal({ session, onLogout, onOpenEnvironment, domain,
       )}
 
       {!presentationMode && showDenseChrome && (
-        <div className="flex min-w-0 shrink-0 items-stretch border-b border-border bg-[#080808]">
+        <div className="flex min-w-0 shrink-0 items-stretch border-b border-border bg-background">
           <div className="flex shrink-0 items-stretch border-r border-border" aria-label="Analytical history">
             <button onClick={handleHistoryBack} disabled={!canGoBack} className="flex w-8 items-center justify-center font-terminal text-[12px] text-muted-foreground hover:bg-white/[0.04] hover:text-foreground disabled:opacity-25" title="Back (Alt+Left)" aria-label="Back in analytical history">←</button>
             <button onClick={handleHistoryForward} disabled={!canGoForward} className="flex w-8 items-center justify-center border-l border-border font-terminal text-[12px] text-muted-foreground hover:bg-white/[0.04] hover:text-foreground disabled:opacity-25" title="Forward (Alt+Right)" aria-label="Forward in analytical history">→</button>
@@ -1147,7 +1147,7 @@ export default function Terminal({ session, onLogout, onOpenEnvironment, domain,
       {showDenseChrome && !isClient && uxPreferences.density === "terminal" && !intelligentCalm && !focusMode && !presentationMode && <FunctionBar onNav={handleNav} onOpenCmd={() => setCmdOpen(true)} onOpenLayouts={() => setLayoutOpen(true)} onOpenWorkbench={() => handleSurface("workbench")} />}
 
       {(focusMode || presentationMode) && (
-        <div className="fixed right-2 top-2 z-[60] flex items-center gap-1 border border-border bg-[#080808]/95 p-1 shadow-xl">
+        <div className="fixed right-2 top-2 z-[60] flex items-center gap-1 border border-border bg-background/95 p-1 shadow-xl">
           <button onClick={() => setCmdOpen(true)} className="border border-border px-2 py-1.5 font-terminal text-[7px] text-amber-300 hover:bg-white/[0.04]">⌘K SEARCH</button>
           <button onClick={() => handleSurface("workbench")} className="border border-border px-2 py-1.5 font-terminal text-[7px] text-cyan-300 hover:bg-white/[0.04]">WORKBENCH</button>
           <button onClick={exitCanvasMode} className="border border-border px-2 py-1.5 font-terminal text-[7px] text-muted-foreground hover:text-foreground">EXIT {presentationMode ? "PRESENTATION" : "FOCUS"}</button>
