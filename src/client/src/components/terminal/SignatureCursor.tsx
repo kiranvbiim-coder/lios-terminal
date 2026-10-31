@@ -58,7 +58,7 @@ export default function SignatureCursor() {
   }, []);
 
   return (
-    <div ref={cursorRef} className="limuria-cursor" data-visible={visible ? "true" : "false"} data-mode={mode} aria-hidden="true">
+    <div ref={cursorRef} className="limuria-cursor fixed pointer-events-none" hidden={!visible} data-visible={visible ? "true" : "false"} data-mode={mode} aria-hidden="true">
       <span className="limuria-cursor-ring" />
       <span className="limuria-cursor-core">L</span>
     </div>
