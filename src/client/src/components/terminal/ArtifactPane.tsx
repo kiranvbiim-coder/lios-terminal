@@ -1,3 +1,4 @@
+import { resolveSaveBase } from "@/lib/artifactSaveBase";
 import { resolveArtifactPaneRequestedVersion } from "@/lib/artifactWorkbenchHandoff";
 import AsyncSurfaceNotice from "./AsyncSurfaceNotice";
 import { ArtifactTimeline } from "./ArtifactTimeline";
@@ -798,6 +799,7 @@ function ArtifactPaneWorkspace({
   useEffect(()=>{if(data)setLeft(Math.max(1,data.artifact.headVersion-1))},[artifactId, data?.artifact.headVersion]);
   useEffect(() => { setSpreadsheetPendingRevision(false); }, [data?.version.version, data?.version.contentHash]);
   const displayedVersionCallback = useRef(onDisplayedVersionChange);
+  const ownSave = useRef<{ artifactId: string; version: number } | null>(null);
   displayedVersionCallback.current = onDisplayedVersionChange;
   useEffect(() => { if (data && !detail.isPlaceholderData && (version == null || data.version.version === version)) displayedVersionCallback.current?.(data.version.version, artifactId, version ?? null); }, [artifactId, version, data?.version.version, detail.isPlaceholderData]);
   exportRevision.current = data ? { artifactId, version: data.version.version, contentHash: data.version.contentHash } : null;
@@ -991,11 +993,13 @@ function ArtifactPaneWorkspace({
     if(next.kind==="research" || next.kind==="report" || next.kind==="decision" || next.kind==="screen" || next.kind==="thesis" || next.kind==="strategy") {
       setError(null);
       try {
-        if(data.version.version!==data.artifact.headVersion) throw new Error("This Artifact is not the current revision. Reload before saving.");
+        const base = resolveSaveBase({ viewedVersion: data.version.version, headVersion: data.artifact.headVersion, ownLatestVersion: ownSave.current?.artifactId === artifactId ? ownSave.current.version : null });
+        if(!base.ok) throw new Error("This Artifact is not the current revision. Reload before saving.");
         const saved = await createArtifactVersion(artifactId,{
-          baseVersion:data.version.version,content:next,actorType:"user",
+          baseVersion:base.baseVersion,content:next,actorType:"user",
           dependencyRefs:data.version.dependencyRefs,refreshSpec:data.version.refreshSpec,
         });
+        ownSave.current = { artifactId, version: saved.version };
         onVersionChange?.(saved.version);
         invalidate(projectId,artifactId);
       } catch(cause) {

@@ -7,6 +7,7 @@ import { fetchPublicNewsArticleHtml, validatePublicNewsUrl } from "./publicNewsA
 import { approvedNewsMediaForFeed } from "./newsEditorialMedia";
 import { getIndicatorQuotes } from "./fredData";
 import { buildDataStatus, type DataStatus } from "./dataStatus";
+import { decideMarketDataAccess } from "@shared/marketDataAccess";
 import { fetchText, fetchWithRetry, getCached, setCached } from "./providerUtils";
 import { loadHistory, saveHistory, isFresh, coversRange, listStoredSymbols, type StoredHistory, type StoredHistoryProvenance } from "./marketHistoryStore";
 import { loadFundamentals, saveFundamentals, isFreshFundamentals, type Fundamentals } from "./fundamentalsStore";
@@ -2035,9 +2036,15 @@ export async function getOHLCVSeries(symbol: string, range = "1Y", interval: Ohl
     getQuotes([upper]).then((items) => items[0] ?? buildReferenceFallbackQuote(upper)),
   ]);
 
+  // An empty series caused by the person's own source selection or consent must say so, not read like a provider outage.
+  const scope = resolveMarketDataScope();
+  const access = scope.scoped ? decideMarketDataAccess(scope) : null;
+  const blocked = !bars.length && access && access.state !== "ready" ? access : null;
   return {
     bars,
-    status: quote.status,
+    status: blocked
+      ? buildDataStatus({ provider: quote.status.provider, freshness: quote.status.freshness, asOf: null, delayLabel: blocked.message, isFallback: true, reason: blocked.reason })
+      : quote.status,
     supportsIntraday: isCryptoSymbol(upper) || quote.status.freshness === "current",
   };
 }

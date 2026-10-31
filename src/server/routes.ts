@@ -381,13 +381,21 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       return q.price === 0 && q.status?.isFallback === true;
     });
   }
+  // An empty quote list or empty price series (nothing selected, consent pending, provider miss) must not be pinned
+  // in the browser cache: choosing a source in Connections has to take effect on the next request, not in 30 minutes.
+  function isEmptyMarketAnswer(req: { path?: string }, data: unknown): boolean {
+    if (Array.isArray(data)) return data.length === 0 && req.path === "/api/finance/quotes";
+    if (!data || typeof data !== "object") return false;
+    const series = data as { bars?: unknown; status?: { reason?: unknown } };
+    return (Array.isArray(series.bars) && series.bars.length === 0) || series.status?.reason !== undefined;
+  }
 
   // Wrap handlers and set Cache-Control headers to let browser cache responses
   const handleFinance = <T>(loader: (req: any) => Promise<T>, cacheSecs = 60) => {
     return async (req: any, res: any) => {
       try {
         const data = await loader(req);
-        const secs = hasHardFallback(data) ? HARD_FALLBACK_CACHE_SECS : cacheSecs;
+        const secs = hasHardFallback(data) || isEmptyMarketAnswer(req, data) ? HARD_FALLBACK_CACHE_SECS : cacheSecs;
         res.set("Cache-Control", `public, max-age=${secs}, stale-while-revalidate=${secs * 2}`);
         res.json(data);
       } catch (error) {

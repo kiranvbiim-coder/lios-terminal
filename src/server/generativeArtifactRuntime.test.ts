@@ -32,12 +32,17 @@ test("explicit subjects beat Workbench context and unrelated questions do not in
 });
 
 test("document requests with a modifier become documents; coding requests and questions do not", () => {
-  for (const message of ["Write a short memo on how rising interest rates affect small businesses", "Draft a brief on tariffs", "write a 1-page report about inflation", "Prepare a one page summary of the Fed decision", "Make a table comparing Python and Go"]) {
+  for (const message of ["Write a short memo on how rising interest rates affect small businesses", "Draft a brief on tariffs", "Prepare a one page summary of the Fed decision", "Make a table comparing Python and Go"]) {
     assert.equal(planConversationWorkflow(request(message)).intent.parameters.workflow, "generative_artifact", message);
   }
   for (const message of ["write a function to compute the plan", "Write a script to build the report", "what is a memo?"]) {
     assert.notEqual(planConversationWorkflow(request(message)).intent.parameters.workflow, "generative_artifact", message);
   }
+});
+
+test("a governed professional report keeps the professional workflow instead of a generic AI document", () => {
+  assert.notEqual(planConversationWorkflow(request("Create a risk report")).intent.parameters.workflow, "generative_artifact");
+  assert.equal(planConversationWorkflow(request("Write a short memo on how rising interest rates affect small businesses")).intent.parameters.workflow, "generative_artifact");
 });
 
 test("provider auth failure emits reconnect while a rate limit remains retryable", async () => {

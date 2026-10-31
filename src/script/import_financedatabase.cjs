@@ -129,7 +129,34 @@ function normalizeRow(row, category) {
   };
 }
 
-function importDatabase(database, categories = DEFAULT_CATEGORIES, minimum = 100000) {
+const YIELD_EVERY_ROWS = 4000;
+const HASH_CHUNK_BYTES = 16 * 1024 * 1024;
+const SERIALIZE_CHUNK_ROWS = 5000;
+
+/** Run a cooperative step generator to completion with no event-loop yielding (CLI, tests). */
+function drive(generator) {
+  let step = generator.next();
+  while (!step.done) step = generator.next();
+  return step.value;
+}
+
+/**
+ * Run the same generator while returning to the event loop at every `yield`,
+ * so a ~300k-row import never freezes the local server (status polling,
+ * search and every other request keep being served). `onStage` receives the
+ * plain stage objects the generator yields.
+ */
+async function driveAsync(generator, onStage) {
+  let step = generator.next();
+  while (!step.done) {
+    if (onStage && step.value) onStage(step.value);
+    await new Promise(resolve => setImmediate(resolve));
+    step = generator.next();
+  }
+  return step.value;
+}
+
+function* importDatabaseSteps(database, categories = DEFAULT_CATEGORIES, minimum = 100000) {
   const rows = [], seen = new Set(), byCategory = {}, files = [];
   let raw = 0, skipped = 0, duplicates = 0;
   for (const category of categories) {
@@ -138,6 +165,7 @@ function importDatabase(database, categories = DEFAULT_CATEGORIES, minimum = 100
     if (!paths.length) throw new Error("No CSV files for category " + category);
     let accepted = 0;
     for (const file of paths) {
+      yield { stage: "read", category, rows: rows.length };
       const info = fs.lstatSync(file);
       if (!info.isFile()) throw new Error("Refusing nonregular donor source file");
       if (info.size > 128 * 1024 * 1024) throw new Error("Oversized donor CSV: " + path.basename(file));
@@ -147,15 +175,19 @@ function importDatabase(database, categories = DEFAULT_CATEGORIES, minimum = 100
       if (!records.length) throw new Error("Missing donor CSV header: " + path.basename(file));
       const header = records.shift().map(x => x.trim().toLowerCase());
       if (!header.includes("symbol") || !header.includes("name")) throw new Error("Donor CSV schema changed: " + path.basename(file));
+      let sinceYield = 0;
       for (const cells of records) {
         if (cells.length !== header.length) throw new Error("Malformed CSV width: " + path.basename(file));
         raw++;
         const input = Object.fromEntries(header.map((column, i) => [column, cells[i]]));
         const candidate = normalizeRow(input, category);
-        if (!candidate) { skipped++; continue; }
-        const key = [category, candidate.symbol.toUpperCase(), (candidate.mic || candidate.exchange || "").toUpperCase(), (candidate.currency || "").toUpperCase()].join("|");
-        if (seen.has(key)) { duplicates++; continue; }
-        seen.add(key); rows.push(candidate); accepted++;
+        if (!candidate) { skipped++; }
+        else {
+          const key = [category, candidate.symbol.toUpperCase(), (candidate.mic || candidate.exchange || "").toUpperCase(), (candidate.currency || "").toUpperCase()].join("|");
+          if (seen.has(key)) duplicates++;
+          else { seen.add(key); rows.push(candidate); accepted++; }
+        }
+        if (++sinceYield >= YIELD_EVERY_ROWS) { sinceYield = 0; yield { stage: "read", category, rows: rows.length }; }
       }
       files.push({ path: path.relative(database, file).replace(/\\/g, "/"), sha256: crypto.createHash("sha256").update(bytes).digest("hex") });
     }
@@ -164,6 +196,10 @@ function importDatabase(database, categories = DEFAULT_CATEGORIES, minimum = 100
   }
   if (rows.length < minimum) throw new Error("Import below required verified listing threshold: " + rows.length + " < " + minimum);
   return { rows, stats: { raw, accepted: rows.length, duplicates, skipped, byCategory, files } };
+}
+
+function importDatabase(database, categories = DEFAULT_CATEGORIES, minimum = 100000) {
+  return drive(importDatabaseSteps(database, categories, minimum));
 }
 
 function writeAtomic(file, value) {
@@ -191,16 +227,27 @@ function backupPair(catalog, manifest) {
   }
 }
 
-function verifyInstalled(dest) {
+function* verifyInstalledSteps(dest, knownRows = null) {
   const catalog = path.join(dest, "financedatabase_universe.json");
   const manifestFile = path.join(dest, "financedatabase_manifest.json");
   const manifest = JSON.parse(fs.readFileSync(manifestFile, "utf8"));
+  // Always hash the bytes actually on disk. `knownRows` (the rows this very
+  // process just serialised and validated) only lets the install path skip
+  // re-parsing 150 MB of JSON on the server's event loop; a standalone
+  // --verify still parses the stored file.
+  yield { stage: "check" };
   const bytes = fs.readFileSync(catalog);
-  const hash = crypto.createHash("sha256").update(bytes).digest("hex");
+  const digest = crypto.createHash("sha256");
+  for (let offset = 0; offset < bytes.length; offset += HASH_CHUNK_BYTES) {
+    digest.update(bytes.subarray(offset, Math.min(bytes.length, offset + HASH_CHUNK_BYTES)));
+    yield { stage: "check" };
+  }
+  const hash = digest.digest("hex");
   if (!manifest.catalogSha256 || manifest.catalogSha256 !== hash) throw new Error("Catalog SHA256 does not match manifest");
-  const rows = JSON.parse(bytes.toString("utf8"));
+  const rows = knownRows ?? JSON.parse(bytes.toString("utf8"));
   if (!Array.isArray(rows) || rows.length !== manifest.accepted) throw new Error("Imported row count mismatch");
   const counter = {}, keys = new Set();
+  let sinceYield = 0;
   for (const r of rows) {
     if (r.provider !== "financedatabase" || !r.symbol || !r.name || !SUPPORTED.has(r.assetClass)) {
       throw new Error("Invalid imported identity row");
@@ -210,12 +257,45 @@ function verifyInstalled(dest) {
     if (keys.has(key)) throw new Error("Duplicate venue-qualified imported listing key");
     keys.add(key);
     counter[r.assetClass] = (counter[r.assetClass] || 0) + 1;
+    if (++sinceYield >= YIELD_EVERY_ROWS * 4) { sinceYield = 0; yield { stage: "check" }; }
   }
   for (const [assetClass, count] of Object.entries(manifest.byCategory)) {
     if (counter[assetClass] !== count) throw new Error("Manifest category count mismatch: " + assetClass);
   }
   return { verified: true, importedAt: manifest.importedAt, upstreamCommit: manifest.upstreamCommit,
     count: rows.length, byCategory: counter, sha256: hash };
+}
+
+function verifyInstalled(dest) {
+  return drive(verifyInstalledSteps(dest));
+}
+
+/** A JSON array identical to JSON.stringify(rows), built in slices so no single call freezes the event loop. */
+function* serializeRowsSteps(rows) {
+  const parts = [Buffer.from("[")];
+  for (let i = 0; i < rows.length; i += SERIALIZE_CHUNK_ROWS) {
+    const body = JSON.stringify(rows.slice(i, i + SERIALIZE_CHUNK_ROWS));
+    parts.push(Buffer.from((i ? "," : "") + body.slice(1, -1)));
+    yield { stage: "write", rows: i };
+  }
+  parts.push(Buffer.from("]"));
+  return Buffer.concat(parts);
+}
+
+/** Refuse early, with a plain message, when the destination volume cannot hold the snapshot plus its previous copy. */
+function assertFreeSpace(directory, requiredBytes) {
+  fs.mkdirSync(directory, { recursive: true, mode: 0o700 });
+  let free = Infinity;
+  try {
+    const stats = fs.statfsSync(directory);
+    free = Number(stats.bavail) * Number(stats.bsize);
+  } catch { /* A filesystem that cannot report free space is attempted anyway; a real ENOSPC is handled by the restore path. */ }
+  if (free < requiredBytes) {
+    const error = new Error("Not enough free disk space: about " + Math.ceil(requiredBytes / 1048576) +
+      " MB needed, " + Math.floor(free / 1048576) + " MB available");
+    error.code = "ENOSPC";
+    throw error;
+  }
 }
 
 function rollback(dest) {
@@ -236,7 +316,40 @@ function rollback(dest) {
   return verifyInstalled(dest);
 }
 
-function withDonorCheckout(callback) {
+/**
+ * Replace the installed snapshot. The previous verified pair is kept; if any
+ * step fails (disk full, interrupted write, failed verification) the previous
+ * pair is restored — or the half-written files removed on a first install — so
+ * a failed update can never leave a catalog/manifest pair that disagrees.
+ */
+function* publishSnapshotSteps(dest, rows, catalogBytes, manifest) {
+  const catalog = path.join(dest, "financedatabase_universe.json");
+  const manifestPath = path.join(dest, "financedatabase_manifest.json");
+  assertFreeSpace(dest, catalogBytes.length * 2 + 32 * 1048576);
+  const hadCurrent = fs.existsSync(catalog) && fs.existsSync(manifestPath);
+  let replaced = false;
+  try {
+    yield { stage: "write", rows: rows.length };
+    backupPair(catalog, manifestPath);
+    replaced = true;
+    writeAtomic(catalog, catalogBytes);
+    yield { stage: "write", rows: rows.length };
+    writeAtomic(manifestPath, manifest);
+    return yield* verifyInstalledSteps(dest, rows);
+  } catch (error) {
+    if (replaced) {
+      try {
+        if (hadCurrent) rollback(dest);
+        else for (const f of [catalog, manifestPath]) fs.rmSync(f, { force: true });
+      } catch (restoreError) {
+        error.message += " (previous catalog could not be restored: " + restoreError.message + ")";
+      }
+    }
+    throw error;
+  }
+}
+
+function openDonorCheckout() {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), "lios-financedatabase-"));
   const checkout = path.join(root, "source");
   try {
@@ -246,11 +359,15 @@ function withDonorCheckout(callback) {
     // entire donor (hundreds of thousands of rows) into the temporary tree.
     execFileSync("git", ["-C", checkout, "sparse-checkout", "set", "database"], { timeout: 180000, stdio: "pipe" });
     execFileSync("git", ["-C", checkout, "checkout", "--detach", PINNED_COMMIT], { timeout: 180000, stdio: "pipe" });
-    return callback(checkout, PINNED_COMMIT);
-  } finally { fs.rmSync(root, { recursive: true, force: true }); }
+  } catch (error) {
+    fs.rmSync(root, { recursive: true, force: true });
+    throw error;
+  }
+  return { checkout, commit: PINNED_COMMIT, cleanup: () => fs.rmSync(root, { recursive: true, force: true }) };
 }
 
-function run(argv = process.argv.slice(2)) {
+/** Parse CLI-style options (shared by the sync CLI and the server's async install). */
+function parseRunArguments(argv) {
   let sourceDir = null, sourceCommit = null, categories = DEFAULT_CATEGORIES, minimum = 300000;
   let dest = path.join(resolveDataRoot({ cwd: path.resolve(__dirname, "..") }).root, "instrument-catalogs");
   const destIndex = argv.indexOf("--dest");
@@ -259,16 +376,8 @@ function run(argv = process.argv.slice(2)) {
     dest = path.resolve(argv[destIndex + 1]);
     argv = argv.filter((_, i) => i !== destIndex && i !== destIndex + 1);
   }
-  if (argv.length === 1 && argv[0] === "--verify") {
-    const report = verifyInstalled(dest);
-    console.log(JSON.stringify(report, null, 2));
-    return report;
-  }
-  if (argv.length === 1 && argv[0] === "--rollback") {
-    const report = rollback(dest);
-    console.log(JSON.stringify({ rolledBack: true, ...report }, null, 2));
-    return report;
-  }
+  if (argv.length === 1 && argv[0] === "--verify") return { mode: "verify", dest };
+  if (argv.length === 1 && argv[0] === "--rollback") return { mode: "rollback", dest };
   for (let i = 0; i < argv.length; i++) {
     const arg = argv[i];
     if (arg === "--from-dir") sourceDir = path.resolve(argv[++i] || "");
@@ -279,42 +388,74 @@ function run(argv = process.argv.slice(2)) {
     else throw new Error("Unknown option " + arg);
   }
   if (!Number.isSafeInteger(minimum) || minimum < 1 || !categories.length) throw new Error("Invalid import threshold or categories");
-  const act = (root, commit) => {
-    const directory = path.join(root, "database");
-    if (!fs.existsSync(directory)) throw new Error("FinanceDatabase /database directory missing");
-    const { rows, stats } = importDatabase(directory, categories, minimum);
-    // Catalog snapshots stay in the user-owned root (never server/data).
-    const catalog = path.join(dest, "financedatabase_universe.json");
-    const manifestPath = path.join(dest, "financedatabase_manifest.json");
-    const catalogBytes = Buffer.from(JSON.stringify(rows));
-    const catalogSha256 = crypto.createHash("sha256").update(catalogBytes).digest("hex");
-    const manifest = {
-      provider: "JerBouma/FinanceDatabase", upstreamCommit: commit,
-      importedAt: new Date().toISOString(), categories, ...stats, catalogSha256,
-      license: "MIT", donorCopyright: "Copyright (c) 2023 Jeroen Bouma",
-      licenseNotice: DONOR_LICENSE_NOTICE,
-      licenseSource: "https://github.com/JerBouma/FinanceDatabase/blob/" + PINNED_COMMIT + "/LICENSE",
-      note: "Reference identities only; not a real-time data or redistribution entitlement.",
-    };
-    backupPair(catalog, manifestPath);
-    writeAtomic(catalog, catalogBytes);
-    writeAtomic(manifestPath, manifest);
-    const verified = verifyInstalled(dest);
-    console.log(JSON.stringify({ destination: dest, ...verified, ...stats, files: stats.files.length }, null, 2));
-    return verified;
+  return { mode: "import", dest, sourceDir, sourceCommit, categories, minimum };
+}
+
+function* importFromDirectorySteps(root, commit, options) {
+  const { dest, categories, minimum } = options;
+  const directory = path.join(root, "database");
+  if (!fs.existsSync(directory)) throw new Error("FinanceDatabase /database directory missing");
+  const { rows, stats } = yield* importDatabaseSteps(directory, categories, minimum);
+  // Catalog snapshots stay in the user-owned root (never server/data).
+  yield { stage: "write", rows: 0 };
+  const catalogBytes = yield* serializeRowsSteps(rows);
+  const catalogSha256 = crypto.createHash("sha256").update(catalogBytes).digest("hex");
+  const manifest = {
+    provider: "JerBouma/FinanceDatabase", upstreamCommit: commit,
+    importedAt: new Date().toISOString(), categories, ...stats, catalogSha256,
+    license: "MIT", donorCopyright: "Copyright (c) 2023 Jeroen Bouma",
+    licenseNotice: DONOR_LICENSE_NOTICE,
+    licenseSource: "https://github.com/JerBouma/FinanceDatabase/blob/" + PINNED_COMMIT + "/LICENSE",
+    note: "Reference identities only; not a real-time data or redistribution entitlement.",
   };
-  if (sourceDir) {
-    let commit = sourceCommit && /^[a-f0-9]{40}$/i.test(sourceCommit) ? sourceCommit : "local-unverified";
+  const verified = yield* publishSnapshotSteps(dest, rows, catalogBytes, manifest);
+  return { destination: dest, verified, stats };
+}
+
+/** The whole run as one cooperative step generator; `log` receives the final CLI report. */
+function* runSteps(argv, log) {
+  const options = parseRunArguments(argv);
+  if (options.mode === "verify") {
+    const report = verifyInstalled(options.dest);
+    log?.(report);
+    return report;
+  }
+  if (options.mode === "rollback") {
+    const report = rollback(options.dest);
+    log?.({ rolledBack: true, ...report });
+    return report;
+  }
+  let root = options.sourceDir, commit, cleanup = null;
+  if (options.sourceDir) {
+    commit = options.sourceCommit && /^[a-f0-9]{40}$/i.test(options.sourceCommit) ? options.sourceCommit : "local-unverified";
     if (commit === "local-unverified") {
-      try { commit = execFileSync("git", ["-C", sourceDir, "rev-parse", "HEAD"], { encoding: "utf8", stdio: ["ignore","pipe","ignore"] }).trim(); }
+      try { commit = execFileSync("git", ["-C", options.sourceDir, "rev-parse", "HEAD"], { encoding: "utf8", stdio: ["ignore","pipe","ignore"] }).trim(); }
       catch { /* A local CSV copy does not have verifiable git provenance. */ }
     }
-    return act(sourceDir, commit);
+  } else {
+    const donor = openDonorCheckout();
+    root = donor.checkout; commit = donor.commit; cleanup = donor.cleanup;
   }
-  return withDonorCheckout(act);
+  try {
+    const { destination, verified, stats } = yield* importFromDirectorySteps(root, commit, options);
+    log?.({ destination, ...verified, ...stats, files: stats.files.length });
+    return verified;
+  } finally { cleanup?.(); }
 }
+
+const printReport = report => console.log(JSON.stringify(report, null, 2));
+
+function run(argv = process.argv.slice(2)) {
+  return drive(runSteps(argv, printReport));
+}
+
+/** Same import as `run`, yielding to the event loop; `onStage({stage, category?, rows?})` reports progress. */
+function runAsync(argv, onStage) {
+  return driveAsync(runSteps(argv), onStage);
+}
+
 if (require.main === module) {
   try { run(); }
   catch (e) { console.error("LiOS FinanceDatabase import failed:", e.message); process.exitCode = 1; }
 }
-module.exports = { parseCsv, normalizeRow, importDatabase, run, catalogFiles, verifyInstalled, rollback };
+module.exports = { parseCsv, normalizeRow, importDatabase, run, runAsync, catalogFiles, verifyInstalled, rollback, assertFreeSpace };

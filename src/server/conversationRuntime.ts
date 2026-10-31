@@ -123,6 +123,8 @@ import { executeAdvancedQuant, AdvancedQuantInputError, type AdvancedQuantPath }
 import { resolveFinancialStatements } from "./financialStatementsBroker";
 import { PythonServiceDataError } from "./pythonService";
 import { explainUniversalDataGap, planUniversalDataRequest } from "./universalDataResolver";
+import { withOwnerRequestIdentity } from "./ownerRequestIdentity";
+import { MARKET_DATA_GAP_REASONS } from "@shared/marketDataAccess";
 import {
   buildEvidenceClaim,
   buildTrustManifest,
@@ -366,6 +368,7 @@ const toolDataStatusSchema = z.object({
   asOf: z.string().nullable(),
   delayLabel: z.string().max(300),
   isFallback: z.boolean(),
+  reason: z.enum(MARKET_DATA_GAP_REASONS).optional(),
 }).strict();
 const ohlcvProvenanceSchema = z.object({
   sourceRefs: z.array(z.string().max(1_000)).max(500),
@@ -496,6 +499,19 @@ const agentDelegationToolInputSchema = z.object({
   budget: agentDelegationBudgetSchema,
 }).strict();
 const noToolInputSchema = z.object({}).strict();
+
+/**
+ * Runs a tool as the signed-in owner named by its call. Market-data authorization (selected sources, community
+ * consent) comes from the ambient request identity; Gateway runs have none until this binds it. A call with no
+ * signed-in tenant has no owner to bind and keeps the historical unscoped behaviour.
+ */
+function withToolCallOwnerIdentity<T>(call: Pick<GovernedToolCall, "tenant">, run: () => Promise<T>): Promise<T> {
+  const tenant = call.tenant;
+  if (!tenant || typeof tenant !== "object") return run();
+  const { userId, organizationId } = tenant as { userId?: unknown; organizationId?: unknown };
+  if (typeof userId !== "number" || !Number.isInteger(userId) || userId <= 0) return run();
+  return withOwnerRequestIdentity({ userId, organizationId: typeof organizationId === "number" && Number.isInteger(organizationId) ? organizationId : null }, run);
+}
 
 export function createConversationToolCall(
   input: ConversationRuntimeInput,
@@ -866,7 +882,7 @@ function registerBuiltinConversationTools(): void {
     replaySafe: true,
     maxOutputBytes: 512 * 1024,
     cancel: null,
-    invoke: async (input, signal, call) => {
+    invoke: (input, signal, call) => withToolCallOwnerIdentity(call, async () => {
       const symbol = String(input.symbol || "").trim().toUpperCase();
       const sourceScope = call.sourceScope ?? "auto";
 
@@ -953,7 +969,7 @@ function registerBuiltinConversationTools(): void {
           historyProvenance: history.provenance,
         },
       };
-    },
+    }),
   });
 
   registerConversationTool({
@@ -1618,7 +1634,7 @@ export function planConversationWorkflow(requestInput: ConversationRequest): Wor
       { id: "run-personal-finance", kind: "calculate", label: "Calculate deterministic personal-finance snapshot", componentId: "lios.personal-finance.core-v1", permissionClass: "safe_auto", dependsOn: ["validate-personal-finance-inputs"] },
       { id: "emit-personal-finance-artifact", kind: "artifact", label: "Create Personal Finance Decision Artifact", componentId: "lios.artifact-draft", permissionClass: "safe_auto", dependsOn: ["run-personal-finance"] },
     );
-  } else if (generationKind) {
+  } else if (generationKind && !(generationKind === "document" && p5ProfessionalCapabilities.length)) {
     capabilities = [];
     intent = { action: "chat", confidence: 1, entityRefs: [], parameters: { workflow: "generative_artifact", generationKind }, requiresAI: true, requiresDeterministicCompute: false };
     steps.push({ id: "generate-artifact", kind: "artifact", label: generationKind === "image" ? "Create an AI image" : "Write an editable document", componentId: generationKind === "image" ? imageGenerationTool.id : documentGenerationTool.id, permissionClass: "safe_auto", dependsOn: [] });

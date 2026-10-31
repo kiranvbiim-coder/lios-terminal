@@ -7,8 +7,10 @@ import { apiRequest } from "@/lib/queryClient";
 import { serverErrorText } from "@/lib/apiErrorText";
 import { LICENSE_ACCESS_KEY, needsFirstRunChoice, readOnlyBannerText, useLicenseAccess, type LicenseAccess } from "@/lib/licenseAccess";
 import { useAiConnectionGate } from "@/lib/aiConnection";
+import { useMarketDataStepGate } from "@/lib/marketDataStep";
 import LicenseKeyEntry from "./LicenseKeyEntry";
 import ConnectAiStep from "./ConnectAiStep";
+import MarketDataStep from "./MarketDataStep";
 
 /** First run after enrollment: start the trial; only the Home owner may also import a license key. */
 export function FirstRunLicenseChoice({ canImportLicense = true }: { canImportLicense?: boolean }) {
@@ -128,12 +130,20 @@ export default function AccessModeGate({ enabled, onLogout, children }: { enable
   if (ai.gate === "connect" && !connectStarted && !workspaceOpened) setConnectStarted(true);
   const firstRunChoice = needsFirstRunChoice(access);
   const aiSettled = !firstRunChoice && (ai.gate === "ready" || (ai.gate === "reconnect" && !connectStarted) || (ai.gate === "not_required" && !(enabled && license.isPending)));
-  if (aiSettled && !workspaceOpened) setWorkspaceOpened(true);
+  // After AI, ask once for a market-data source. A person who defers is not asked again.
+  const market = useMarketDataStepGate(access?.mode === "full" && aiSettled && !workspaceOpened);
+  const [marketDone, setMarketDone] = useState(false);
+  const marketSettled = marketDone || market.gate === "skip";
+  if (aiSettled && marketSettled && !workspaceOpened) setWorkspaceOpened(true);
 
   if (access && firstRunChoice) return <FirstRunLicenseChoice canImportLicense={access.isOwner} />;
   if (!workspaceOpened && !aiSettled) {
-    if (connectStarted || ai.gate === "connect") return <ConnectAiStep setup={ai.setup} onConnected={() => setWorkspaceOpened(true)} onLogout={onLogout} />;
+    if (connectStarted || ai.gate === "connect") return <ConnectAiStep setup={ai.setup} onConnected={() => setConnectStarted(false)} onLogout={onLogout} />;
     return <StartupCheck text={ai.gate === "checking" ? "Checking your AI connection…" : "Getting LiOS ready…"} />;
+  }
+  if (!workspaceOpened && aiSettled) {
+    if (market.gate === "show") return <MarketDataStep setup={market.setup} userId={market.userId} onDone={() => setMarketDone(true)} />;
+    return <StartupCheck text="Getting LiOS ready…" />;
   }
   return (
     <>

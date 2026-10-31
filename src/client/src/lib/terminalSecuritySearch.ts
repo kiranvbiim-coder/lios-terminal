@@ -4,6 +4,13 @@ export interface SecuritySearchResult {
   exchange?: string;
   assetClass?: string;
   region?: string;
+  /** Provider that supplied this row. "financedatabase" rows are catalog listings with no live price. */
+  source?: string;
+}
+
+/** A global-securities catalog listing: identity only, no price. */
+export function isReferenceListing(result: SecuritySearchResult): boolean {
+  return result.source === "financedatabase";
 }
 
 /** Search rows are discovery evidence, not verified financial data or entitlement. */
@@ -15,7 +22,8 @@ export function isSecuritySearchResult(value: unknown): value is SecuritySearchR
     && typeof row.name === "string" && row.name.trim().length > 0
     && (row.exchange === undefined || typeof row.exchange === "string")
     && (row.assetClass === undefined || typeof row.assetClass === "string")
-    && (row.region === undefined || typeof row.region === "string");
+    && (row.region === undefined || typeof row.region === "string")
+    && (row.source === undefined || typeof row.source === "string");
 }
 
 /** Enter/GO can open only one exact symbol returned by the active completed

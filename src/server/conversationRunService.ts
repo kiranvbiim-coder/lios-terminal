@@ -94,6 +94,7 @@ import { deriveWorkingContext, resolveWorkingContextRequest, restoreWorkingConte
 import type { WorkingContextOwner, WorkingContextResolution } from "@shared/workingContext";
 import type { WorkingContextSnapshot } from "@shared/conversationRuntime";
 import { ConversationExecutionTranscript, ConversationJournalError, getConversationExecutionJournal, withConversationExecutionScope } from "./exec/execution-scope";
+import { withOwnerRequestIdentity } from "./ownerRequestIdentity";
 import { SandboxRuntimeConfigurationError } from "./exec/sandbox-runtime-profile";
 import type { AgentEventInput } from "./exec/agent-run-events";
 import { AgentDispatchOutcomeUnknownError, agentPlanSha256, type AgentLoopContinuationState, type AgentLoopReopen } from "./agentLoop";
@@ -760,7 +761,8 @@ async function runProjectChat(
             }
           }
           : undefined;
-        const result = await withConversationExecutionScope(request.requestId, () => executeConversationRuntime({
+        // Gateway (WebSocket) runs are not Express requests; bind the owner's market-data identity so Chat obeys the same source selection and consent as the HTTP routes.
+        const result = await withConversationExecutionScope(request.requestId, () => withOwnerRequestIdentity(context, () => executeConversationRuntime({
           tenant: context,
           signal,
           runSignal,
@@ -890,7 +892,7 @@ async function runProjectChat(
             if (event.type === "error") held.errored = true;
             emit(event);
           },
-        }), sourceRelease, adopted?.assertCurrent, incomingAiDispatch);
+        })), sourceRelease, adopted?.assertCurrent, incomingAiDispatch);
         await adopted?.assertCurrent();
         if (!result.cancelled && !result.awaitingApproval && !conversationRuns.claimCompletion(request.requestId, user.id)) {
           // Stop won before durable output commit. Do not save a completed
@@ -1384,7 +1386,7 @@ export async function startTemporaryRun(user: ConversationUser, rawBody: unknown
       chatId: null,
     }, async (emit, signal) => {
       const held: HeldRun = { done: null, errored: false };
-      const result = await withConversationExecutionScope(request.requestId, () => executeConversationRuntime({
+      const result = await withConversationExecutionScope(request.requestId, () => withOwnerRequestIdentity(context, () => executeConversationRuntime({
         tenant: context,
         signal,
         scope: "temporary",
@@ -1408,7 +1410,7 @@ export async function startTemporaryRun(user: ConversationUser, rawBody: unknown
             emit(runtimeEvent);
           }
         },
-      })).catch((error: unknown) => {
+      }))).catch((error: unknown) => {
         endFailedRun(emit, request.requestId, held, error, preRun);
         return null;
       });
