@@ -3,10 +3,11 @@
  * Palette references describe colors, not an affiliation with model providers.
  */
 export const LIOS_PALETTE_STORAGE_KEY = "lios-product-palette-v1";
-export const DEFAULT_LIOS_PALETTE = "chatgpt-dark" as const;
+export const DEFAULT_LIOS_PALETTE = "studio-light" as const;
 export const LIOS_PRODUCT_PALETTES = [
   { id: "chatgpt-dark", label: "Graphite · ChatGPT-inspired dark" },
   { id: "chatgpt-light", label: "White · ChatGPT-inspired light" },
+  { id: "studio-light", label: "Studio Clean · bright white" },
   { id: "claude-light", label: "Ivory · Claude-inspired light" },
   { id: "claude-dark", label: "Clay · Claude-inspired dark" },
   { id: "lios-classic", label: "LiOS Classic · black & gold" },
@@ -27,7 +28,7 @@ export function readLiosProductPalette(): LiosProductPalette {
 }
 
 export function isLiosLightPalette(palette: LiosProductPalette): boolean {
-  return palette === "chatgpt-light" || palette === "claude-light";
+  return palette === "chatgpt-light" || palette === "claude-light" || palette === "studio-light";
 }
 
 function applyLiosProductPalette(palette: LiosProductPalette): void {

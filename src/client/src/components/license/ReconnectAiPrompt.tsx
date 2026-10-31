@@ -61,7 +61,7 @@ export default function ReconnectAiPrompt({ setup, permission, onReconnected }: 
       </div>
       {error && <p role="alert" className="mt-2 text-xs text-rose-300">{error}</p>}
       <Dialog open={choosing} onOpenChange={setChoosing}>
-        <DialogContent className="dark max-w-2xl border-border bg-[#070707] text-foreground">
+        <DialogContent className="dark max-w-2xl border-border bg-card text-foreground">
           <DialogHeader>
             <DialogTitle className="font-ui text-base">Connect your AI</DialogTitle>
             <DialogDescription className="font-ui text-sm text-muted-foreground">

@@ -524,7 +524,7 @@ export default function ConversationRuntimeTrace({
 
       {caveats && (
         <div className="mb-2 rounded-lg border border-amber-300/20 bg-amber-300/[0.025] px-3 py-2.5" role="note" data-testid="trace-source-caveats">
-          <div className="font-ui text-[13px] font-semibold text-foreground">Source limitations</div>
+          <div className="font-ui text-[13px] font-semibold text-foreground">Things to know about these sources</div>
           <ul className="mt-1 list-disc space-y-0.5 pl-4 font-ui text-[13px] leading-5 text-muted-foreground">
             {caveats.lines.slice(0, 4).map((line, index) => <li key={`${index}-${line}`}>{line}</li>)}
             {caveats.lines.length > 4 && <li>{caveats.lines.length - 4} more — open Show work for the full list.</li>}
@@ -641,7 +641,7 @@ export default function ConversationRuntimeTrace({
         </div>
       )}
       {summary.status === "completed" && !observedReceipt && (
-        <p role="status" data-testid="trace-receipt-missing" className="mb-2 px-2 font-ui text-sm text-muted-foreground">Home reported completion; a separate execution receipt was not received in this view.</p>
+        <p role="status" data-testid="trace-receipt-missing" className="mb-2 px-2 font-ui text-sm text-muted-foreground">This run finished, but its confirmation record could not be loaded here. Open “Show work” to check.</p>
       )}
 
       {!runtimeError && !dataGap && !legacyApproval && !governedApproval && done?.type === "done" && (done.status === "failed" || (done.status === "cancelled" && !canResume)) && (

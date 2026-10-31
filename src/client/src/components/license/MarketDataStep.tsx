@@ -35,8 +35,8 @@ export default function MarketDataStep({ setup, userId, onDone }: { setup: AiSet
   const later = () => { dismissMarketDataStep(userId); onDone(); };
 
   return (
-    <main className="flex min-h-screen w-screen items-center justify-center bg-[#030303] p-4 text-foreground" data-testid="market-data-step">
-      <section className="w-full max-w-xl space-y-6 rounded-lg border border-border bg-[#070707] p-6 sm:p-8" aria-labelledby="market-data-title">
+    <main className="flex min-h-screen w-screen items-center justify-center bg-background p-4 text-foreground" data-testid="market-data-step">
+      <section className="w-full max-w-xl space-y-6 rounded-lg border border-border bg-card p-6 sm:p-8" aria-labelledby="market-data-title">
         <header className="space-y-2">
           <div className="flex items-center gap-2">
             <TrendingUp className="h-5 w-5 text-[hsl(38,95%,55%)]" aria-hidden="true" />

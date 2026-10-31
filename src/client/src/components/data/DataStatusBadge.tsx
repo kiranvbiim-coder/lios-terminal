@@ -106,7 +106,7 @@ export default function DataStatusBadge({
         aria-hidden="true"
       />
       <span className="whitespace-nowrap">
-        {status.isFallback ? "DEGRADED" : FRESHNESS_LABEL[status.freshness]}
+        {status.isFallback ? "LIMITED DATA" : FRESHNESS_LABEL[status.freshness]}
       </span>
       {!compact && <span className="hidden whitespace-nowrap opacity-75 sm:inline">{status.delayLabel}</span>}
       {showProvider && <span className="hidden whitespace-nowrap opacity-75 md:inline">{status.provider}</span>}

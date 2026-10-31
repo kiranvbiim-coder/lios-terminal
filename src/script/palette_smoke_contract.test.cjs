@@ -4,11 +4,11 @@ const assert = require("node:assert/strict");
 const test = require("node:test");
 const { PALETTES, paletteSpecs, contrast, validateFrame } = require("./palette_smoke_contract.cjs");
 
-test("palette smoke matrix contains 35 unique bounded source fixture views", () => {
+test("palette smoke matrix contains 42 unique bounded source fixture views", () => {
   const specs = paletteSpecs();
-  assert.equal(PALETTES.length, 5);
-  assert.equal(specs.length, 35);
-  assert.equal(new Set(specs.map((view) => view.name)).size, 35);
+  assert.equal(PALETTES.length, 6);
+  assert.equal(specs.length, 42);
+  assert.equal(new Set(specs.map((view) => view.name)).size, 42);
   for (const palette of PALETTES) {
     const views = specs.filter((item) => item.palette === palette);
     assert.equal(views.length, 7);

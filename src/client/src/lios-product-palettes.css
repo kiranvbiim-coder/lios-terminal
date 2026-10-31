@@ -56,6 +56,7 @@ html[data-lios-palette="chatgpt-dark"] {
   --lios-overlay: 0.00 0.00% 18.82%;
   --lios-hover: 0.00 0.00% 20.78%;
   --lios-hairline: 0.00 0.00% 25.49%;
+  --border: 0.00 0.00% 25.49%;
   --lios-hairline-strong: 0.00 0.00% 40.39%;
   --lios-text: 0.00 0.00% 100.00%;
   --lios-text-soft: 0.00 0.00% 80.39%;
@@ -77,7 +78,86 @@ html[data-lios-palette="chatgpt-dark"] {
   --amber: 0.00 0.00% 100.00%;
 }
 
-html[data-lios-palette="chatgpt-light"] {
+/* Studio Clean: a distinct white neutral palette based on the owner's visual reference.
+ * LiOS-owned colors and controls; no Google trademarks, assets or source code. */
+html[data-lios-palette="studio-light"],
+html[data-lios-palette="studio-light"] .dark {
+  color-scheme: light;
+  --lios-bg-app: #FFFFFF;
+  --lios-bg-shell: #F9FAFB;
+  --lios-bg-panel: #FFFFFF;
+  --lios-bg-panel-2: #FAFAFB;
+  --lios-bg-elevated: #F3F4F6;
+  --lios-bg-hover: #F0F1F3;
+  --lios-bg-active: #E9EAED;
+  --lios-bg-selected: #E9EAEE;
+  --lios-border-subtle: #EDEEF0;
+  --lios-border-default: #E3E5E8;
+  --lios-border-strong: #CED2D8;
+  --lios-text-primary: #202124;
+  --lios-text-secondary: #5F6368;
+  --lios-text-muted: #747880;
+  --lios-brand: #202124;
+  --lios-brand-hover: #323438;
+  --lios-brand-muted: #EAF0FD;
+  --background: 225 12% 100%;
+  --foreground: 225 5% 13%;
+  --card: 225 12% 100%;
+  --card-foreground: 225 5% 13%;
+  --card-border: 220 10% 90%;
+  --sidebar: 220 16% 98%;
+  --sidebar-foreground: 225 5% 13%;
+  --sidebar-border: 220 10% 90%;
+  --sidebar-primary: 225 5% 13%;
+  --sidebar-primary-foreground: 0 0% 100%;
+  --sidebar-accent: 220 12% 93%;
+  --sidebar-accent-foreground: 225 5% 13%;
+  --sidebar-ring: 220 5% 22%;
+  --popover: 0 0% 100%;
+  --popover-foreground: 225 5% 13%;
+  --popover-border: 220 10% 90%;
+  --primary: 225 5% 13%;
+  --primary-foreground: 0 0% 100%;
+  --secondary: 220 12% 96%;
+  --secondary-foreground: 225 5% 13%;
+  --muted: 220 12% 95%;
+  --muted-foreground: 220 4% 38%;
+  --accent: 220 12% 94%;
+  --accent-foreground: 225 5% 13%;
+  --input: 220 10% 85%;
+  --ring: 220 5% 22%;
+  --chart-1: 216 88% 52%;
+  --lios-void: 220 16% 98%;
+  --lios-canvas: 0 0% 100%;
+  --lios-raised: 0 0% 100%;
+  --lios-overlay: 220 12% 96%;
+  --lios-hover: 220 12% 94%;
+  --lios-hairline: 220 10% 90%;
+  --border: 220 10% 90%;
+  --lios-hairline-strong: 220 10% 82%;
+  --lios-text: 225 5% 13%;
+  --lios-text-soft: 220 4% 37%;
+  --lios-text-dim: 220 4% 47%;
+  --limuria-ink: 220 16% 98%;
+  --limuria-graphite-0: 0 0% 100%;
+  --limuria-graphite-1: 0 0% 100%;
+  --limuria-graphite-2: 220 12% 96%;
+  --limuria-graphite-3: 220 12% 94%;
+  --limuria-line: 220 10% 90%;
+  --limuria-line-strong: 220 10% 82%;
+  --limuria-text: 225 5% 13%;
+  --limuria-text-soft: 220 4% 37%;
+  --limuria-text-dim: 220 4% 47%;
+  --limuria-amber: 225 5% 13%;
+  --limuria-amber-hot: 225 5% 20%;
+  --limuria-amber-soft: 225 5% 20%;
+  --lios-amber: 225 5% 13%;
+  --amber: 225 5% 13%;
+}
+
+
+html[data-lios-palette="chatgpt-light"],
+html[data-lios-palette="chatgpt-light"] .dark {
   color-scheme: light;
   --lios-bg-app: #FFFFFF;
   --lios-bg-shell: #F9F9F9;
@@ -129,6 +209,7 @@ html[data-lios-palette="chatgpt-light"] {
   --lios-overlay: 0.00 0.00% 95.69%;
   --lios-hover: 0.00 0.00% 95.69%;
   --lios-hairline: 0.00 0.00% 89.02%;
+  --border: 0.00 0.00% 89.02%;
   --lios-hairline-strong: 0.00 0.00% 80.39%;
   --lios-text: 0.00 0.00% 5.10%;
   --lios-text-soft: 0.00 0.00% 36.47%;
@@ -150,7 +231,8 @@ html[data-lios-palette="chatgpt-light"] {
   --amber: 0.00 0.00% 5.10%;
 }
 
-html[data-lios-palette="claude-light"] {
+html[data-lios-palette="claude-light"],
+html[data-lios-palette="claude-light"] .dark {
   color-scheme: light;
   --lios-bg-app: #FAF9F5;
   --lios-bg-shell: #F0EEE6;
@@ -202,6 +284,7 @@ html[data-lios-palette="claude-light"] {
   --lios-overlay: 48.00 25.00% 92.16%;
   --lios-hover: 50.00 20.69% 88.63%;
   --lios-hairline: 45.00 17.39% 81.96%;
+  --border: 45.00 17.39% 81.96%;
   --lios-hairline-strong: 49.09 6.51% 66.86%;
   --lios-text: 60.00 2.56% 7.65%;
   --lios-text-soft: 45.00 4.82% 32.55%;
@@ -275,6 +358,7 @@ html[data-lios-palette="claude-dark"] {
   --lios-overlay: 60.00 4.35% 18.04%;
   --lios-hover: 60.00 3.64% 21.57%;
   --lios-hairline: 52.50 6.15% 25.49%;
+  --border: 52.50 6.15% 25.49%;
   --lios-hairline-strong: 48.00 5.10% 38.43%;
   --lios-text: 48.00 33.33% 97.06%;
   --lios-text-soft: 42.86 13.21% 79.22%;
@@ -315,3 +399,24 @@ html[data-lios-palette]:not([data-lios-palette="lios-classic"]) .terminal-root .
   background-color: var(--lios-bg-hover);
 }
 /* Screen-reader and keyboard focus retain the canonical LiOS focus contract. */
+
+/* Light palettes inherit their own surfaces in Chat, onboarding and Workbench.
+ * Isolated dark analytical tools must opt in rather than override a user preference. */
+
+/* Discover (Pulse/Explore/Signals/Library) uses literal dark fills in index.css; follow the palette instead. */
+html[data-lios-palette$="-light"] .fusion-pulse-board,
+html[data-lios-palette$="-light"] .fusion-section,
+html[data-lios-palette$="-light"] .fusion-section-header,
+html[data-lios-palette$="-light"] .fusion-subheader,
+html[data-lios-palette$="-light"] .fusion-market-canvas,
+html[data-lios-palette$="-light"] .fusion-index-card,
+html[data-lios-palette$="-light"] .fusion-canvas-panel,
+html[data-lios-palette$="-light"] .fusion-pulse-card,
+html[data-lios-palette$="-light"] .fusion-continuity-card,
+html[data-lios-palette$="-light"] .fusion-market-tile { background: var(--lios-bg-panel); }
+html[data-lios-palette$="-light"] .fusion-pulse-card:hover,
+html[data-lios-palette$="-light"] .fusion-table-row:hover,
+html[data-lios-palette$="-light"] .fusion-continuity-card:hover { background: var(--lios-bg-hover); }
+html[data-lios-palette$="-light"] .fusion-breadth-ring::before { background: var(--lios-bg-panel); }
+html[data-lios-palette$="-light"] .fusion-stack-bar { background: var(--lios-border-default); }
+html[data-lios-palette$="-light"] .terminal-root[data-surface="workbench"] .lios-visual-canvas { background: var(--lios-bg-app); }

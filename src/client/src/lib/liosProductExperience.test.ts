@@ -6,7 +6,7 @@ const read = (path: string) => readFileSync(new URL(path, import.meta.url), "utf
 const paletteCss = read("../lios-product-palettes.css");
 const polishCss = read("../lios-product-experience.css");
 
-const themes = ["chatgpt-dark", "chatgpt-light", "claude-light", "claude-dark"] as const;
+const themes = ["chatgpt-dark", "chatgpt-light", "studio-light", "claude-light", "claude-dark"] as const;
 
 function hexLuminance(hex: string): number {
   assert.match(hex, /^#[0-9a-f]{6}$/i);
@@ -22,7 +22,7 @@ function contrastRatio(a: string, b: string): number {
 }
 
 function color(css: string, theme: string, token: string): string {
-  const start = css.indexOf(`html[data-lios-palette="${theme}"] {`);
+  const start = css.search(new RegExp(`html\\[data-lios-palette="${theme}"\\]\\s*(?:,[^{]*)?\\{`));
   assert.ok(start >= 0, `missing palette: ${theme}`);
   const end = css.indexOf("}", start);
   const block = css.slice(start, end);
@@ -66,11 +66,21 @@ test("light palette status colors meet normal-text contrast on Chat and Project 
   for (const key of statuses) {
     const match = polishCss.match(new RegExp(key + ":\\s*(#[0-9a-fA-F]{6})"));
     assert.ok(match, "Missing accessible status token " + key);
-    for (const theme of ["chatgpt-light", "claude-light"]) {
+    for (const theme of ["chatgpt-light", "studio-light", "claude-light"]) {
       for (const bg of ["--lios-bg-app", "--lios-bg-panel"]) {
         assert.ok(contrastRatio(match[1], color(paletteCss, theme, bg)) >= 4.5,
           key + " fails AA on " + theme + " " + bg);
       }
     }
   }
+});
+
+const appSource = read("../App.tsx");
+const terminalSource = read("../pages/Terminal.tsx");
+
+test("light mode cannot be silently forced dark on Workbench, onboarding or app chrome", () => {
+  assert.doesNotMatch(paletteCss, /html\[data-lios-palette\$="-light"\]\s+\.terminal-root\[data-surface="workbench"\]\s*\{[^}]*color-scheme:\s*dark/);
+  assert.doesNotMatch(paletteCss, /html\[data-lios-palette\$="-light"\]\s+\.lios-reference-(?:login|entry)/);
+  assert.doesNotMatch(appSource, /className="dark /);
+  assert.doesNotMatch(terminalSource, /bg-\\[#(?:050505|080808)\\]/);
 });

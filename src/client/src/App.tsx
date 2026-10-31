@@ -265,7 +265,7 @@ function App() {
 
   if (checkingSession) {
     return (
-      <div className="dark min-h-screen bg-[#030303] flex items-center justify-center">
+      <div className="min-h-screen bg-background flex items-center justify-center">
         <span role="status" className="font-terminal text-[10px] tracking-widest text-muted-foreground animate-pulse">
           OPENING LIOS...
         </span>
@@ -275,7 +275,7 @@ function App() {
 
   if (sessionError) {
     return (
-      <main className="dark min-h-screen bg-[#030303] flex items-center justify-center p-6 text-foreground">
+      <main className="min-h-screen bg-background flex items-center justify-center p-6 text-foreground">
         <section className="w-full max-w-md rounded-xl border border-border bg-background p-6">
           <h1 className="font-ui text-lg font-semibold">Your work is waiting</h1>
           <p role="alert" className="mt-3 font-ui text-sm text-muted-foreground">{sessionError}</p>
@@ -293,7 +293,7 @@ function App() {
         && typeof window !== "undefined" && (window as any).limuriaDesktop?.isElectron
       )} />
       <GatewayProvider enabled={!!session && !session.mustChangePassword}>
-      <div className="dark min-h-screen bg-[#030303]">
+      <div className="min-h-screen bg-background">
         {session && session.mustChangePassword ? (
           <ForcedChangePassword email={session.email} onDone={() => setSession({ ...session, mustChangePassword: false })} />
         ) : session ? (
@@ -313,7 +313,7 @@ function App() {
               <SheetContent
                 side="right"
                 data-testid="chat-management-drawer"
-                className="dark flex h-[100dvh] w-[min(100vw,64rem)] max-w-none flex-col gap-0 overflow-hidden border-l border-border bg-background p-0 text-foreground sm:max-w-none"
+                className="flex h-[100dvh] w-[min(100vw,64rem)] max-w-none flex-col gap-0 overflow-hidden border-l border-border bg-background p-0 text-foreground sm:max-w-none"
                 onCloseAutoFocus={(event) => { event.preventDefault(); }}
               >
                 <div className="shrink-0 border-b border-border px-4 py-4 pr-14 sm:px-6">
