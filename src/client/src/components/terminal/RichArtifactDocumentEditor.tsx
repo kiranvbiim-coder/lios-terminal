@@ -271,7 +271,7 @@ export default function RichArtifactDocumentEditor({ content, onChange, onError,
         <option value="" disabled>Insert block…</option><option value="paragraph">Paragraph</option><option value="table">Recorded table</option><option value="callout">Callout</option><option value="chart_ref">Chart reference</option><option value="artifact_ref">Artifact reference</option>
       </select>
     </div>
-    <p className="rich-document-evidence-note">Local rich document projection · P4 owns revisions and evidence. Pasted text is plain text; references never fetch remote content.</p>
+    <p className="rich-document-evidence-note">Edits here are saved as new versions. Pasted text stays plain text and references never load outside content.</p>
     <fieldset disabled={disabled} className="rich-document-surface"><legend className="sr-only">Rich document content</legend><EditorContent editor={editor} /></fieldset>
   </div>;
 }

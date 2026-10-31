@@ -140,7 +140,7 @@ test("source limitations from the trust manifest are visible by default; the ful
   });
   const markup = render([planEvent, event({ type: "trust", manifest: limited }), doneOk], { onRecoveryAction: noop });
   assert.match(markup, /data-testid="trace-source-caveats"/);
-  assert.match(markup, /Source limitations/);
+  assert.match(markup, /Things to know about these sources/);
   assert.match(markup, /free cash flow is unavailable: The filing has no cash-flow statement\./);
   assert.match(markup, /Two sources disagree by 20%\./);
   assert.match(markup, /Figures are as of the last filing\./);
@@ -148,7 +148,7 @@ test("source limitations from the trust manifest are visible by default; the ful
   assert.doesNotMatch(markup, /data-p3-trust-manifest/, "the detailed trust panel is Show work only");
 
   const clean = render([planEvent, event({ type: "trust", manifest: manifest() }), doneOk]);
-  assert.doesNotMatch(clean, /Source limitations/, "a clean manifest adds no chrome");
+  assert.doesNotMatch(clean, /Things to know about these sources/, "a clean manifest adds no chrome");
   assert.equal(trustCaveats(manifest()), null);
 
   const opened = render([planEvent, event({ type: "trust", manifest: limited }), doneOk], { defaultShowWork: true });
