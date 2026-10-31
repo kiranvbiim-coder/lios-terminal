@@ -243,6 +243,7 @@ const REVIEW_SHAPE_GUIDANCE = [
   'Return exactly one JSON object and no other text.',
   'If the goal is satisfied, use exactly {"decision":"complete","answer":"<grounded answer>"} and no extra keys.',
   'If more tool work is required, use exactly {"decision":"revise","steps":[...]} and no extra keys.',
+  'A goal that asks to prepare, send, save, publish or otherwise act through a tool is NOT satisfied until that tool step has been planned, executed or paused for approval by LiOS. Never use "complete" to say an action is prepared, pending approval or done when no such step exists; use "revise" with the exact step from observed results.',
   'A revise step uses the same strict step fields as planning: "id", "toolId", "label", "input", "dependsOn", plus optional "skillId" only when actually used.',
   'Omit optional fields instead of emitting null. Do not emit markdown fences, commentary, reasoning, or trailing text.',
 ].join(" ");
@@ -352,6 +353,8 @@ function planningSystem(
     `Plan at most ${budget.maxSteps} steps. ${PLAN_SHAPE_GUIDANCE}`,
     "Use only the tools listed. Never put credentials, tenant or Project identifiers in input; LiOS supplies those.",
     "Construct each input from that tool's JSON Schema. Respect required fields, enums and bounds; LiOS additionally validates refinements. Never substitute empty input when required facts are missing.",
+    "A dependency orders execution; it does NOT substitute a previous tool's result into a later input. Every planned input is fixed now.",
+    "If a tool needs an ID, digest or review binding that has not been observed yet, plan only the prerequisite read. After it executes, return a revise decision using the observed value. Never invent placeholders or copy a binding from a different run.",
     "Installed skills are declarative procedures. If a skill fits, set skillId on the relevant steps and use only tool ids that skill declares.",
     "Do not compute numbers yourself: deterministic tools produce them. Tools marked confirm need user approval and will pause the run.",
     ...(skills.length ? [

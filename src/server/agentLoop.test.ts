@@ -113,6 +113,13 @@ test("the review prompt carries tool summaries only, never the model's raw tool 
   assert.match(h.prompts[1]!.user, /result of a/);
 });
 
+test("review guidance forbids claiming an unplanned tool action is prepared", async () => {
+  const h = harness([plan([step("inspect")]), complete("Inspection complete.")]);
+  await runAgentLoop(h.deps);
+  assert.match(h.prompts[1]!.system, /NOT satisfied until that tool step has been planned, executed or paused/);
+  assert.match(h.prompts[1]!.system, /use "revise" with the exact step from observed results/);
+});
+
 test("governed connected observations remain available beyond the generic status-summary cutoff", async () => {
   const tools = ["lios.provider.connected_sources", "lios.provider.connected_preview", "lios.external-mcp.allowed_tools"].map(id => tool(id));
   for (const descriptor of tools) {

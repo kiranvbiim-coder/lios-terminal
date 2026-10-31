@@ -34,6 +34,8 @@ export function buildTelegramConnectRequest(form: TelegramConnectForm): { reques
   const parsed = telegramConnectInputSchema.safeParse({
     name: form.name.trim(), botToken: form.botToken.trim(), projectId: form.projectId, chatId: form.chatId,
     allowedConversationIds: [...new Set(ids)], retentionDays: Number.isFinite(retentionDays) ? retentionDays : 0,
+    // Import edits to allowed messages too; edits do not opt into AI execution or outbound replies.
+    allowedUpdateTypes: ["message", "edited_message"],
     allowAiTransmission: form.allowAiTransmission, consent: true,
     allowOutbound: form.allowOutbound, outboundConsent: form.outboundConsent,
     autoRun: form.autoRunEnabled ? {
