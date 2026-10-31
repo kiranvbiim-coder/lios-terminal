@@ -94,13 +94,27 @@ test("blocked storage cannot prevent immediate theme selection or make legacy mo
   }, true);
 });
 
+test("Studio Clean is the fresh-install default while Classic Dark remains available", () => {
+  assert.equal(DEFAULT_LIOS_PALETTE, "studio-light");
+  withBrowserMock(({ attributes, classes, storage }) => {
+    initializeLiosProductPalette();
+    assert.equal(attributes.get("data-lios-palette"), "studio-light");
+    assert.equal(attributes.get("data-theme"), "light");
+    assert.equal(classes.has("dark"), false);
+    setLiosProductPalette("lios-classic");
+    assert.equal(attributes.get("data-theme"), "dark");
+    assert.equal(classes.has("dark"), true);
+    assert.equal(storage.get(LIOS_PALETTE_STORAGE_KEY), "lios-classic");
+  });
+});
+
 test("invalid persisted Appearance resolves safely during boot without touching other user state", () => {
   withBrowserMock(({ attributes, storage, classes }) => {
     storage.set(LIOS_PALETTE_STORAGE_KEY, "not-a-palette");
     initializeLiosProductPalette();
     assert.equal(attributes.get("data-lios-palette"), DEFAULT_LIOS_PALETTE);
-    assert.equal(attributes.get("data-theme"), "dark");
-    assert.equal(classes.has("dark"), true);
+    assert.equal(attributes.get("data-theme"), "light");
+    assert.equal(classes.has("dark"), false);
     assert.equal(storage.get("lios.fixture-other-state"), "unchanged");
   });
 });
