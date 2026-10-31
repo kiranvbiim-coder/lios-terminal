@@ -27,6 +27,7 @@ export function parseEventFilterRows(rows: readonly P9EventFilterRow[]): P9Event
   const filters: Record<string, string | number | boolean> = Object.create(null);
   for (const row of rows) {
     if (!row.key.trim()) return { success: false, error: "Enter a field name for every condition." };
+    if (["__proto__", "prototype", "constructor"].includes(row.key)) return { success: false, error: "Choose a different field name." };
     if (Object.prototype.hasOwnProperty.call(filters, row.key)) {
       return { success: false, error: "Each field can appear only once." };
     }
