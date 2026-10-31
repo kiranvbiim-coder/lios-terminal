@@ -1,5 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import { parseEventFilterRows, rowsFromEventFilters, type P9EventFilterRow } from "./p9EventFilterEditor";
 
 test("editable event conditions round-trip string, number and boolean values without JSON", () => {
@@ -21,8 +22,7 @@ test("condition field names are exact and duplicates are rejected", () => {
   assert.equal(parseEventFilterRows([base, { ...base, id: 2 }]).success, false);
   assert.equal(parseEventFilterRows([{ ...base, key: " " }]).success, false);
   const special = parseEventFilterRows([{ ...base, key: "__proto__" }]);
-  assert.equal(special.success, true);
-  if (special.success) assert.equal(Object.getOwnPropertyDescriptor(special.data, "__proto__")?.value, "SEC");
+  assert.equal(special.success, false);
 });
 
 test("invalid numbers and oversized strings are refused before saving", () => {
@@ -38,4 +38,13 @@ test("the existing 50-filter server limit applies to structured edits", () => {
   }));
   assert.equal(parseEventFilterRows(rows).success, false);
   assert.equal(parseEventFilterRows(rows.slice(0, 50)).success, true);
+});
+
+
+test("Project automation editor exposes typed form instead of raw JSON", () => {
+  const source = readFileSync(new URL("../components/terminal/ProjectAutomationPanel.tsx", import.meta.url), "utf8");
+  assert.match(source, /data-testid="p9-event-conditions"/);
+  assert.match(source, /Add condition/);
+  assert.match(source, /Remove condition/);
+  assert.doesNotMatch(source, /Matching event filters \\(JSON object\\)|setEventFiltersDraft/);
 });
