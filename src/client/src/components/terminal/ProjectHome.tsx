@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
-import { MessageSquare, Send } from "lucide-react";
+import { BookOpen, FileText, MessageSquare, Radar, Send } from "lucide-react";
 import type { ArtifactRefreshSpec } from "@shared/artifactContracts";
 import type { P6PersonalFinanceRequest } from "@shared/p6FinanceContracts";
 import { trashProjectResource, trashProjectSession, updateProjectResource, updateProjectSession, useProjectChats, useProjectResources, useProjectSessions, type Project, type ProjectChat, type ProjectResource, type ProjectSession } from "@/lib/useProjects";
@@ -145,6 +145,22 @@ export function ProjectHome({
   const [continuityOpen, setContinuityOpen] = useState(false);
   const [investigationOpen, setInvestigationOpen] = useState(false);
   const [briefingOpen, setBriefingOpen] = useState(false);
+  const watchroomsEntryRef = useRef<HTMLElement>(null);
+  const investigationEntryRef = useRef<HTMLElement>(null);
+  const revealProjectTool = (tool: "research" | "briefing" | "watchrooms") => {
+    if (tool === "watchrooms") setWatchroomsOpen(true);
+    else {
+      setInvestigationOpen(true);
+      setBriefingOpen(tool === "briefing");
+    }
+    // Activate the *existing* section and bring its actual controls into view.
+    // No parallel research, briefing, monitoring or navigation state is created.
+    requestAnimationFrame(() => {
+      const target = tool === "watchrooms" ? watchroomsEntryRef.current : investigationEntryRef.current;
+      target?.scrollIntoView({ block: "start" });
+      target?.querySelector<HTMLButtonElement>('button[aria-expanded]')?.focus({ preventScroll: true });
+    });
+  };
   const [nameDraft, setNameDraft] = useState(project.name);
   const renameInFlight = useRef(false);
   const [renameBusy, setRenameBusy] = useState(false);
@@ -295,12 +311,31 @@ export function ProjectHome({
           </div>
         </section>
 
+        <nav aria-label="Project research and work" data-testid="project-rich-work-shortcuts"
+          className="mt-5 grid grid-cols-3 gap-2">
+          <button type="button" aria-controls={`project-investigation-${project.id}`} aria-expanded={investigationOpen && !briefingOpen}
+            onClick={() => revealProjectTool("research")}
+            className="flex min-h-12 min-w-0 items-center justify-center gap-2 rounded-xl border border-border/65 bg-card/60 px-2.5 py-3 font-ui text-[13px] font-medium text-foreground transition-colors hover:border-amber-300/35 hover:bg-accent/50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary">
+            <BookOpen aria-hidden="true" className="h-4 w-4 shrink-0 text-amber-200" /><span>Research</span>
+          </button>
+          <button type="button" aria-controls={`project-investigation-${project.id}`} aria-expanded={investigationOpen && briefingOpen}
+            onClick={() => revealProjectTool("briefing")}
+            className="flex min-h-12 min-w-0 items-center justify-center gap-2 rounded-xl border border-border/65 bg-card/60 px-2.5 py-3 font-ui text-[13px] font-medium text-foreground transition-colors hover:border-amber-300/35 hover:bg-accent/50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary">
+            <FileText aria-hidden="true" className="h-4 w-4 shrink-0 text-amber-200" /><span>Briefings</span>
+          </button>
+          <button type="button" aria-controls={`project-watchrooms-${project.id}`} aria-expanded={watchroomsOpen}
+            onClick={() => revealProjectTool("watchrooms")}
+            className="flex min-h-12 min-w-0 items-center justify-center gap-2 rounded-xl border border-border/65 bg-card/60 px-2.5 py-3 font-ui text-[13px] font-medium text-foreground transition-colors hover:border-amber-300/35 hover:bg-accent/50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary">
+            <Radar aria-hidden="true" className="h-4 w-4 shrink-0 text-amber-200" /><span>Watchrooms</span>
+          </button>
+        </nav>
+
         <ProjectResumeDesk key={project.id} projectId={project.id} chats={projectChats} sessions={projectSessions}
           onOpenChat={onOpenChat} onOpenSession={onOpenSession} onFocusArtifact={onFocusArtifact}
           onInspectContinuity={() => setContinuityOpen(true)}
-          onOpenWatchrooms={() => setWatchroomsOpen(true)} />
+          onOpenWatchrooms={() => revealProjectTool("watchrooms")} />
 
-        <section className="mt-5 rounded-xl border border-border/60 bg-white/[0.015] p-3" data-testid="project-watchrooms-entry">
+        <section ref={watchroomsEntryRef} className="mt-5 scroll-mt-4 rounded-xl border border-border/60 bg-white/[0.015] p-3" data-testid="project-watchrooms-entry">
           <button type="button" aria-expanded={watchroomsOpen}
             aria-controls={`project-watchrooms-${project.id}`}
             onClick={() => setWatchroomsOpen(value => !value)}
@@ -324,7 +359,7 @@ export function ProjectHome({
           </div>}
         </section>
 
-        <section className="mt-3 rounded-xl border border-border/60 bg-white/[0.015] p-3" data-testid="project-investigation-entry">
+        <section ref={investigationEntryRef} className="mt-3 scroll-mt-4 rounded-xl border border-border/60 bg-white/[0.015] p-3" data-testid="project-investigation-entry">
           <button type="button" aria-expanded={investigationOpen}
             aria-controls={`project-investigation-${project.id}`}
             onClick={() => setInvestigationOpen(value => !value)}

@@ -122,14 +122,15 @@ test("unknown Artifact kinds get an honest fallback with export and no JSON", ()
     kind: screen.kind, content: screen, onSave: save, onOpenExport: () => undefined,
     facts: [{ label: "Screen", value: "Equity screener" }, { label: "Symbol", value: "ACME" }],
   }));
-  assert.match(markup, /No built-in viewer for this screen Artifact yet/);
-  assert.match(markup, /saved and unchanged/);
-  assert.match(markup, />Export this Artifact</);
+  assert.match(markup, /Recorded screen/);
+  assert.match(markup, /Recorded details/);
+  assert.doesNotMatch(markup, /No built-in viewer/);
+  assert.match(markup, />Export</);
   assert.match(markup, />Equity screener</);
   assert.doesNotMatch(markup, RAW_JSON);
-  assert.doesNotMatch(markup, /marketCap|<textarea|<pre/);
+  assert.doesNotMatch(markup, /<textarea|<pre/);
   const withoutExport = renderToStaticMarkup(createElement(ArtifactViewerFallback, { kind: "screen", content: screen, onSave: save }));
-  assert.doesNotMatch(withoutExport, />Export this Artifact</);
+  assert.doesNotMatch(withoutExport, />Export</);
   const expert = renderToStaticMarkup(createElement(ArtifactViewerFallback, { kind: "screen", content: screen, onSave: save, expertDefaultOpen: true }));
   assert.match(expert, /&quot;marketCap&quot;/);
 });

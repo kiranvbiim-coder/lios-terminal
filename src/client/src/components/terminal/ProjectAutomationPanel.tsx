@@ -28,12 +28,13 @@ import {
   prepareP9ManualRunAttempt,
   subscribeP9ManualRunAttempts,
 } from "@/lib/p9ManualRunAttemptLedger";
-import { p9AutomationEventTypeSchema, p9EventFiltersSchema, p9WorkflowTriggerSchema, type P9WorkflowTrigger } from "@shared/p9AutomationContracts";
+import { p9AutomationEventTypeSchema, p9WorkflowTriggerSchema, type P9WorkflowTrigger } from "@shared/p9AutomationContracts";
+import { parseEventFilterRows, rowsFromEventFilters, type P9EventFilterRow } from "@/lib/p9EventFilterEditor";
 import { quickMonitorDraft, workflowTriggerEditDefinition, workflowExecutionTruth, workflowScheduleSummary, type QuickMonitorKind } from "@/lib/workflowReviewTruth";
 import { P9NotificationHistory } from "./P9NotificationHistory";
 import { PortfolioMaterialityResult } from "./ArtifactPortfolioMateriality";
+import { ReadableValueTable } from "./ReadableValueTable";
 import { CronScheduleFields } from "./CronScheduleFields";
-import { ReadableValue } from "@/components/ui/ReadableValue";
 
 function time(value: string | null, timeZone?: string): string {
   if (!value) return "—";
@@ -76,11 +77,8 @@ export function ProjectAutomationPanel({ projectId }: { projectId: number }) {
   const [createEnabled, setCreateEnabled] = useState(false);
   const [createMinutes, setCreateMinutes] = useState(60);
   const [review, setReview] = useState<WorkflowReview | null>(null);
-  const [eventFiltersDraft, setEventFiltersDraft] = useState("{}");
-  const eventFilters = useMemo(() => {
-    try { return p9EventFiltersSchema.safeParse(JSON.parse(eventFiltersDraft)); }
-    catch { return null; }
-  }, [eventFiltersDraft]);
+  const [eventFilterRows, setEventFilterRows] = useState<P9EventFilterRow[]>([]);
+  const eventFilters = useMemo(() => parseEventFilterRows(eventFilterRows), [eventFilterRows]);
   const managementInFlight = useRef(false);
   useEffect(() => {
     setCreateKind(null); setReview(null); setMessage(null);
@@ -247,7 +245,7 @@ export function ProjectAutomationPanel({ projectId }: { projectId: number }) {
     if (busyId || managementInFlight.current || workflow.projectId !== projectId) return;
     setCreateKind(null);
     setMessage(null);
-    setEventFiltersDraft(workflow.trigger.type === "event" ? JSON.stringify(workflow.trigger.filters, null, 2) : "{}");
+    setEventFilterRows(workflow.trigger.type === "event" ? rowsFromEventFilters(workflow.trigger.filters) : []);
     setReview({ projectId, workflowId: workflow.id, expectedUpdatedAt: workflow.updatedAt,
       name: workflow.name, intent, trigger: workflow.trigger, enabled: workflow.enabled });
   };
@@ -262,7 +260,7 @@ export function ProjectAutomationPanel({ projectId }: { projectId: number }) {
       return;
     }
     if (candidate.intent === "edit" && candidate.trigger.type === "event" && !eventFilters?.success) {
-      setMessage("Event filters must be a JSON object with at most 50 string, number or boolean values.");
+      setMessage(eventFilters?.success === false ? eventFilters.error : "Review the event conditions.");
       return;
     }
     if (candidate.intent === "edit" && !p9WorkflowTriggerSchema.safeParse(candidate.trigger).success) {
@@ -412,13 +410,47 @@ export function ProjectAutomationPanel({ projectId }: { projectId: number }) {
                 {p9AutomationEventTypeSchema.options.map(type => <option key={type} value={type}>{type.replaceAll("_", " ")}</option>)}
               </select>
             </label>
-            <label className="block text-sm">Matching event filters (JSON object)
-              <textarea value={eventFiltersDraft} disabled={Boolean(busyId)} maxLength={64000}
-                onChange={event => setEventFiltersDraft(event.target.value)}
-                className="mt-1 min-h-28 w-full rounded border border-border bg-background p-2 font-mono text-sm" />
-            </label>
-            <p className="text-xs text-muted-foreground">All filters must match an observed event. Values may be strings, numbers or booleans; strings match without case or surrounding spaces. An empty object matches all permitted events of this type. Saving does not publish an event, run the workflow or grant source access.</p>
-            {!eventFilters?.success && <p role="alert" className="text-sm text-amber-200">Use a valid JSON object with at most 50 string, number or boolean values; nested values and null are not supported.</p>}
+            <div className="space-y-2" aria-label="Event matching conditions" data-testid="p9-event-conditions">
+              <p className="text-sm font-medium">Match conditions</p>
+              {eventFilterRows.length === 0 && <p className="text-xs text-muted-foreground">Any permitted event of this type</p>}
+              {eventFilterRows.map(row => <div key={row.id} className="grid grid-cols-1 gap-2 rounded-lg border border-border/50 bg-card/50 p-2 sm:grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)_auto] sm:items-end">
+                <label className="text-xs text-muted-foreground">Field
+                  <input type="text" maxLength={1000} value={row.key} disabled={Boolean(busyId)}
+                    onChange={event => setEventFilterRows(previous => previous.map(item => item.id === row.id ? { ...item, key: event.target.value } : item))}
+                    className="mt-1 min-h-10 w-full rounded-md border border-border bg-background px-2 text-sm text-foreground" />
+                </label>
+                <label className="text-xs text-muted-foreground">Type
+                  <select value={row.type} disabled={Boolean(busyId)}
+                    onChange={event => setEventFilterRows(previous => previous.map(item => item.id === row.id
+                      ? { ...item, type: event.target.value as P9EventFilterRow["type"], value: event.target.value === "boolean" ? "true" : event.target.value === "number" ? "0" : "" }
+                      : item))}
+                    className="mt-1 min-h-10 w-full rounded-md border border-border bg-background px-2 text-sm text-foreground">
+                    <option value="string">Text</option><option value="number">Number</option><option value="boolean">True / false</option>
+                  </select>
+                </label>
+                <label className="text-xs text-muted-foreground">Value
+                  {row.type === "boolean"
+                    ? <select value={row.value} disabled={Boolean(busyId)}
+                        onChange={event => setEventFilterRows(previous => previous.map(item => item.id === row.id ? { ...item, value: event.target.value } : item))}
+                        className="mt-1 min-h-10 w-full rounded-md border border-border bg-background px-2 text-sm text-foreground">
+                        <option value="true">True</option><option value="false">False</option>
+                      </select>
+                    : <input type={row.type === "number" ? "number" : "text"} maxLength={1000} value={row.value} disabled={Boolean(busyId)}
+                        onChange={event => setEventFilterRows(previous => previous.map(item => item.id === row.id ? { ...item, value: event.target.value } : item))}
+                        className="mt-1 min-h-10 w-full rounded-md border border-border bg-background px-2 text-sm text-foreground" />}
+                </label>
+                <button type="button" disabled={Boolean(busyId)} aria-label={`Remove condition ${row.key || row.id + 1}`}
+                  onClick={() => setEventFilterRows(previous => previous.filter(item => item.id !== row.id))}
+                  className="min-h-10 rounded-md border border-border/60 px-3 text-sm text-muted-foreground hover:text-foreground disabled:opacity-40">Remove</button>
+              </div>)}
+              <button type="button" disabled={Boolean(busyId) || eventFilterRows.length >= 50}
+                onClick={() => setEventFilterRows(previous => [...previous, { id: previous.reduce((max, row) => Math.max(max, row.id + 1), 0), key: "", type: "string", value: "" }])}
+                className="min-h-10 rounded-md border border-border/60 px-3 text-sm text-foreground disabled:opacity-40">
+                Add condition
+              </button>
+              {!eventFilters.success && <p role="alert" className="text-sm text-amber-200">{eventFilters.error}</p>}
+              <p className="text-xs text-muted-foreground">Every condition must match. Blank conditions match all permitted events. Saving never runs the workflow or changes its permissions.</p>
+            </div>
           </div>}
           <p className="text-xs text-muted-foreground">{review.intent === "resume"
             ? "Resuming opts into future scheduled or conditional checks, not a confirmed run."
@@ -476,7 +508,7 @@ export function ProjectAutomationPanel({ projectId }: { projectId: number }) {
                     <summary className="cursor-pointer">Model source review · no automatic apply</summary>
                     <p className="break-all">Accepted {workflow.action.acceptedArtifact.artifactId} · v{workflow.action.acceptedArtifact.version} · {workflow.action.sourceProvider}</p>
                     <p>Open this model's existing reported-period maintenance surface to select, review and explicitly apply an eligible immutable snapshot. This monitor never overwrites your model.</p>
-                    {last?.output.review != null && <ReadableValue value={last.output.review} className="mt-2 max-h-96 overflow-auto" />}
+                    {last?.output.review != null && <div className="mt-2"><ReadableValueTable title="Latest source review" values={{ review: last.output.review }} /></div>}
                   </details>}
                   {last?.output.kind === "portfolio_materiality" && <PortfolioMaterialityResult output={last.output} />}
                   {workflow.action.kind === "conversation_rerun" && workflow.action.acceptedArtifact && <details className="mt-2 text-xs text-muted-foreground">
