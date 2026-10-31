@@ -21,6 +21,7 @@ import { getStoredEnterprisePolicy } from "./enterprisePolicyService";
 import { evaluateEnterpriseAiProvider } from "@shared/enterpriseContracts";
 import { readBoundedText } from "./sourceConnectionPolicy";
 import { z } from "zod";
+import { requireMasterAiDispatchOn } from "./masterAiGate";
 
 /** Server-only capability for the fixed, user-requested connectivity probe. JSON cannot forge it. */
 export const AI_CHAT_VERIFICATION_PROBE = Symbol("LiOS fixed chat verification");
@@ -43,6 +44,16 @@ export interface AICompletionRequest {
   enterpriseApproval?: boolean;
   /** Server-only source release check, followed by a final enterprise-policy/revision gate before provider dispatch. */
   beforeTransmission?: () => Promise<void>;
+  /**
+   * Lets the model search the web through the provider's own search feature (the user's key; no LiOS service).
+   * The model decides whether to search. Providers without native search answer normally and report "unsupported".
+   */
+  webSearch?: boolean;
+}
+
+export interface AIWebSource {
+  title: string;
+  url: string;
 }
 
 export type AIRoutedCompletionRequest = Omit<AICompletionRequest, "provider"> & {
@@ -96,6 +107,34 @@ export interface AICompletionResult {
   attribution: AICallAttribution;
   /** Present only when an earlier provider failed and this provider answered instead. */
   fallback?: { attempts: AIFallbackAttempt[] };
+  /** Present only when web search was requested. */
+  webSearch?: { status: "used" | "not_used" | "unsupported"; sources: AIWebSource[] };
+}
+
+/** Providers whose own APIs can search the web during a chat answer. */
+export function supportsWebSearch(provider: AIProviderType): boolean {
+  return provider === "openai" || provider === "anthropic" || provider === "gemini";
+}
+
+const MAX_WEB_SOURCES = 10;
+
+/** Keeps only distinct http(s) links with bounded titles; provider payloads are untrusted. */
+export function collectWebSources(candidates: Array<{ url?: unknown; title?: unknown }>): AIWebSource[] {
+  const sources: AIWebSource[] = [];
+  const seen = new Set<string>();
+  for (const candidate of candidates) {
+    if (typeof candidate.url !== "string" || candidate.url.length > 2_000) continue;
+    let parsed: URL;
+    try { parsed = new URL(candidate.url); } catch { continue; }
+    if ((parsed.protocol !== "https:" && parsed.protocol !== "http:") || parsed.username || parsed.password) continue;
+    const url = parsed.toString();
+    if (seen.has(url)) continue;
+    seen.add(url);
+    const rawTitle = typeof candidate.title === "string" ? candidate.title.replace(/[\u0000-\u001f\u007f]/g, " ").trim() : "";
+    sources.push({ title: (rawTitle || parsed.hostname).slice(0, 300), url });
+    if (sources.length >= MAX_WEB_SOURCES) break;
+  }
+  return sources;
 }
 
 function providerCredential(provider: AIProviderType): string | null {
@@ -530,7 +569,6 @@ export async function invokeAIProvider(request: AICompletionRequest): Promise<AI
   const identity = getRequestIdentity();
   if (identity?.userId != null && canonicalRequest[AI_CHAT_VERIFICATION_PROBE] !== true) {
     try {
-      const { requireMasterAiDispatchOn } = await import("./masterAiGate");
       const assertCurrent = await requireMasterAiDispatchOn(identity.userId, identity.organizationId, provider, resolvedModel, localModelIdentity?.signature);
       const finalEnterpriseRevision = await enforceEnterpriseAiPolicy(canonicalRequest, config, resolvedModel);
       if (finalEnterpriseRevision !== enterpriseRevision) throw new Error("Organization policy changed.");
@@ -668,12 +706,36 @@ async function invokeAIProviderUnverified(request: AICompletionRequest, expected
   if (expectedLocalCredential !== undefined && credential !== expectedLocalCredential) {
     throw new AIProviderError("policy_denied", "The local endpoint changed before dispatch. Retry under the current configuration.", { provider: request.provider });
   }
-  const signal = request.signal ?? AbortSignal.timeout(60_000);
+  const search = request.webSearch === true && supportsWebSearch(request.provider);
+  const signal = request.signal ?? AbortSignal.timeout(search ? 90_000 : 60_000);
   let response: Response;
   let text = "";
   let servedModel: string | undefined;
+  let searched = false;
+  let webSources: AIWebSource[] = [];
   try {
-    if (request.provider === "anthropic") {
+    if (request.provider === "openai" && search) {
+      // Chat Completions has no general web-search tool; the Responses API does.
+      const input = request.messages.map((message) => {
+        const images = message.images ?? [];
+        if (message.role === "assistant" || !images.length) return { role: message.role, content: message.content };
+        return { role: message.role, content: [
+          { type: "input_text", text: message.content },
+          ...images.map((image) => ({ type: "input_image", image_url: `data:${image.mimeType};base64,${image.base64}` })),
+        ] };
+      });
+      response = await fetch("https://api.openai.com/v1/responses", { method: "POST", headers: { "content-type": "application/json", Authorization: `Bearer ${credential}` }, body: JSON.stringify({ model, ...(request.system ? { instructions: request.system } : {}), input, max_output_tokens: boundedMaxTokens(request.maxTokens), tools: [{ type: "web_search" }] }), signal });
+      if (!response.ok) {
+        const body = await readError(response);
+        throw responseError(config, request.provider, response, body);
+      }
+      const payload = await response.json() as { output?: Array<{ type?: string; content?: Array<{ type?: string; text?: string; annotations?: Array<{ type?: string; url?: string; title?: string }> }> }> };
+      const output = payload.output ?? [];
+      searched = output.some((item) => item.type === "web_search_call");
+      const parts = output.filter((item) => item.type === "message").flatMap((item) => item.content ?? []).filter((part) => part.type === "output_text");
+      text = parts.map((part) => part.text ?? "").join("");
+      webSources = collectWebSources(parts.flatMap((part) => (part.annotations ?? []).filter((note) => note.type === "url_citation")));
+    } else if (request.provider === "anthropic") {
       const messages = request.messages.map((message) => ({
         role: message.role === "assistant" ? "assistant" : "user",
         content: [
@@ -681,10 +743,20 @@ async function invokeAIProviderUnverified(request: AICompletionRequest, expected
           ...(message.images ?? []).map((image) => ({ type: "image", source: { type: "base64", media_type: image.mimeType, data: image.base64 } })),
         ],
       }));
-      response = await fetch("https://api.anthropic.com/v1/messages", { method: "POST", headers: { "content-type": "application/json", "x-api-key": credential, "anthropic-version": "2023-06-01" }, body: JSON.stringify({ model, system: request.system, messages, max_tokens: boundedMaxTokens(request.maxTokens) }), signal });
-      if (!response.ok) throw responseError(config, request.provider, response, await readError(response));
-      const payload = await response.json() as { content?: Array<{ type?: string; text?: string }> };
-      text = payload.content?.filter((item) => item.type === "text").map((item) => item.text ?? "").join("") ?? "";
+      response = await fetch("https://api.anthropic.com/v1/messages", { method: "POST", headers: { "content-type": "application/json", "x-api-key": credential, "anthropic-version": "2023-06-01" }, body: JSON.stringify({ model, system: request.system, messages, max_tokens: boundedMaxTokens(request.maxTokens), ...(search ? { tools: [{ type: "web_search_20250305", name: "web_search", max_uses: 3 }] } : {}) }), signal });
+      if (!response.ok) {
+        const body = await readError(response);
+        throw responseError(config, request.provider, response, body);
+      }
+      const payload = await response.json() as { content?: Array<{ type?: string; text?: string; citations?: Array<{ url?: string; title?: string }>; content?: unknown }> };
+      const blocks = payload.content ?? [];
+      text = blocks.filter((item) => item.type === "text").map((item) => item.text ?? "").join("");
+      if (search) {
+        searched = blocks.some((item) => item.type === "server_tool_use");
+        const cited = blocks.flatMap((item) => item.type === "text" ? item.citations ?? [] : []);
+        const results = blocks.flatMap((item) => item.type === "web_search_tool_result" && Array.isArray(item.content) ? item.content as Array<{ url?: string; title?: string }> : []);
+        webSources = collectWebSources(cited.length ? cited : results);
+      }
     } else if (request.provider === "gemini") {
       const contents = request.messages.map((message) => ({
         role: message.role === "assistant" ? "model" : "user",
@@ -694,9 +766,18 @@ async function invokeAIProviderUnverified(request: AICompletionRequest, expected
         ],
       }));
       const url = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent`;
-      response = await fetch(url, { method: "POST", headers: { "content-type": "application/json", "x-goog-api-key": credential }, body: JSON.stringify({ systemInstruction: request.system ? { parts: [{ text: request.system }] } : undefined, contents, generationConfig: geminiGenerationConfig(model, request.maxTokens) }), signal });
-      if (!response.ok) throw responseError(config, request.provider, response, await readError(response));
-      const payload = await response.json() as { candidates?: Array<{ finishReason?: string; content?: { parts?: Array<{ text?: string }> } }>; promptFeedback?: { blockReason?: string } };
+      response = await fetch(url, { method: "POST", headers: { "content-type": "application/json", "x-goog-api-key": credential }, body: JSON.stringify({ systemInstruction: request.system ? { parts: [{ text: request.system }] } : undefined, contents, generationConfig: geminiGenerationConfig(model, request.maxTokens), ...(search ? { tools: [{ google_search: {} }] } : {}) }), signal });
+      if (!response.ok) {
+        const body = await readError(response);
+        throw responseError(config, request.provider, response, body);
+      }
+      const payload = await response.json() as { candidates?: Array<{ finishReason?: string; content?: { parts?: Array<{ text?: string }> }; groundingMetadata?: { webSearchQueries?: string[]; groundingChunks?: Array<{ web?: { uri?: string; title?: string } }> } }>; promptFeedback?: { blockReason?: string } };
+      const grounding = payload.candidates?.[0]?.groundingMetadata;
+      if (search && grounding) {
+        const chunks = (grounding.groundingChunks ?? []).map((chunk) => ({ url: chunk.web?.uri, title: chunk.web?.title }));
+        searched = Boolean(grounding.webSearchQueries?.length || chunks.length);
+        webSources = collectWebSources(chunks);
+      }
       text = payload.candidates?.[0]?.content?.parts?.map((part) => part.text ?? "").join("") ?? "";
       if (!text.trim()) {
         const finishReason = payload.candidates?.[0]?.finishReason;
@@ -728,7 +809,10 @@ async function invokeAIProviderUnverified(request: AICompletionRequest, expected
     content: message.content,
     ...(message.images?.length ? { images: message.images.map((image) => ({ mimeType: image.mimeType, byteLength: Buffer.from(image.base64, "base64").byteLength })) } : {}),
   }));
-  return { provider: request.provider, model, text, ...(servedModel ? { servedModel } : {}), ...(localIdentity ? { localModelIdentity: localIdentity.signature } : {}), attribution: createAttribution({ provider: request.provider, model, prompt: JSON.stringify({ system: request.system, messages: attributionMessages }), output: text }) };
+  const webSearch = request.webSearch === true
+    ? { webSearch: { status: !search ? "unsupported" as const : searched ? "used" as const : "not_used" as const, sources: searched ? webSources : [] } }
+    : {};
+  return { provider: request.provider, model, text, ...(servedModel ? { servedModel } : {}), ...(localIdentity ? { localModelIdentity: localIdentity.signature } : {}), ...webSearch, attribution: createAttribution({ provider: request.provider, model, prompt: JSON.stringify({ system: request.system, messages: attributionMessages }), output: text }) };
 }
 
 /** Explicit local-only embedding operation; never uses completion fallback or downloads a model. */
@@ -801,4 +885,63 @@ export async function invokeLocalEmbeddings(request: {
   }
   if (typeof body.model !== "string" || !body.model.trim() || body.model.trim().length > 200) throw new AIProviderError("invalid_request", "Local embedding response did not identify its served model.");
   return { vectors, model: body.model.trim(), dimensions };
+}
+
+export function aiImageResponseError(error: unknown): string {
+  if (error instanceof AIProviderError) return error.message;
+  return "The AI provider couldn't create the image. Try again.";
+}
+
+/** Image dispatch uses the same vault, enterprise and live consent authorities as Chat. */
+export async function invokeAIImageGeneration(request: {
+  provider: AIProviderType; chatModel: string; prompt: string; signal?: AbortSignal;
+  dataClassification?: "public" | "organization";
+}): Promise<{ bytes: Buffer; provider: AIProviderType; model: string }> {
+  await assertExecutionAllowed("ai");
+  if (request.provider !== "openai" && request.provider !== "gemini") {
+    throw new AIProviderError("invalid_provider", "Your connected AI provider does not support image generation.", { provider: request.provider });
+  }
+  const identity = getRequestIdentity();
+  if (!identity?.userId) throw new AIProviderError("policy_denied", "Sign in before creating an image.");
+  if (!request.prompt.trim() || request.prompt.length > 4_000) throw new AIProviderError("invalid_request", "Describe the image in 1–4,000 characters.");
+  const config = getProviderConfig(request.provider)!;
+  const model = request.provider === "openai" ? "gpt-image-1" : "gemini-2.5-flash-image";
+  const policyRequest: AICompletionRequest = { provider: request.provider, model, messages: [{ role: "user", content: request.prompt }], dataClassification: request.dataClassification ?? "organization" };
+  const revision = await enforceEnterpriseAiPolicy(policyRequest, config, model);
+  const credentialCurrent = await assertCurrentCredentialSnapshot(config.envKey, config.vaultKey);
+  await currentConversationTransmissionGuard()?.();
+  await currentIncomingAiDispatchGuard()?.();
+  const consentCurrent = await requireMasterAiDispatchOn(identity.userId, identity.organizationId, request.provider, request.chatModel);
+  if (await enforceEnterpriseAiPolicy(policyRequest, config, model) !== revision) throw new AIProviderError("policy_denied", "Organization AI policy changed. Try again.");
+  credentialCurrent(); consentCurrent();
+  const credential = providerCredential(request.provider);
+  if (!credential) throw new AIProviderError("not_configured", "Reconnect your AI provider.");
+  const timeout = AbortSignal.timeout(120_000);
+  const signal = request.signal ? AbortSignal.any([request.signal, timeout]) : timeout;
+  const openai = request.provider === "openai";
+  let response: Response;
+  try {
+    response = await fetch(openai ? "https://api.openai.com/v1/images/generations" : `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`, {
+      method: "POST", signal,
+      headers: { "content-type": "application/json", ...(openai ? { Authorization: `Bearer ${credential}` } : { "x-goog-api-key": credential }) },
+      body: JSON.stringify(openai
+        ? { model, prompt: request.prompt, n: 1, size: "1024x1024", quality: "low", output_format: "png" }
+        : { contents: [{ parts: [{ text: request.prompt }] }], generationConfig: { responseModalities: ["TEXT", "IMAGE"] } }),
+    });
+  } catch {
+    signal.throwIfAborted();
+    throw new AIProviderError("unavailable", "The image provider is unavailable. Try again.");
+  }
+  if (!response.ok) {
+    const body = await readError(response);
+    if (/safety|content_policy|moderation/i.test(body)) throw new AIProviderError("invalid_request", "The provider declined this image request. Try a different description.");
+    throw responseError(config, request.provider, response, body);
+  }
+  const raw = JSON.parse(await readBoundedText(response, 32 * 1024 * 1024));
+  const encoded = openai ? raw.data?.[0]?.b64_json : raw.candidates?.[0]?.content?.parts?.find((part: { inlineData?: { mimeType?: string } }) => part.inlineData?.mimeType === "image/png")?.inlineData?.data;
+  if (typeof encoded !== "string" || !encoded || !/^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/.test(encoded)) {
+    throw new AIProviderError("empty_completion", "The provider did not return an image. It may have declined the request; try another description.");
+  }
+  signal.throwIfAborted();
+  return { bytes: Buffer.from(encoded, "base64"), provider: request.provider, model };
 }

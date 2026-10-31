@@ -151,7 +151,7 @@ function SectionChildren({
             }`}
           >
             <span className="w-1 shrink-0 text-[7px] text-[hsl(38,95%,55%)]/70">›</span>
-            <span className="min-w-0 truncate font-terminal text-[8px] uppercase tracking-wider">
+            <span className="min-w-0 truncate font-ui text-[11px]">
               {item.label}
             </span>
           </button>

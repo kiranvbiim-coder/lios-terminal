@@ -74,7 +74,7 @@ These are required proof journeys, not a status table. Any-topic intelligence, a
 - P14-11 → `first_use`
 - P14-12 → `flagship`
 
-`acceptance:p14:release` builds a deterministic qualification board from the exact evidence bundle. It fails closed on missing categories, duplicate categories, mismatched category/environment bindings, package-version mismatch, or evidence belonging to another release tag.
+The private release-mode validator (withheld from the public source tree) builds a deterministic qualification board from the exact evidence bundle. It fails closed on missing categories, duplicate categories, mismatched category/environment bindings, package-version mismatch, or evidence belonging to another release tag.
 
 The final certification workflow writes `p14-qualification-board.json`. Its timestamp is derived from the newest evidence record so an identical evidence bundle produces an identical board. The workflow publishes the board to the exact GitHub release and refuses to overwrite an existing board with different content.
 

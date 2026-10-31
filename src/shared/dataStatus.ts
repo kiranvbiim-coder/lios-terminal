@@ -9,6 +9,8 @@
  * server share one taxonomy rather than two copies that can drift apart.
  * (See Trial-to-Contract BUILD_PLAN: "Universal trust/provenance layer".)
  */
+import type { MarketDataGapReason } from "./marketDataAccess";
+
 export type DataFreshness =
   | "current"
   | "delayed"
@@ -30,6 +32,8 @@ export interface DataStatus {
   asOf: string | null;
   delayLabel: string;
   isFallback: boolean;
+  /** Present only when the data is missing because of the person's own source selection or consent; see marketDataAccess.ts. */
+  reason?: MarketDataGapReason;
 }
 
 const DEFAULT_DELAY_LABELS: Record<DataFreshness, string> = {
@@ -50,6 +54,7 @@ export function buildDataStatus(input: {
   asOf?: string | null;
   delayLabel?: string;
   isFallback?: boolean;
+  reason?: MarketDataGapReason;
 }): DataStatus {
   return {
     // Deliberately always "Limuria Intelligence" regardless of input.provider
@@ -61,5 +66,6 @@ export function buildDataStatus(input: {
     asOf: input.asOf ?? null,
     delayLabel: input.delayLabel ?? DEFAULT_DELAY_LABELS[input.freshness],
     isFallback: input.isFallback ?? false,
+    ...(input.reason ? { reason: input.reason } : {}),
   };
 }

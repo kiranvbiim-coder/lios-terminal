@@ -93,6 +93,7 @@ export function surfaceForView(view: ViewMode): ExperienceShellSurface {
   return "workbench";
 }
 
-export function isExperienceHomeSurface(surface: ExperienceShellSurface): boolean {
-  return surface !== "workbench";
+/** Surfaces that render as Discover inside the Chat shell rather than as a second application shell. */
+export function hostedDiscoverSurface(surface: ExperienceShellSurface): boolean {
+  return surface === "pulse" || surface === "explore" || surface === "signals" || surface === "library";
 }

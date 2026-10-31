@@ -76,7 +76,7 @@ export default function SynthesisFlowPanel({
         {/* LPA Score Panel */}
         <div className="bg-[#080808] border border-border/80 p-5 rounded flex flex-col items-center justify-center relative overflow-hidden group">
           <div className="absolute inset-0 bg-radial-gradient from-amber-500/5 via-transparent to-transparent pointer-events-none" />
-          <span className="font-terminal text-[9px] tracking-widest text-muted-foreground uppercase mb-4">LIMURIA PROPRIETARY ALPHA</span>
+          <span className="font-terminal text-[9px] tracking-widest text-muted-foreground uppercase mb-4">LiOS PROPRIETARY ALPHA</span>
 
           {/* Radial Score Gauge */}
           <div className="relative w-36 h-36 flex items-center justify-center">
@@ -312,7 +312,7 @@ export default function SynthesisFlowPanel({
         <div className="flex items-center justify-between border-b border-border/40 pb-2">
           <div className="flex items-center gap-1.5">
             <FileText className="w-4 h-4 text-amber-500" />
-            <span className="text-[10px] font-bold tracking-widest uppercase">LIMURIA INTELLIGENCE SYNTHESIS REPORT</span>
+            <span className="text-[10px] font-bold tracking-widest uppercase">LiOS INTELLIGENCE SYNTHESIS REPORT</span>
           </div>
           <span className="text-[8px] text-muted-foreground font-mono">AS OF: {new Date().toISOString()}</span>
         </div>

@@ -2,6 +2,7 @@ import type { ReactNode } from "react";
 import { useMemo } from "react";
 import { ArrowUpRight, BarChart3, BellRing, BookOpen, Calculator, CircleAlert, FileText, Gauge, GitCompare, Layers3, Radar, Scale, Search, ShieldAlert, Sparkles, Target, TrendingUp } from "lucide-react";
 import { useFundamentals, useNews, useQuote } from "@/lib/useFinance";
+import { ReferenceOnlyBanner, useInstrumentPriceState } from "@/components/data/ReferenceOnlyNotice";
 import { useLseCompany } from "@/lib/useLse";
 import DataStatusBadge from "@/components/data/DataStatusBadge";
 import { ENTITY_CAPABILITIES, capabilitiesForEntity, type EntityCapability, type EntityCapabilityGroup } from "@/lib/entityCapabilities";
@@ -91,12 +92,15 @@ export default function EntityWorkspacePanel({ symbol, onNav, onSymbol, role }: 
   const isInternal = useAudience() === "internal";
   const isClient = useAudience() === "client";
   const quote = useQuote(symbol).data;
+  const priceState = useInstrumentPriceState(symbol);
+  const catalogEntry = priceState.kind === "reference_only" ? priceState.entry : null;
+  const noPrice = priceState.kind === "reference_only" || priceState.kind === "no_price";
   const fundamentals = useFundamentals(symbol).data;
   const company = useLseCompany(symbol).data;
   const { data: news = [], isLoading: newsLoading } = useNews(symbol);
   const capabilities = useMemo(() => capabilitiesForEntity().map((capability) => !isInternal && CLIENT_RESTRICTED_VIEWS.has(capability.view) ? { ...capability, status: "unavailable" as const, description: `${capability.description} Available in the internal research build.` } : capability), []);
   const profile = company?.profile;
-  const displayName = profile?.company_name ?? quote?.name ?? symbol;
+  const displayName = profile?.company_name ?? quote?.name ?? catalogEntry?.name ?? symbol;
   const currency = quote?.currency ?? "USD";
   const currencyPrefix = currency === "USD" ? "$" : currency === "GBP" ? "£" : currency === "EUR" ? "€" : `${currency} `;
   const investigationView: ViewMode = isInternal ? "brain" : "advisory";
@@ -151,11 +155,13 @@ export default function EntityWorkspacePanel({ symbol, onNav, onSymbol, role }: 
                 {statusNeedsAttention && <DataStatusBadge status={quote?.status} compact />}
               </div>
               <div className="mt-1 font-ui text-[8px] text-muted-foreground">
-                {[profile?.sector ?? quote?.sector, quote?.exchange ?? profile?.exchange].filter(Boolean).join(" · ") || "Company"}
+                {[profile?.sector ?? quote?.sector ?? catalogEntry?.sector, quote?.exchange ?? profile?.exchange ?? catalogEntry?.exchange].filter(Boolean).join(" · ") || "Company"}
               </div>
             </div>
             <div className="text-right">
-              <div className="font-terminal text-xl font-bold tabular-nums text-foreground">{quote ? `${currencyPrefix}${quote.price.toFixed(2)}` : "—"}</div>
+              <div className={`font-terminal tabular-nums ${noPrice ? "text-[11px] font-semibold text-amber-200" : "text-xl font-bold text-foreground"}`} data-testid="entity-price">
+                {quote ? `${currencyPrefix}${quote.price.toFixed(2)}` : noPrice ? "Reference only" : "—"}
+              </div>
               <div className={`font-terminal text-[9px] tabular-nums ${(quote?.changePercent ?? 0) >= 0 ? "text-emerald-300" : "text-rose-300"}`}>
                 {quote ? `${quote.changePercent >= 0 ? "+" : ""}${quote.changePercent.toFixed(2)}%` : ""}
               </div>
@@ -175,7 +181,7 @@ export default function EntityWorkspacePanel({ symbol, onNav, onSymbol, role }: 
             ))}
           </nav>
         </header>
-
+        <ReferenceOnlyBanner state={priceState} />
         <div className="min-h-0 flex-1 overflow-y-auto">
           <section className="grid grid-cols-2 gap-px border-b border-border bg-border sm:grid-cols-4">
             {[
@@ -239,15 +245,15 @@ export default function EntityWorkspacePanel({ symbol, onNav, onSymbol, role }: 
           <div className="min-w-0">
             <div className="flex flex-wrap items-center gap-2">
               <span className="font-terminal text-xl font-bold tracking-widest text-amber-300">{symbol}</span>
-              <span className="border border-border px-1.5 py-0.5 font-terminal text-[8px] text-muted-foreground">{quote?.exchange ?? profile?.exchange ?? "LISTING"}</span>
+              <span className="border border-border px-1.5 py-0.5 font-terminal text-[8px] text-muted-foreground">{quote?.exchange ?? profile?.exchange ?? catalogEntry?.exchange ?? "LISTING"}</span>
               {quote?.status && <DataStatusBadge status={quote.status} compact showProvider />}
             </div>
             <div className="mt-1 truncate font-terminal text-[11px] text-foreground">{displayName}</div>
-            <div className="mt-1 font-terminal text-[8px] text-muted-foreground">{profile?.sector ?? quote?.sector ?? "Ticker intelligence workspace"}</div>
+            <div className="mt-1 font-terminal text-[8px] text-muted-foreground">{profile?.sector ?? quote?.sector ?? catalogEntry?.sector ?? "Ticker intelligence workspace"}</div>
           </div>
           <div className="text-right">
-            <div className="font-terminal text-2xl font-bold tabular-nums text-foreground">{quote ? `${currencyPrefix}${quote.price.toFixed(2)}` : "—"}</div>
-            <div className={`font-terminal text-[10px] tabular-nums ${(quote?.changePercent ?? 0) >= 0 ? "text-emerald-300" : "text-rose-300"}`}>{quote ? `${quote.changePercent >= 0 ? "+" : ""}${quote.changePercent.toFixed(2)}%` : "QUOTE LOADING"}</div>
+            <div className={`font-terminal font-bold tabular-nums ${noPrice ? "text-sm text-amber-200" : "text-2xl text-foreground"}`} data-testid="entity-price">{quote ? `${currencyPrefix}${quote.price.toFixed(2)}` : noPrice ? "REFERENCE ONLY" : "—"}</div>
+            <div className={`font-terminal text-[10px] tabular-nums ${(quote?.changePercent ?? 0) >= 0 ? "text-emerald-300" : "text-rose-300"}`}>{quote ? `${quote.changePercent >= 0 ? "+" : ""}${quote.changePercent.toFixed(2)}%` : noPrice ? "NO LIVE PRICE" : priceState.kind === "unavailable" ? "PRICE UNAVAILABLE" : "QUOTE LOADING"}</div>
           </div>
         </div>
         <div className="mt-3 flex flex-wrap gap-2">
@@ -257,6 +263,7 @@ export default function EntityWorkspacePanel({ symbol, onNav, onSymbol, role }: 
           <button className="flex items-center gap-1.5 border border-border px-3 py-1.5 font-terminal text-[8px] tracking-wider text-muted-foreground hover:border-foreground/50 hover:text-foreground" onClick={() => onNav("alerts")}><BellRing className="h-3 w-3" /> MONITOR</button>
         </div>
       </header>
+      <ReferenceOnlyBanner state={priceState} />
 
       <div className="min-h-0 flex-1 overflow-y-auto">
         <section className="grid grid-cols-2 gap-px border-b border-border bg-border sm:grid-cols-4 xl:grid-cols-8">

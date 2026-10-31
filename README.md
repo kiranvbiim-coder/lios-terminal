@@ -6,7 +6,7 @@
 
 
 > **2026-09-26 entry lock:** LiOS now uses a **public, non-executable product preview → mandatory authentication/entitlement boundary → authenticated AI-first workspace**. The public screen may show representative terminal UI, capabilities, workflows and plans, but it must not execute AI, research, data, engines, connectors, Projects, Chats or Artifacts. Returning authenticated users restore directly into the workspace. Guest execution is retired.
-  <img src="logo/icon.png" alt="Limuria Intelligence" width="120" />
+  <img src="src/build-resources/icon.png" alt="Limuria Intelligence" width="120" />
 </p>
 
 <h1 align="center">LiOS Intelligence Terminal</h1>

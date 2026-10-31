@@ -173,7 +173,7 @@ test("buildQuoteFromSnapshot derives observed price fields without injecting cat
   assert.equal(quote.eps, null);
   assert.equal(quote.pe, null);
   assert.equal(quote.marketCap, null);
-  assert.equal(quote.quoteSource, "Limuria Intelligence");
+  assert.equal(quote.quoteSource, "Yahoo Finance");
   assert.equal(quote.isLive, true);
   assert.deepEqual(quote.status, {
     provider: "Limuria Intelligence",

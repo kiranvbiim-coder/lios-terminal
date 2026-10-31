@@ -98,10 +98,11 @@ test("P2 active resolver uses workspace symbol without forcing module selection"
   assert.equal(capabilities[0].symbol, "MSFT");
 });
 
-test("workspace-resolved NVDA context keeps a natural research request ready", () => {
-  const capabilities = resolveConversationCapabilities(request("research nvidia", { symbol: "NVDA" }));
+test("a named research subject is resolved by name rather than inheriting the Workbench ticker", () => {
+  const capabilities = resolveConversationCapabilities(request("research nvidia", { symbol: "AAPL" }));
   assert.deepEqual(capabilities.map((item) => item.id), ["company.research"]);
-  assert.equal(capabilities[0].symbol, "NVDA");
+  assert.equal(capabilities[0].symbol, null);
+  assert.equal(capabilities[0].entityQuery, "nvidia");
   assert.equal(capabilities[0].availability, "ready");
   assert.deepEqual(capabilities[0].missingInputs, []);
 });

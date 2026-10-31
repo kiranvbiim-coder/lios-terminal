@@ -16,7 +16,6 @@ export type TerminalUxSurface =
   | "object-workbench"
   | "graph-explorer"
   | "workspace-composer"
-  | "intelligence-pulse"
   | "impact-map"
   | "trust-ledger"
   | "decision-drift"

@@ -68,9 +68,9 @@ Tenant IdP and private-cloud verification are customer/deployment-specific. They
 
 ## Final certification
 
-`npm run acceptance:p7` validates the source-controlled engineering readiness contract; its pass does not establish every external/native control or a current independent security result.
+`npm run test:p7` validates the source-controlled engineering readiness contract; its pass does not establish every external/native control or a current independent security result.
 
-`npm run acceptance:p7:release` is release-mode certification. It requires the complete typed P14 evidence bundle for one exact release tag/version and is invoked by the final release-certification workflow after the evidence assets are downloaded.
+Release-mode certification requires the complete typed P14 evidence bundle for one exact release tag/version and runs only in the private release-certification workflow, which is withheld from this public source tree.
 
 The Operational Readiness surface displays:
 

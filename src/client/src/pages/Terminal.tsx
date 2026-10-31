@@ -17,7 +17,6 @@ import QuickSwitcher from "@/components/terminal/QuickSwitcher";
 import DockviewWorkspaceGrid from "@/components/terminal/DockviewWorkspaceGrid";
 import TerminalUxOverlays from "@/components/terminal/TerminalUxOverlays";
 import TerminalTimeContextControl from "@/components/terminal/TerminalTimeContextControl";
-import WaveCExperienceShell from "@/components/terminal/WaveCExperienceShell";
 import ProjectExperienceShell from "@/components/terminal/ProjectExperienceShell";
 import WorkbenchArtifactPane from "@/components/terminal/WorkbenchArtifactPane";
 import { openArtifactWorkbench, returnFromArtifactWorkbench, loadArtifactWorkbenchRecovery, saveArtifactWorkbenchRecovery, clearArtifactWorkbenchRecovery } from "@/lib/artifactWorkbenchHandoff";
@@ -32,7 +31,7 @@ import VisualCanvas from "@/components/terminal/VisualCanvas";
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
 import { subscribeDecisionReview } from "@/lib/decisionReviewNavigation";
 import {
-  isExperienceHomeSurface,
+  hostedDiscoverSurface,
   loadExperienceSurface,
   requestExperienceField,
   setExperienceSurface,
@@ -128,7 +127,6 @@ const CryptoChainPanel = lazy(() => import("@/components/panels/CryptoChainPanel
 const TradeIdeaPanel = lazy(() => import("@/components/panels/TradeIdeaPanel"));
 const BacktestPanel = lazy(() => import("@/components/panels/BacktestPanel"));
 const MnaDealDeskPanel = lazy(() => import("@/components/panels/MnaDealDeskPanel"));
-const IntegrationTrackerPanel = lazy(() => import("@/components/panels/IntegrationTrackerPanel"));
 const FpaDashboardPanel = lazy(() => import("@/components/panels/FpaDashboardPanel"));
 const IndicatorExplorerPanel = lazy(() => import("@/components/panels/IndicatorExplorerPanel"));
 const MacroDashboardPanel = lazy(() => import("@/components/panels/MacroDashboardPanel"));
@@ -301,7 +299,7 @@ export default function Terminal({ session, onLogout, onOpenEnvironment, domain,
   const [uxPreferences, setUxPreferences] = useState<TerminalUxPreferences>(() =>
     loadTerminalUxPreferences(isClient ? DEFAULT_RETAIL_TERMINAL_UX_PREFERENCES : undefined),
   );
-  const [experienceSurface, setExperienceSurfaceState] = useState<ExperienceShellSurface>(() => loadExperienceSurface());
+  const [experienceSurface, setExperienceSurfaceState] = useState<ExperienceShellSurface>(() => { const stored = loadExperienceSurface(); return hostedDiscoverSurface(stored) ? "projects" : stored; });
   const [timeContext, setTimeContext] = useState<TerminalTimeContext>(() => loadTerminalTimeContext());
   const [researchStarter, setResearchStarter] = useState<{ question: string; symbol: string } | null>(null);
   const [askLiosContext, setAskLiosContext] = useState<ClientAiContext | null>(null);
@@ -324,14 +322,9 @@ export default function Terminal({ session, onLogout, onOpenEnvironment, domain,
   // LiOS Power: three deliberate density tiers over one experienceSurface
   // value -- LIOS_EXECUTION_ROADMAP.md LIOS-P1-17, "conversation remains
   // primary and cockpit density appears only on demand".
-  //   "projects"                        -> cleanest: MinimalProjectsHeader only.
-  //   "pulse"/"explore"/"signals"/"library" -> WaveCExperienceShell renders its
-  //     own header (wordmark/Ask LiOS/Master AI); the outer TopBar would just
-  //     duplicate it. WaveCExperienceShell's *internal* surface-switcher nav is
-  //     intentionally hidden when embedded (see WaveCExperienceShell.tsx), so
-  //     the outer Sidebar remains the way to move between these surfaces --
-  //     it must stay visible here even though the rest of the dense chrome
-  //     (TopBar/ticker tapes/ContextRail/FunctionBar) should not.
+  //   "projects"                        -> cleanest: no global header.
+  //   "pulse"/"explore"/"signals"/"library" -> hosted as Discover inside the
+  //     "projects" shell (see hostedDiscoverSurface); they never own a surface.
   //   "workbench"                       -> full dense professional Terminal.
   // Derived, not separate state: reuses the experience-surface event store,
   // and the Sidebar's existing Projects/Workbench
@@ -340,7 +333,7 @@ export default function Terminal({ session, onLogout, onOpenEnvironment, domain,
   const isWorkbenchSurface = experienceSurface === "workbench";
   const showDenseChrome = isWorkbenchSurface;
   const showSidebarNav = !isProjectsSurface;
-  const [projectNavigation, setProjectNavigation] = useState<{ id: number; section: Exclude<CanonicalNavigationTarget, "connections" | "doctor"> } | null>(null);
+  const [projectNavigation, setProjectNavigation] = useState<{ id: number; section: Exclude<CanonicalNavigationTarget, "connections" | "doctor">; discoverSurface?: ExperienceShellSurface } | null>(null);
   const [navigationContext, setNavigationContext] = useState("Saved Project/Chat selection");
   const activeCapability = getTerminalCapability(activePane.view);
   const intelligentCalm = uxPreferences.adaptiveCalm && isWorkbenchSurface && !presentationMode && (
@@ -467,6 +460,13 @@ export default function Terminal({ session, onLogout, onOpenEnvironment, domain,
   useEffect(() => subscribeExperienceSurface(surface => {
     if (workbenchDirtyRef.current && surface !== "workbench") { setExperienceSurface("workbench"); return; }
     if (surface !== "workbench") chatWorkbenchOriginRef.current = null;
+    // Pulse/Explore/Signals/Library live inside the Chat shell as Discover: one navigation,
+    // one account menu, one Chat. Every old entry point (shortcut, command, dock) lands there.
+    if (hostedDiscoverSurface(surface)) {
+      setProjectNavigation((current) => ({ id: (current?.id ?? 0) + 1, section: "discover", discoverSurface: surface }));
+      setExperienceSurface("projects");
+      return;
+    }
     setExperienceSurfaceState(surface);
   }), []);
   const handleOpenWorkbench = useCallback((context?: ArtifactWorkbenchContext, chatOrigin?: ChatWorkbenchOrigin) => {
@@ -549,11 +549,13 @@ export default function Terminal({ session, onLogout, onOpenEnvironment, domain,
     recordCapabilityLaunch(view, "other");
   }, [canOpenView, handleSurface, onOpenEnvironment, setWorkspace]);
 
-  const handleAskLios = useCallback((initialQuestion?: string) => {
+  const handleAskLios = useCallback((initialQuestion?: string, target?: Pick<PaneState, "view" | "symbol">) => {
+    // A pane's own Ask LiOS button names its pane, so the draft never uses another focused pane.
+    const subject = target ?? activePane;
     if (isClient) {
       if (workbenchDirtyRef.current) return;
-      const capability = getTerminalCapability(activePane.view);
-      const prompt = workbenchQuestionDraft(initialQuestion, activePane.view, capability.symbolAware ? activePane.symbol : null, timeContext.enabled ? timeContext.asOfDate : null);
+      const capability = getTerminalCapability(subject.view);
+      const prompt = workbenchQuestionDraft(initialQuestion, subject.view, capability.symbolAware ? subject.symbol : null, timeContext.enabled ? timeContext.asOfDate : null);
       const handoff = artifactHandoffRef.current;
       if (handoff) {
         const exact = getWorkspacePanes(workspace).find(({ pane }) => pane.artifact?.artifactId === handoff.context.artifactId)?.pane.artifact;
@@ -568,16 +570,16 @@ export default function Terminal({ session, onLogout, onOpenEnvironment, domain,
       setUniversalChatHandoff(current => ({ request: (current?.request ?? 0) + 1, prompt }));
       return;
     }
-    if (activePane.view === "agent") {
+    if (subject.view === "agent") {
       if (initialQuestion?.trim()) setAskLiosPrompt(initialQuestion.trim());
       return;
     }
 
-    const capability = getTerminalCapability(activePane.view);
-    const contextSymbol = capability.symbolAware ? activePane.symbol?.trim().toUpperCase() || undefined : undefined;
+    const capability = getTerminalCapability(subject.view);
+    const contextSymbol = capability.symbolAware ? subject.symbol?.trim().toUpperCase() || undefined : undefined;
     setAskLiosContext({
       symbol: contextSymbol,
-      view: activePane.view,
+      view: subject.view,
       asOfDate: timeContext.enabled ? timeContext.asOfDate ?? undefined : undefined,
     });
     setAskLiosPrompt(initialQuestion?.trim() || null);
@@ -814,7 +816,7 @@ export default function Terminal({ session, onLogout, onOpenEnvironment, domain,
       case "crossasset": content = <CrossAssetPanel onSymbol={onSymbol} onNav={onNav} />; break;
       case "scanner": content = <ScannerPanel onSymbol={onSymbol} onNav={onNav} />; break;
       case "morningbrief": content = <MorningBriefPanel magnetization={magnetization} onSymbol={onSymbol} onNav={onNav} />; break;
-      case "developer": content = isInternal ? <DeveloperConsolePanel onSymbol={onSymbol} onNav={onNav} /> : null; break;
+      case "developer": content = isInternal ? <DeveloperConsolePanel /> : null; break;
       case "uide": content = isInternal ? <UideEnginePanel /> : null; break;
       case "workspaces": content = <WorkspacePanel onSymbol={onSymbol} onNav={onNav} />; break;
       case "spreadsheet": content = <SpreadsheetStudioPanel symbol={pane.symbol} />; break;
@@ -879,7 +881,6 @@ export default function Terminal({ session, onLogout, onOpenEnvironment, domain,
       case "tradeideas": content = <TradeIdeaPanel onSymbol={onSymbol} onNav={onNav} />; break;
       case "backtesting": content = <BacktestPanel symbol={pane.symbol || "AAPL"} onNav={onNav} />; break;
       case "mnadesk": content = <MnaDealDeskPanel />; break;
-      case "integration": content = <IntegrationTrackerPanel />; break;
       case "fpa": content = <FpaDashboardPanel />; break;
       case "advisory": content = isClient ? <AdvisoryPanel /> : null; break;
       case "activity": content = isClient ? <ActivityPanel role={session.role} /> : null; break;
@@ -1072,6 +1073,7 @@ export default function Terminal({ session, onLogout, onOpenEnvironment, domain,
             <ProjectExperienceShell
               navigationRequest={projectNavigation}
               onNavigationContext={setNavigationContext}
+              onOpenAction={handleOpenAction}
               onOpenCommand={() => setCmdOpen(true)}
               account={{ name: session.name, email: session.email }}
               onLogout={onLogout}
@@ -1095,17 +1097,7 @@ export default function Terminal({ session, onLogout, onOpenEnvironment, domain,
               }}
             />
           </div>
-          {isProjectsSurface ? null : isExperienceHomeSurface(experienceSurface) ? (
-            <WaveCExperienceShell
-              embedded
-              surface={experienceSurface}
-              onSurfaceChange={handleSurface}
-              activeView={activePane.view}
-              activeSymbol={getTerminalCapability(activePane.view).symbolAware ? activePane.symbol : undefined}
-              onOpen={handleOpenAction}
-              onAskLios={handleAskLios}
-            />
-          ) : (
+          {isProjectsSurface ? null : (
           <div className="flex h-full min-h-0 min-w-0 flex-col overflow-hidden" data-testid="workbench-canvas">
             {chatWorkbenchOriginRef.current && !artifactHandoffRef.current && <button type="button" data-testid="workbench-return-chat-general" disabled={workbenchDirty} onClick={returnFromGeneralWorkbench} className="shrink-0 border-b border-border p-2 text-left text-sm">Return to Chat</button>}
             {isClient && !chatWorkbenchOriginRef.current && !artifactHandoffRef.current && <button type="button" disabled={workbenchDirty} onClick={() => handleAskLios()} className="min-h-10 shrink-0 border-b border-border p-2 text-left text-sm">Return to Chat</button>}
@@ -1122,6 +1114,7 @@ export default function Terminal({ session, onLogout, onOpenEnvironment, domain,
                 onToggleMaximize={(paneId) => setMaximizedPane((current) => current === paneId ? null : paneId)}
                 onOpenActions={(paneId, pane, x, y) => requestTerminalContextMenu({ paneId, view: pane.view, symbol: getTerminalCapability(pane.view).symbolAware ? pane.symbol : undefined, x, y })}
                 renderPane={renderPaneContent}
+                onAskLios={handleAskLios}
                 density={uxPreferences.density}
               />
             </div>

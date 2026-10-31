@@ -1,12 +1,16 @@
 import * as React from "react";
 import { useState, type ReactNode } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { KeyRound, Lock } from "lucide-react";
+import { KeyRound, Loader2, Lock } from "lucide-react";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { apiRequest } from "@/lib/queryClient";
 import { serverErrorText } from "@/lib/apiErrorText";
 import { LICENSE_ACCESS_KEY, needsFirstRunChoice, readOnlyBannerText, useLicenseAccess, type LicenseAccess } from "@/lib/licenseAccess";
+import { useAiConnectionGate } from "@/lib/aiConnection";
+import { useMarketDataStepGate } from "@/lib/marketDataStep";
 import LicenseKeyEntry from "./LicenseKeyEntry";
+import ConnectAiStep from "./ConnectAiStep";
+import MarketDataStep from "./MarketDataStep";
 
 /** First run after enrollment: start the trial; only the Home owner may also import a license key. */
 export function FirstRunLicenseChoice({ canImportLicense = true }: { canImportLicense?: boolean }) {
@@ -67,7 +71,7 @@ export function ReadOnlyBanner({ access }: { access: LicenseAccess }) {
       <div
         role="status"
         data-testid="read-only-banner"
-        className="fixed inset-x-4 bottom-4 z-[900] mx-auto flex max-w-2xl flex-wrap items-center gap-3 border border-[hsl(38,95%,50%)]/50 bg-[#0b0b0b] p-3 font-terminal text-[10px] text-foreground shadow-xl"
+        className="relative z-40 flex shrink-0 flex-wrap items-center gap-3 border-b border-[hsl(38,95%,50%)]/50 bg-[#0b0b0b] px-4 py-2 font-ui text-xs text-foreground"
       >
         <Lock className="h-3.5 w-3.5 shrink-0 text-[hsl(38,95%,55%)]" aria-hidden="true" />
         <span className="min-w-0 flex-1">
@@ -101,14 +105,52 @@ export function ReadOnlyBanner({ access }: { access: LicenseAccess }) {
   );
 }
 
-/** First-run activation follows its explicit permission; installation key entry remains owner-only. */
-export default function AccessModeGate({ enabled, children }: { enabled: boolean; children: ReactNode }) {
-  const { data: access } = useLicenseAccess(enabled);
-  if (access && needsFirstRunChoice(access)) return <FirstRunLicenseChoice canImportLicense={access.isOwner} />;
+function StartupCheck({ text }: { text: string }) {
   return (
-    <>
-      {children}
+    <main className="flex min-h-screen w-screen items-center justify-center bg-[#030303] p-4 text-foreground" data-testid="startup-check">
+      <p role="status" className="flex items-center gap-2 font-ui text-sm text-muted-foreground">
+        <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" /> {text}
+      </p>
+    </main>
+  );
+}
+
+/**
+ * First-run order: license choice, then Connect your AI, then the workspace. Once the workspace has
+ * opened in this session it is never torn down for AI changes; Chat asks to reconnect inline instead.
+ */
+export default function AccessModeGate({ enabled, onLogout, children }: { enabled: boolean; onLogout: () => void | Promise<void>; children: ReactNode }) {
+  const license = useLicenseAccess(enabled);
+  const access = license.data;
+  const ai = useAiConnectionGate(access?.mode === "full");
+  const [workspaceOpened, setWorkspaceOpened] = useState(false);
+  // Once the Connect step has been shown, verifying saves the provider (gate becomes "reconnect");
+  // only the user's Continue, which also turns AI on for Chat, may close it.
+  const [connectStarted, setConnectStarted] = useState(false);
+  if (ai.gate === "connect" && !connectStarted && !workspaceOpened) setConnectStarted(true);
+  const firstRunChoice = needsFirstRunChoice(access);
+  const aiSettled = !firstRunChoice && (ai.gate === "ready" || (ai.gate === "reconnect" && !connectStarted) || (ai.gate === "not_required" && !(enabled && license.isPending)));
+  // After AI, ask once for a market-data source. A person who defers is not asked again.
+  const market = useMarketDataStepGate(access?.mode === "full" && aiSettled && !workspaceOpened);
+  const [marketDone, setMarketDone] = useState(false);
+  const marketSettled = marketDone || market.gate === "skip";
+  if (aiSettled && marketSettled && !workspaceOpened) setWorkspaceOpened(true);
+
+  if (access && firstRunChoice) return <FirstRunLicenseChoice canImportLicense={access.isOwner} />;
+  if (!workspaceOpened && !aiSettled) {
+    if (connectStarted || ai.gate === "connect") return <ConnectAiStep setup={ai.setup} onConnected={() => setConnectStarted(false)} onLogout={onLogout} />;
+    return <StartupCheck text={ai.gate === "checking" ? "Checking your AI connection…" : "Getting LiOS ready…"} />;
+  }
+  if (!workspaceOpened && aiSettled) {
+    if (market.gate === "show") return <MarketDataStep setup={market.setup} userId={market.userId} onDone={() => setMarketDone(true)} />;
+    return <StartupCheck text="Getting LiOS ready…" />;
+  }
+  return (
+    <div className="flex h-dvh min-h-0 flex-col overflow-hidden">
       {access && <ReadOnlyBanner access={access} />}
-    </>
+      <div className="min-h-0 flex-1 overflow-hidden [&>[data-lios-workspace]]:h-full [&_.terminal-root]:h-full">
+        {children}
+      </div>
+    </div>
   );
 }

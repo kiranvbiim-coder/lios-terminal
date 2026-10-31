@@ -2,11 +2,17 @@
 
 **27 Oct 2026** · master source-gap tracker [#258](https://github.com/kiranvbiim-coder/lios-terminal/issues/258) · parent D1 [#297](https://github.com/kiranvbiim-coder/lios-terminal/pull/297).
 
+**Release scope (macOS-first):** per `docs/PENDING_WORK.md` the release is macOS Apple Silicon first. Installed acceptance for macOS (DMG/ZIP) is required for this release. Windows x64 NSIS installed acceptance is **deferred, not required for this release**: it needs a Windows machine from the owner, and Windows source CI stays required. Wherever this document lists Windows installer evidence, it applies only when the deferred Windows qualification is run.
+
+## Product flow (merged from the superseded D2 note)
+
+Keep the existing, user-ordered eight-source Project Library briefing. The user pins up to three *already saved, source-bound, Project-owned* P4 chart/table versions. A fresh same-origin P4 read and exact result/permission/source/hash comparison occurs before the sole final Save. The native Office exporter uses exactly the saved report blocks for editability (native editable PowerPoint chart, table and local embedded workbook); no new slide store or network media is added. Saved visual comparisons use `stableSerialize`, so semantically identical records are not rejected for JSON key order while changed values/source references remain blocked. The same report also exports a DOCX native table with P4 custom source metadata.
+
 ## Implemented: one source + installed verification path
 
 - Reuses the existing P1 Project navigation, P2 Chat, P4 editable Artifacts/export, P7 evidence, P9 review, beta manifest, beta acceptance and hosted source workflow. **No fifth feature phase, new store, paid renderer/asset, third-party source copying, release-upload workflow or runner upgrade.**
 - Adds executable D2 native Office export regression: composed P7 + two exact P4 visual payloads → canonical report → actual native editable PPTX chart and table XML → readOfficeArtifactRoundtrip exact content/lineage; checks repeat export determinism. Native DOCX table and P4 Office metadata are also checked.
-- Extends the **existing** owner-reviewed beta native acceptance control list from 10 to 23. Every control must be explicitly true and tied to the exact built installer SHA-256 for *both* macOS Apple Silicon DMG and Windows x64 NSIS installers. Four distinct real native screenshots (discovery, investigation, briefing/Office, 390px) plus a local test log/report are required. The checker reads bytes, rejects symlinks, missing files, path escapes and false image signatures. A truthful human reviewer must sign off the report. The existing beta manifest validator separately checks installer integrity and the exact commit.
+- Extends the **existing** owner-reviewed beta native acceptance control list from 10 to 23. Every control must be explicitly true and tied to the exact built installer SHA-256 of the macOS Apple Silicon DMG (required for this release); the Windows x64 NSIS installer entry is deferred with Windows qualification. Four distinct real native screenshots (discovery, investigation, briefing/Office, 390px) plus a local test log/report are required. The checker reads bytes, rejects symlinks, missing files, path escapes and false image signatures. A truthful human reviewer must sign off the report. The existing beta manifest validator separately checks installer integrity and the exact commit.
 - Bounds D1 source inclusion so 51+ references on a selected insight or 21+ references on a matching historical timeline event **blocks briefing composition instead of dropping lineage silently**.
 - Source CI runs all prior A/B/C/D1 named gates, plus D2 test suite and existing beta proof **negative controls**. These tests do not set `checks: true` for any actual native installer.
 
@@ -32,7 +38,7 @@
 | offlineAndReconnect | Deliberate disconnect/reconnect, no fabricated success or paid network dependency |
 | keyboardOnly, screenReader, zoom200, reducedMotion | Test all A–D critical surfaces, 200% zoom, visible focus, reduced motion |
 
-Other remaining beta fields are unchanged. Human testers must capture the installed windows, not static source smoke or marketing images. Use distinct screenshot files for four key surfaces plus a truthful session log. **Do not claim 390px/mobile or screen-reader acceptance from source tests.**
+Other remaining beta fields are unchanged. Human testers must capture the installed macOS app windows (Windows only when deferred qualification is run), not static source smoke or marketing images. Use distinct screenshot files for four key surfaces plus a truthful session log. **Do not claim 390px/mobile or screen-reader acceptance from source tests.**
 
 ## $0 release guard
 
@@ -65,8 +71,8 @@ node script/beta_release_acceptance.cjs \
   --mac-ux /evidence/mac-ux.json \
   --win-ux /evidence/win-ux.json
 ```
-The 23 named true/false UX checks belong in each platform's `checks` object. Use existing test schema and exact manifest hashes; no fake or placeholder evidence. **Without those real native artifacts this gate is BLOCKED.**
+The 23 named true/false UX checks belong in each platform's `checks` object. The current checker (`script/beta_release_acceptance.cjs`) still takes the `--win-*` evidence for the deferred Windows qualification, so the full command cannot pass until the owner supplies a Windows machine; macOS evidence is the required input for this release. Use existing test schema and exact manifest hashes; no fake or placeholder evidence. **Without those real native artifacts this gate is BLOCKED.**
 
 ## Merge/release decision
 
-D2 is a focused **stacked draft PR** on D1, not a release. Before merging into protected `main`, integrate the A1–D2 ancestor branches in order, require exact integrated HEAD CI green, resolve cross-workstream conflicts and perform packaged macOS ARM64/Windows x64 acceptance. A green public source job certifies source regressions only. The final result must report installed QA and license/rights risks honestly rather than treating donor-source integration as native UX acceptance.
+D2 is a focused **stacked draft PR** on D1, not a release. Before merging into protected `main`, integrate the A1–D2 ancestor branches in order, require exact integrated HEAD CI green, resolve cross-workstream conflicts and perform packaged macOS ARM64 acceptance (Windows x64 acceptance is deferred). A green public source job certifies source regressions only. The final result must report installed QA and license/rights risks honestly rather than treating donor-source integration as native UX acceptance.

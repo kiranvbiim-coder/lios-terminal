@@ -1191,7 +1191,6 @@ Current local verification commands:
 ```bash
 cd src
 npm run test:p11
-npm run acceptance:p11
 npm run acceptance:p11:platform
 ```
 

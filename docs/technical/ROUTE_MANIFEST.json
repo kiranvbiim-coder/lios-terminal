@@ -1667,6 +1667,18 @@
   },
   {
    "method": "POST",
+   "path": "/api/chats/:chatId/artifacts/generate-image",
+   "reachableBy": [
+    "client_user",
+    "client_admin",
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "POST",
    "path": "/api/chats/:chatId/artifacts/keep-draft",
    "reachableBy": [
     "client_user",
@@ -3750,11 +3762,7 @@
   {
    "method": "GET",
    "path": "/api/finance/news/ai-smart-search",
-   "reachableBy": [
-    "internal_analyst",
-    "internal_compliance",
-    "internal_admin"
-   ],
+   "reachableBy": [],
    "unprobed": false
   },
   {
@@ -3814,13 +3822,7 @@
   {
    "method": "GET",
    "path": "/api/finance/ohlcv",
-   "reachableBy": [
-    "client_user",
-    "client_admin",
-    "internal_analyst",
-    "internal_compliance",
-    "internal_admin"
-   ],
+   "reachableBy": [],
    "unprobed": false
   },
   {
@@ -3850,13 +3852,7 @@
   {
    "method": "GET",
    "path": "/api/finance/peers",
-   "reachableBy": [
-    "client_user",
-    "client_admin",
-    "internal_analyst",
-    "internal_compliance",
-    "internal_admin"
-   ],
+   "reachableBy": [],
    "unprobed": false
   },
   {
@@ -3910,13 +3906,7 @@
   {
    "method": "GET",
    "path": "/api/finance/rate-cycle-impact",
-   "reachableBy": [
-    "client_user",
-    "client_admin",
-    "internal_analyst",
-    "internal_compliance",
-    "internal_admin"
-   ],
+   "reachableBy": [],
    "unprobed": false
   },
   {
@@ -4439,7 +4429,7 @@
   },
   {
    "method": "GET",
-   "path": "/api/media/commons/cc0",
+   "path": "/api/media/commons/images",
    "reachableBy": [
     "client_user",
     "client_admin",
@@ -4451,7 +4441,7 @@
   },
   {
    "method": "GET",
-   "path": "/api/media/commons/cc0/file",
+   "path": "/api/media/commons/images/file",
    "reachableBy": [
     "client_user",
     "client_admin",
@@ -6020,19 +6010,6 @@
   {
    "method": "GET",
    "path": "/api/public/desktop-distribution",
-   "reachableBy": [
-    "anonymous",
-    "client_user",
-    "client_admin",
-    "internal_analyst",
-    "internal_compliance",
-    "internal_admin"
-   ],
-   "unprobed": false
-  },
-  {
-   "method": "POST",
-   "path": "/api/public/leads",
    "reachableBy": [
     "anonymous",
     "client_user",
@@ -8050,6 +8027,8 @@
    "method": "GET",
    "path": "/api/voice/providers",
    "reachableBy": [
+    "client_user",
+    "client_admin",
     "internal_analyst",
     "internal_compliance",
     "internal_admin"
@@ -8060,6 +8039,8 @@
    "method": "GET",
    "path": "/api/voice/setup",
    "reachableBy": [
+    "client_user",
+    "client_admin",
     "internal_analyst",
     "internal_compliance",
     "internal_admin"
@@ -8070,6 +8051,8 @@
    "method": "POST",
    "path": "/api/voice/setup/refresh",
    "reachableBy": [
+    "client_user",
+    "client_admin",
     "internal_analyst",
     "internal_compliance",
     "internal_admin"
@@ -8080,6 +8063,8 @@
    "method": "POST",
    "path": "/api/voice/speak",
    "reachableBy": [
+    "client_user",
+    "client_admin",
     "internal_analyst",
     "internal_compliance",
     "internal_admin"
@@ -8090,6 +8075,8 @@
    "method": "POST",
    "path": "/api/voice/transcribe",
    "reachableBy": [
+    "client_user",
+    "client_admin",
     "internal_analyst",
     "internal_compliance",
     "internal_admin"

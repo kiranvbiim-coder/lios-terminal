@@ -32,6 +32,7 @@ import { clearResearchTray } from "@/lib/terminalResearchTray";
 import { clearTerminalPersonalization } from "@/lib/terminalPersonalization";
 import { restoreSession, signOutSession } from "./lib/sessionLifecycle";
 import { subscribeOpenEnvironmentCenter, subscribeOpenPluginCenter, subscribeOpenGuidedConnectorSetup } from "@/lib/appShellEvents";
+import { openTerminalUxSurface } from "@/lib/terminalUxEvents";
 import type { AuthSessionState, EffectiveAccessSnapshot } from "@shared/identityContracts";
 
 // Chat-first: connection and plugin management must not inflate the initial Chat bundle.
@@ -193,6 +194,28 @@ function App() {
       document.querySelector<HTMLElement>('[data-lios-workspace] button:not(:disabled)')?.focus();
     }
   }, [managementView, domainPickerOpen, session]);
+  // Pulse shortcut (⌘/Ctrl U outside text fields, ⌘/Ctrl ⇧ U/V anywhere) also works from
+  // inside the app-level drawer or domain picker: close them and open Pulse. A draft
+  // review (alertdialog) is never dismissed this way.
+  useEffect(() => {
+    if (!session || (managementView === null && !domainPickerOpen)) return;
+    const handler = (event: KeyboardEvent) => {
+      if (!(event.metaKey || event.ctrlKey) || event.altKey) return;
+      const key = event.key.toLowerCase();
+      const target = event.target as HTMLElement | null;
+      const editable = Boolean(target?.isContentEditable || target?.tagName === "INPUT" || target?.tagName === "TEXTAREA" || target?.tagName === "SELECT");
+      if (!(event.shiftKey ? key === "u" || key === "v" : key === "u" && !editable)) return;
+      if (document.querySelector('[role="alertdialog"]')) return;
+      event.preventDefault();
+      event.stopPropagation();
+      setManagementView(null);
+      setGuidedConnectorId(null);
+      setDomainPickerOpen(false);
+      openTerminalUxSurface("wave-c-shell");
+    };
+    window.addEventListener("keydown", handler, { capture: true });
+    return () => window.removeEventListener("keydown", handler, { capture: true });
+  }, [session, managementView, domainPickerOpen]);
 
   const handleLogout = async () => {
     if (signOutPending.current) return;
@@ -274,7 +297,7 @@ function App() {
         {session && session.mustChangePassword ? (
           <ForcedChangePassword email={session.email} onDone={() => setSession({ ...session, mustChangePassword: false })} />
         ) : session ? (
-          <AccessModeGate enabled>
+          <AccessModeGate enabled onLogout={handleLogout}>
             {/* Preserve the conversation, staged inputs and workspace while contextual setup is open. */}
             <div data-lios-workspace hidden={domainPickerOpen}>
               <AppRouter

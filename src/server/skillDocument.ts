@@ -1,6 +1,5 @@
 import crypto from "node:crypto";
-import { createRequire } from "node:module";
-import path from "node:path";
+import * as yaml from "js-yaml";
 import { z } from "zod";
 import { liosPluginManifestV1Schema } from "@shared/pluginSdk";
 import { SKILL_DOCUMENT_MAX_BYTES } from "@shared/p13ExtensionContracts";
@@ -8,10 +7,6 @@ import { SKILL_DOCUMENT_MAX_BYTES } from "@shared/p13ExtensionContracts";
 // Adapted from approved OpenClaw markdown-core/frontmatter and skills/loading/frontmatter:
 // normalize only parsing view, require a complete leading block, reject parser issues, retain body.
 // Use the already installed pinned js-yaml parser, not the donor SDK/config/install authority.
-const yaml = createRequire(path.resolve(process.cwd(), "package.json"))("js-yaml") as {
-  FAILSAFE_SCHEMA: unknown;
-  load(text: string, options: Record<string, unknown>): unknown;
-};
 const metadataSchema = z.object({
   name: z.string().trim().min(1).max(160).regex(/^[a-z0-9][a-z0-9-]*$/),
   description: z.string().trim().min(1).max(2_000),

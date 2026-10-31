@@ -51,7 +51,6 @@ export type ViewMode =
   | "tradeideas"
   | "backtesting"
   | "mnadesk"
-  | "integration"
   | "fpa"
   | "optionsflow"
   | "insiders"

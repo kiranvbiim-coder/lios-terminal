@@ -40,7 +40,7 @@ export default function ThemeSwitcher() {
       <button
         type="button"
         onClick={toggleCursor}
-        title="Toggle Limuria signature cursor; precise native cursors remain on inputs and charts"
+        title="Toggle LiOS signature cursor; precise native cursors remain on inputs and charts"
         className={`flex items-center gap-1 border px-1.5 py-1 transition-colors ${signatureCursor ? "border-[hsl(38,100%,50%)/35%] bg-[hsl(38,100%,50%)/7%] text-[hsl(38,100%,58%)]" : "border-border text-muted-foreground hover:text-foreground"}`}
       >
         <MousePointer2 className="h-3 w-3" /> CURSOR

@@ -12,7 +12,7 @@
     "npm": ">=10"
   },
   "scripts": {
-    "data:recover": "node script/recover_instrument_catalogs.cjs --restore --github",
+    "data:recover": "node script/recover_instrument_catalogs.cjs --restore",
     "data:verify": "node script/recover_instrument_catalogs.cjs --verify",
     "test:catalog-recovery": "node --test script/recover_instrument_catalogs.test.cjs",
     "dev": "node script/dev.mjs",

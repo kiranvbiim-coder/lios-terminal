@@ -32,7 +32,6 @@ if (pkg.dependencies?.["flexlayout-react"] || pkg.dependencies?.["dockview-enter
 
 const appEntry = read("client/src/App.tsx");
 const publicPreview = read("client/src/pages/PublicProductPreview.tsx");
-const publicRoutes = read("server/publicRoutes.ts");
 requireMatch(appEntry, /PublicProductPreview/, "P1 signed-out entry must render the public LiOS product preview.");
 requireAbsent(appEntry, /GuestConversationHome/, "P1 must not restore the executable guest conversation shell.");
 requireAbsent(appEntry, /ExperienceCenter|#\/experience/, "P1 legacy Experience Center hash must not bypass the single public preview/auth boundary.");
@@ -42,8 +41,7 @@ requireMatch(publicPreview, /const requireRegistration = \(\) =>/, "P1 public cr
 requireMatch(publicPreview, /initialMode=\{loginMode\}/, "P1 public preview must pass the selected auth mode into the login surface.");
 requireAbsent(publicPreview, /\/api\/public\/research\/quick/, "P1 public preview must not execute anonymous research.");
 requireAbsent(publicPreview, /fetch\(/, "P1 public preview must not execute network data/research calls.");
-requireMatch(publicRoutes, /\/api\/public\/leads/, "P1 intentional public lead capture must remain explicit.");
-requireAbsent(publicRoutes, /\/api\/public\/research\/quick|runGuestPublicResearch|guestResearchRequestSchema/, "P1 anonymous server surface must not expose research execution.");
+requireAbsent(read("server/routes.ts"), /\/api\/public\/leads|\/api\/public\/research\/quick|runGuestPublicResearch|guestResearchRequestSchema/, "P1 anonymous server surface must not expose lead capture or research execution.");
 
 const lock = json<any>("package-lock.json");
 for (const [entry, version] of [

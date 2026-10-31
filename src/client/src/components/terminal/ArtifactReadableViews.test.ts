@@ -8,7 +8,7 @@ import BacktestArtifactView from "./BacktestArtifactView";
 import PortfolioArtifactView from "./PortfolioArtifactView";
 import ValuationArtifactView from "./ValuationArtifactView";
 import { dcfSensitivityValuation } from "./dcfSensitivityArtifact.fixture";
-import { ReadableRowsTable } from "./ReadableValueTable";
+import { ReadableRowsTable, ReadableValueTable } from "./ReadableValueTable";
 
 const save = async () => undefined;
 const facts = { savedAt: "2026-10-20T10:30:00.000Z", sourceCount: 0, receiptCount: 1 };
@@ -79,14 +79,15 @@ test("full precision mode shows every stored digit", () => {
   assert.match(markup, />Show formatted numbers</);
 });
 
-test("raw valuation JSON is reachable only as read-only recorded evidence", () => {
+test("recorded valuation data is reachable only as read-only exact evidence, never raw JSON", () => {
   const closed = valuation();
   assert.match(closed, /<button[^>]*aria-expanded="false"[^>]*>.*?Expert view/);
   assert.doesNotMatch(closed, /<textarea/);
   const open = valuation({ expertDefaultOpen: true });
   assert.match(open, /aria-expanded="true"/);
-  assert.match(open, /<pre[^>]*aria-label="Recorded valuation JSON"/);
-  assert.match(open, /&quot;valuePerShare&quot;: 71\.370824940136/);
+  assert.match(open, /<(?:div|section)[^>]*aria-label="Recorded valuation data"/);
+  assert.match(open, />71\.370824940136 per share</);
+  assert.doesNotMatch(open, RAW_JSON);
   assert.match(open, /This is recorded calculation evidence, not an input editor/);
   assert.doesNotMatch(open, /<textarea|Save revision/);
 });
@@ -97,7 +98,7 @@ test("Expert view panel mounts read-only valuation data only on explicit disclos
   assert.match(closed, /<div id="[^"]+" hidden=""[^>]*><\/div>/);
   const open = valuation({ expertDefaultOpen: true });
   assert.doesNotMatch(open, /<div id="[^"]+" hidden=""/);
-  assert.match(open, /<pre aria-label="Recorded valuation JSON"/);
+  assert.match(open, /aria-label="Recorded valuation data"/);
 });
 
 test("WACC control stages a proposal without changing stored calculations", () => {
@@ -121,14 +122,15 @@ test("unknown Artifact kinds get an honest fallback with export and no JSON", ()
     kind: screen.kind, content: screen, onSave: save, onOpenExport: () => undefined,
     facts: [{ label: "Screen", value: "Equity screener" }, { label: "Symbol", value: "ACME" }],
   }));
-  assert.match(markup, /No built-in viewer for this screen Artifact yet/);
-  assert.match(markup, /saved and unchanged/);
-  assert.match(markup, />Export this Artifact</);
+  assert.match(markup, /Recorded screen/);
+  assert.match(markup, /Recorded details/);
+  assert.doesNotMatch(markup, /No built-in viewer/);
+  assert.match(markup, />Export</);
   assert.match(markup, />Equity screener</);
   assert.doesNotMatch(markup, RAW_JSON);
-  assert.doesNotMatch(markup, /marketCap|<textarea|<pre/);
+  assert.doesNotMatch(markup, /<textarea|<pre/);
   const withoutExport = renderToStaticMarkup(createElement(ArtifactViewerFallback, { kind: "screen", content: screen, onSave: save }));
-  assert.doesNotMatch(withoutExport, />Export this Artifact</);
+  assert.doesNotMatch(withoutExport, />Export</);
   const expert = renderToStaticMarkup(createElement(ArtifactViewerFallback, { kind: "screen", content: screen, onSave: save, expertDefaultOpen: true }));
   assert.match(expert, /&quot;marketCap&quot;/);
 });
@@ -201,4 +203,18 @@ test("columns recorded after the visible row page remain discoverable without wi
   const markup = renderToStaticMarkup(createElement(ReadableRowsTable, { title: "Trades", rows, limit: 100 }));
   assert.match(markup, /Late recorded metric/i);
   assert.equal((markup.match(/<tbody>[\s\S]*?<\/tbody>/)?.[0].match(/<tr/g) ?? []).length, 100);
+});
+
+test("ReadableValueTable reads nested records, arrays and plain values without a title or JSON", () => {
+  const nested = renderToStaticMarkup(createElement(ReadableValueTable, { values: { wacc: 0.0825, stages: [{ growth: 0.05 }, { growth: 0.03 }], notes: ["rounded", "annual"] }, "aria-label": "Inputs" }));
+  assert.match(nested, /aria-label="Inputs"/);
+  assert.doesNotMatch(nested, /<h3/);
+  assert.match(nested, />WACC</);
+  assert.match(nested, /Stages › #1 › Growth/);
+  assert.doesNotMatch(nested, RAW_JSON);
+  const plain = renderToStaticMarkup(createElement(ReadableValueTable, { values: ["argv", "--flag"], title: "Command" }));
+  assert.match(plain, />Command</);
+  assert.match(plain, /argv/);
+  const empty = renderToStaticMarkup(createElement(ReadableValueTable, { values: null, emptyText: "Nothing here." }));
+  assert.match(empty, /Nothing here\./);
 });

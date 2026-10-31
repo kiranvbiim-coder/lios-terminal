@@ -8,6 +8,7 @@ import { useLseFinancials } from "@/lib/useLse";
 import { getCurrencySymbol, formatPrice } from "@/lib/finance";
 import { Building2, Layers, RefreshCw, Download, Calculator, Percent, X, Gauge } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
+import { PromptDialog } from "@/components/ui/prompt-dialog";
 import { LineChart, Line, ResponsiveContainer, XAxis, YAxis, Tooltip, CartesianGrid, ReferenceLine } from "recharts";
 import {
   altmanZScore, piotroskiFScore, olsRegression,
@@ -1065,6 +1066,7 @@ function ValuationPanel({ symbol }: Props) {
   const applyAllYears = useCallback((key: keyof YearRow, val: number) => {
     setRows(prev => prev.map(r => ({ ...r, [key]: val })));
   }, []);
+  const [applyAll, setApplyAll] = useState<{ key: keyof YearRow; label: string; initial: string } | null>(null);
 
   if (isLoading) {
     return (
@@ -1477,10 +1479,7 @@ function ValuationPanel({ symbol }: Props) {
                   <tr className="border-b border-border/40 hover:bg-white/[2%] group">
                     <td className="px-3 py-1.5 font-terminal text-[9px] text-muted-foreground whitespace-nowrap">
                       <button
-                        onClick={() => {
-                          const v = parseFloat(window.prompt("Apply to ALL years — Revenue Growth %:", String(rows[0].revenueGrowth)) ?? "");
-                          if (!isNaN(v)) applyAllYears("revenueGrowth", v);
-                        }}
+                        onClick={() => setApplyAll({ key: "revenueGrowth", label: "Revenue growth % (all years)", initial: String(rows[0].revenueGrowth) })}
                         className="hover:text-[hsl(38,95%,55%)] transition-colors text-left w-full"
                         title="Click to fill all years"
                       >
@@ -1496,7 +1495,7 @@ function ValuationPanel({ symbol }: Props) {
                   {/* EBITDA Margin */}
                   <tr className="border-b border-border/40 hover:bg-white/[2%]">
                     <td className="px-3 py-1.5 font-terminal text-[9px] text-muted-foreground whitespace-nowrap">
-                      <button onClick={() => { const v = parseFloat(window.prompt("EBITDA Margin % (all years):", String(rows[0].ebitdaMargin)) ?? ""); if (!isNaN(v)) applyAllYears("ebitdaMargin", v); }} className="hover:text-[hsl(38,95%,55%)] transition-colors text-left w-full">
+                      <button onClick={() => setApplyAll({ key: "ebitdaMargin", label: "EBITDA Margin % (all years):", initial: String(rows[0].ebitdaMargin) })} className="hover:text-[hsl(38,95%,55%)] transition-colors text-left w-full">
                         EBITDA MARGIN %
                       </button>
                     </td>
@@ -1505,7 +1504,7 @@ function ValuationPanel({ symbol }: Props) {
                   {/* D&A */}
                   <tr className="border-b border-border/40 hover:bg-white/[2%]">
                     <td className="px-3 py-1.5 font-terminal text-[9px] text-muted-foreground whitespace-nowrap">
-                      <button onClick={() => { const v = parseFloat(window.prompt("D&A % of Revenue (all years):", String(rows[0].daPercent)) ?? ""); if (!isNaN(v)) applyAllYears("daPercent", v); }} className="hover:text-[hsl(38,95%,55%)] transition-colors text-left w-full">
+                      <button onClick={() => setApplyAll({ key: "daPercent", label: "D&A % of Revenue (all years):", initial: String(rows[0].daPercent) })} className="hover:text-[hsl(38,95%,55%)] transition-colors text-left w-full">
                         D&A % OF REVENUE
                       </button>
                     </td>
@@ -1514,7 +1513,7 @@ function ValuationPanel({ symbol }: Props) {
                   {/* Tax Rate */}
                   <tr className="border-b border-border/40 hover:bg-white/[2%]">
                     <td className="px-3 py-1.5 font-terminal text-[9px] text-muted-foreground whitespace-nowrap">
-                      <button onClick={() => { const v = parseFloat(window.prompt("Tax Rate % (all years):", String(rows[0].taxRate)) ?? ""); if (!isNaN(v)) applyAllYears("taxRate", v); }} className="hover:text-[hsl(38,95%,55%)] transition-colors text-left w-full">
+                      <button onClick={() => setApplyAll({ key: "taxRate", label: "Tax Rate % (all years):", initial: String(rows[0].taxRate) })} className="hover:text-[hsl(38,95%,55%)] transition-colors text-left w-full">
                         EFFECTIVE TAX RATE %
                       </button>
                     </td>
@@ -1523,7 +1522,7 @@ function ValuationPanel({ symbol }: Props) {
                   {/* CapEx */}
                   <tr className="border-b border-border/40 hover:bg-white/[2%]">
                     <td className="px-3 py-1.5 font-terminal text-[9px] text-muted-foreground whitespace-nowrap">
-                      <button onClick={() => { const v = parseFloat(window.prompt("CapEx % of Revenue (all years):", String(rows[0].capexPercent)) ?? ""); if (!isNaN(v)) applyAllYears("capexPercent", v); }} className="hover:text-[hsl(38,95%,55%)] transition-colors text-left w-full">
+                      <button onClick={() => setApplyAll({ key: "capexPercent", label: "CapEx % of Revenue (all years):", initial: String(rows[0].capexPercent) })} className="hover:text-[hsl(38,95%,55%)] transition-colors text-left w-full">
                         CAPEX % OF REVENUE
                       </button>
                     </td>
@@ -1532,7 +1531,7 @@ function ValuationPanel({ symbol }: Props) {
                   {/* NWC Change */}
                   <tr className="border-b border-border/40 hover:bg-white/[2%]">
                     <td className="px-3 py-1.5 font-terminal text-[9px] text-muted-foreground whitespace-nowrap">
-                      <button onClick={() => { const v = parseFloat(window.prompt("ΔNWC % of Revenue (all years):", String(rows[0].nwcChangePercent)) ?? ""); if (!isNaN(v)) applyAllYears("nwcChangePercent", v); }} className="hover:text-[hsl(38,95%,55%)] transition-colors text-left w-full">
+                      <button onClick={() => setApplyAll({ key: "nwcChangePercent", label: "ΔNWC % of Revenue (all years):", initial: String(rows[0].nwcChangePercent) })} className="hover:text-[hsl(38,95%,55%)] transition-colors text-left w-full">
                         ΔNWC % OF REVENUE
                       </button>
                     </td>
@@ -2477,6 +2476,16 @@ function ValuationPanel({ symbol }: Props) {
           </div>
         </div>
       )}
+      <PromptDialog
+        open={applyAll !== null}
+        title="Apply to all years"
+        label={applyAll?.label ?? ""}
+        initialValue={applyAll?.initial ?? ""}
+        inputMode="decimal"
+        validate={(value) => (Number.isFinite(parseFloat(value)) ? null : "Enter a number.")}
+        onConfirm={(value) => { if (applyAll) applyAllYears(applyAll.key, parseFloat(value)); setApplyAll(null); }}
+        onCancel={() => setApplyAll(null)}
+      />
     </div>
   );
 }

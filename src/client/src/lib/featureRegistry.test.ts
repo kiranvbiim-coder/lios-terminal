@@ -5,6 +5,9 @@ import {
   getVisibleWorkspaces,
   getWorkspaceForView,
   isViewVisibleToAudience,
+  getSettingsAdvancedViews,
+  isRegisteredView,
+  isSettingsAdvancedView,
   PRIMARY_WORKSPACES,
 } from "./featureRegistry";
 
@@ -15,7 +18,6 @@ test("primary navigation exposes the contracted destinations once and in order",
     navigation.map(({ key, label }) => [key, label]),
     [
       ["home", "Home"],
-      ["data", "Data"],
       ["finance", "Finance"],
       ["modeling", "Modeling"],
       ["research", "Research"],
@@ -28,18 +30,39 @@ test("primary navigation exposes the contracted destinations once and in order",
   assert.equal(new Set(navigation.map((workspace) => workspace.entryView)).size, navigation.length);
 });
 
-test("client and trial navigation retain the same primary destinations without internal utilities", () => {
+test("client and trial navigation retain primary destinations without internal utilities", () => {
   for (const audience of ["client", "trial"] as const) {
     const navigation = getVisibleWorkspaces(audience);
     const visibleViews = navigation.flatMap((workspace) => workspace.views);
     assert.deepEqual(
       navigation.map((workspace) => workspace.key),
-      ["home", "data", "finance", "modeling", "research", "intelligence", "outputs", "advanced", "settings"],
+      audience === "client"
+        ? ["home", "data", "finance", "modeling", "research", "intelligence", "outputs", "advanced", "settings"]
+        : ["home", "finance", "modeling", "research", "intelligence", "outputs", "advanced", "settings"],
     );
     assert.equal(visibleViews.includes("developer"), false);
     assert.equal(visibleViews.includes("adminconsole"), false);
     assert.equal(visibleViews.includes("uide"), false);
   }
+});
+
+test("admin, developer and data-plumbing views live in Settings › Advanced and stay openable", () => {
+  const moved = [
+    "developer", "adminconsole", "enginereadiness", "coveragemap", "qualitygate", "connectors", "marketdatafabric",
+    "universefabric", "crossassetfabric", "economicdatafabric", "datastats", "conflictdetector",
+  ] as const;
+  const internalAdvanced = getSettingsAdvancedViews("internal");
+  for (const view of moved) {
+    assert.equal(getWorkspaceForView(view), "settings", view);
+    assert.equal(isSettingsAdvancedView(view), true, view);
+    assert.equal(internalAdvanced.includes(view), true, view);
+    assert.equal(isRegisteredView(view), true, view);
+  }
+  // Admin-only stays admin-only after the move.
+  assert.equal(getSettingsAdvancedViews("client").includes("developer"), false);
+  assert.equal(getSettingsAdvancedViews("client").includes("connectors"), true);
+  // Connections (environment) is a Settings destination, not an Advanced tool.
+  assert.equal(isSettingsAdvancedView("environment"), false);
 });
 
 test("Pro-style trial keeps core monitoring workflows available", () => {
@@ -61,7 +84,7 @@ test("client-only specialist features route only to full client builds", () => {
 
 test("representative specialist features remain reachable under the correct parent", () => {
   assert.equal(getWorkspaceForView("missioncontrol"), "home");
-  assert.equal(getWorkspaceForView("connectors"), "data");
+  assert.equal(getWorkspaceForView("clientdata"), "data");
   assert.equal(getWorkspaceForView("market"), "finance");
   for (const financeView of [
     "heatmap",
@@ -76,7 +99,7 @@ test("representative specialist features remain reachable under the correct pare
   assert.equal(getWorkspaceForView("research"), "research");
   assert.equal(getWorkspaceForView("decisionengine"), "intelligence");
   assert.equal(getWorkspaceForView("spreadsheet"), "outputs");
-  assert.equal(getWorkspaceForView("developer"), "advanced");
+  assert.equal(getWorkspaceForView("advancedrisk"), "advanced");
   assert.equal(getWorkspaceForView("environment"), "settings");
   for (const modelView of [
     "fixedincome",

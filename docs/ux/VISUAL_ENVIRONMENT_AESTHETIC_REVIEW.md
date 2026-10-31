@@ -23,7 +23,7 @@ Run locally from `src/`:
 npm run validate:visual-environments
 npm run test:ux
 npm run check
-npm run acceptance:ux
+npm run validate:visual-environments
 ```
 
 The asset gate validates the canonical ten IDs, production + low-resource + master files, dimensions, non-trivial scene structure, manifest provenance and absence of remote embedded assets.

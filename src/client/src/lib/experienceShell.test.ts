@@ -7,7 +7,7 @@ import {
   loadExperienceSurface,
   setExperienceSurface,
   subscribeExperienceSurface,
-  isExperienceHomeSurface,
+  hostedDiscoverSurface,
   isExperienceShellSurface,
   requestExperienceField,
   subscribeExperienceField,
@@ -39,8 +39,8 @@ test("compatibility surface registry remains available without owning authentica
 test("experience-shell surface guards reject unknown stored surfaces", () => {
   assert.equal(isExperienceShellSurface("wave-c"), false);
   assert.equal(isExperienceShellSurface("pulse"), true);
-  assert.equal(isExperienceHomeSurface("pulse"), true);
-  assert.equal(isExperienceHomeSurface("workbench"), false);
+  for (const surface of ["pulse", "explore", "signals", "library"] as const) assert.equal(hostedDiscoverSurface(surface), true, surface);
+  for (const surface of ["projects", "workbench"] as const) assert.equal(hostedDiscoverSurface(surface), false, surface);
 });
 
 test("existing analytical views remain Workbench capabilities", () => {

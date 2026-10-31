@@ -3,7 +3,7 @@ import { useEffect, useRef, useState } from "react";
 import { Image as ImageIcon, Search } from "lucide-react";
 import type { CommonsCandidate } from "@shared/commonsMedia";
 import type { SavedNewsIllustration } from "@/lib/newsIllustrationSelections";
-import { safeCommonsFilePage, safeCommonsPreview } from "@shared/commonsMedia";
+import { commonsAttributionLine, commonsLicenseValid, safeCommonsFilePage, safeCommonsPreview } from "@shared/commonsMedia";
 
 function vettedCandidates(value: unknown): CommonsCandidate[] {
   if (!value || typeof value !== "object") return [];
@@ -12,7 +12,7 @@ function vettedCandidates(value: unknown): CommonsCandidate[] {
   return payload.results.filter((row: unknown): row is CommonsCandidate => {
     if (!row || typeof row !== "object") return false;
     const candidate = row as CommonsCandidate;
-    return candidate.license === "CC0 1.0"
+    return commonsLicenseValid(candidate)
       && typeof candidate.fileTitle === "string" && candidate.fileTitle.startsWith("File:")
       && typeof candidate.creator === "string"
       && Boolean(safeCommonsPreview(candidate) && safeCommonsFilePage(candidate));
@@ -37,9 +37,9 @@ export function CommonsContextIllustration({ candidate, compact = false, showSou
         className={compact ? "h-20 w-full object-cover" : "max-h-64 w-full object-cover"} />}
     <figcaption className="px-2 py-2 font-ui text-xs leading-5 text-muted-foreground">
       <span className="block font-semibold text-amber-200">Illustration only · not a photograph of the news event</span>
-      {!compact && <span className="block">{candidate.creator} · Wikimedia Commons · CC0 metadata (review source before reuse)</span>}
+      {!compact && <span className="block break-words" data-testid="commons-attribution">{commonsAttributionLine(candidate)}</span>}
       {showSource && page && <a href={page} rel="noopener noreferrer" target="_blank" referrerPolicy="no-referrer"
-        className="inline-block underline underline-offset-2 focus-visible:ring-2 focus-visible:ring-amber-300/70">Review Commons image and license</a>}
+        className="inline-block underline underline-offset-2 focus-visible:ring-2 focus-visible:ring-amber-300/70">View image, credit and license on Commons</a>}
     </figcaption>
   </figure>;
 }
@@ -80,7 +80,7 @@ export function NewsImageDiscovery({
     setCandidates(null);
     try {
       // Search terms reach Wikimedia only after a deliberate user action.
-      const response = await fetch("/api/media/commons/cc0?q=" + encodeURIComponent(keywords), {
+      const response = await fetch("/api/media/commons/images?q=" + encodeURIComponent(keywords), {
         credentials: "same-origin",
         signal: abort.signal,
       });
@@ -100,7 +100,7 @@ export function NewsImageDiscovery({
     setRecheckError(null);
     try {
       const verified = await onReopenSaved();
-      if (!verified) setRecheckError("Saved image is unavailable or no longer verified CC0. Choose another image.");
+      if (!verified) setRecheckError("Saved image is unavailable or no longer has an accepted license. Choose another image.");
     } catch {
       setRecheckError("Could not verify the saved Commons license. The image was not reopened.");
     } finally { setRechecking(false); }
@@ -114,7 +114,7 @@ export function NewsImageDiscovery({
       <div className="flex flex-wrap gap-2">
         {canRemember && saved && !selected && <button type="button" disabled={rechecking} onClick={() => void showRemembered()}
           className="min-h-10 rounded-lg border border-amber-300/40 px-3 py-2 font-ui text-sm text-foreground disabled:opacity-50 focus-visible:ring-2 focus-visible:ring-amber-300/70">
-          {rechecking ? "Rechecking CC0…" : "Recheck & show saved"}
+          {rechecking ? "Rechecking license…" : "Recheck & show saved"}
         </button>}
         {canRemember && selected && (!saved || saved.candidate.filePage !== selected.filePage) && onRemember && <button type="button" onClick={onRemember}
           className="min-h-10 rounded-lg border border-amber-300/40 px-3 py-2 font-ui text-sm text-foreground focus-visible:ring-2 focus-visible:ring-amber-300/70">
@@ -137,12 +137,12 @@ export function NewsImageDiscovery({
     </div>
     {canRemember && saved && <p className="px-3 pb-2 font-ui text-xs leading-5 text-muted-foreground" data-testid="saved-context-reference">
       Saved in this Workbench artifact: {saved.candidate.fileTitle.replace(/^File:/, "")}.
-      Images are not reloaded automatically; recheck the CC0 file before showing it again.
+      Images are not reloaded automatically; recheck the file's license before showing it again.
     </p>}
     {recheckError && <p role="alert" className="px-3 pb-2 font-ui text-sm text-amber-100">{recheckError}</p>}
     {open && <div id="news-image-discovery-options" className="space-y-3 border-t border-border/60 p-3">
       <p className="font-ui text-xs leading-5 text-muted-foreground">
-        Illustrations are not evidence of the event. Search sends the terms to Wikimedia Commons only when pressed. CC0 metadata is not an independent rights review.
+        Illustrations are not evidence of the event. Search sends the terms to Wikimedia Commons only when pressed. Pictures are shown with their credit and license; check the license before any reuse.
       </p>
       <form className="flex flex-wrap items-center gap-2" onSubmit={event => { event.preventDefault(); void search(); }}>
         <label htmlFor="news-image-keywords" className="sr-only">Commons image search keywords</label>
@@ -156,9 +156,9 @@ export function NewsImageDiscovery({
         </button>
       </form>
       {error && <p role="alert" className="font-ui text-sm text-amber-100">{error}</p>}
-      {loading && <p role="status" className="font-ui text-sm text-muted-foreground">Reading current CC0 file metadata…</p>}
-      {candidates !== null && candidates.length === 0 && <p role="status" className="font-ui text-sm text-muted-foreground">No supported CC0 files found. Try another term.</p>}
-      {candidates && candidates.length > 0 && <div className="grid gap-3 sm:grid-cols-2" aria-label="Commons CC0 image candidates">
+      {loading && <p role="status" className="font-ui text-sm text-muted-foreground">Reading current file license metadata…</p>}
+      {candidates !== null && candidates.length === 0 && <p role="status" className="font-ui text-sm text-muted-foreground">No supported images found. Try another term.</p>}
+      {candidates && candidates.length > 0 && <div className="grid gap-3 sm:grid-cols-2" aria-label="Commons image candidates">
         {candidates.map(candidate => {
           const url = safeCommonsPreview(candidate);
           const page = safeCommonsFilePage(candidate);
@@ -170,7 +170,7 @@ export function NewsImageDiscovery({
               className="h-36 w-full object-cover" />
             <div className="space-y-2 p-3 font-ui text-sm">
               <p className="line-clamp-2 break-words font-semibold text-foreground">{candidate.fileTitle.replace(/^File:/, "")}</p>
-              <p className="break-words text-xs text-muted-foreground">{candidate.creator} · CC0 (Commons metadata)</p>
+              <p className="break-words text-xs text-muted-foreground">{commonsAttributionLine(candidate)}</p>
               <a href={page} rel="noopener noreferrer" referrerPolicy="no-referrer" target="_blank"
                 className="inline-block text-xs text-amber-200 underline underline-offset-2 focus-visible:ring-2 focus-visible:ring-amber-300/70">
                 Review image source and license

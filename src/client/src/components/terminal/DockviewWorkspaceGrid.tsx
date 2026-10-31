@@ -45,6 +45,7 @@ interface Props {
   onToggleMaximize: (paneId: PaneId) => void;
   onOpenActions: (paneId: PaneId, pane: PaneState, x: number, y: number) => void;
   renderPane: (paneId: PaneId, pane: PaneState) => ReactNode;
+  onAskLios?: (question: string, pane: PaneState) => void;
   density: TerminalDensity;
 }
 
@@ -63,7 +64,7 @@ function isPaneId(value: unknown): value is PaneId {
 
 function panelTitle(pane: PaneState): string {
   const capability = getTerminalCapability(pane.view);
-  return capability.shortLabel + (capability.symbolAware && pane.symbol ? " · " + pane.symbol : "");
+  return capability.label + (capability.symbolAware && pane.symbol ? " · " + pane.symbol : "");
 }
 
 function DockviewPane({ params }: IDockviewPanelProps<{ paneId?: string }>) {
@@ -88,6 +89,7 @@ function DockviewPane({ params }: IDockviewPanelProps<{ paneId?: string }>) {
       isMaximized={runtime.maximizedPane === paneId}
       onToggleMaximize={() => runtime.onToggleMaximize(paneId)}
       onOpenActions={(x, y) => runtime.onOpenActions(paneId, pane, x, y)}
+      onAskLios={runtime.onAskLios}
     >
       {runtime.renderPane(paneId, pane)}
     </WorkspacePane>

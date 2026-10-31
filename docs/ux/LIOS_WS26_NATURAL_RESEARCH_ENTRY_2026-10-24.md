@@ -24,7 +24,7 @@ Run from `src/`:
 node --import tsx --test server/naturalResearchEntry.test.ts server/ws26NaturalResearch.test.ts server/conversationCapabilityResolver.test.ts server/conversationRuntime.test.ts
 npm run test:p2
 npm run test:ux
-npm run acceptance:ux
+npm run validate:visual-environments
 ```
 
 Written regression assertions: explicit research recognition/rejections; exact research plan, budget and existing AI capability; finance/generic non-regression; fake configured-provider run emitting an actual `plan` event, exactly one observed `ai-assist` start, attributed receipt, no artifact and explicit external-source boundary. The fake-provider test is **not live provider proof**.

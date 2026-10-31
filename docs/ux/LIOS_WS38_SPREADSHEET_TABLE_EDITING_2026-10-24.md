@@ -27,7 +27,7 @@ node --import tsx --test client/src/lib/spreadsheetReviewBounds.test.ts shared/u
 npm run check
 npm run test:p4
 npm run test:ux
-npm run acceptance:ux
+npm run validate:visual-environments
 ```
 
 **Acceptance still required:** exact-head CI on Linux, Windows and macOS; installed Electron native workbook edit/paste/formula failure/undo/focus, view at 320px and 200% zoom; signed-in P4 ACL, multi-sheet stored format/provenance, owner/tenant denial, source-rights drift, autosave absence, revision conflict/refetch and explicit user review, independent reviewer and P14/SP shipping qualification. Test files are not proof of a successful run until checks finish.

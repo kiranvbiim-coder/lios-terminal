@@ -82,7 +82,7 @@ export default function ContextRail({
     return (
       <button
         onClick={onToggle}
-        className="fixed right-3 top-[82px] z-40 flex items-center gap-1.5 border border-border bg-[#090909]/95 px-2.5 py-2 font-terminal text-[8px] tracking-widest text-muted-foreground shadow-xl backdrop-blur hover:border-cyan-400/40 hover:text-foreground xl:relative xl:right-auto xl:top-auto xl:z-auto xl:h-full xl:w-8 xl:shrink-0 xl:justify-center xl:border-y-0 xl:border-r-0 xl:border-l xl:px-0 xl:py-0 xl:shadow-none xl:backdrop-blur-none"
+        className="fixed right-3 top-[82px] z-30 flex items-center gap-1.5 border border-border bg-[#090909]/95 px-2.5 py-2 font-terminal text-[8px] tracking-widest text-muted-foreground shadow-xl backdrop-blur hover:border-cyan-400/40 hover:text-foreground xl:relative xl:right-auto xl:top-auto xl:z-auto xl:h-full xl:w-8 xl:shrink-0 xl:justify-center xl:border-y-0 xl:border-r-0 xl:border-l xl:px-0 xl:py-0 xl:shadow-none xl:backdrop-blur-none"
         aria-label="Open context intelligence rail"
         title="Open context intelligence rail"
       >
@@ -93,7 +93,7 @@ export default function ContextRail({
   }
 
   return (
-    <aside className="fixed inset-x-3 bottom-14 z-40 flex max-h-[72vh] flex-col border border-border bg-[#090909]/98 shadow-2xl backdrop-blur xl:relative xl:inset-auto xl:z-auto xl:h-full xl:max-h-none xl:w-[340px] xl:shrink-0 xl:border-y-0 xl:border-r-0 xl:border-l xl:shadow-none xl:backdrop-blur-none" aria-label="Context intelligence rail">
+    <aside className="fixed inset-x-3 bottom-14 z-30 flex max-h-[72vh] flex-col border border-border bg-[#090909]/98 shadow-2xl backdrop-blur xl:relative xl:inset-auto xl:z-auto xl:h-full xl:max-h-none xl:w-[340px] xl:shrink-0 xl:border-y-0 xl:border-r-0 xl:border-l xl:shadow-none xl:backdrop-blur-none" aria-label="Context intelligence rail">
       <header className="flex shrink-0 items-center justify-between border-b border-border bg-[#070707] px-3 py-2">
         <div className="min-w-0">
           <div className="flex items-center gap-2">

@@ -13,16 +13,19 @@ export function ReadableCell({ text, exact, align = "right" }: { text: string; e
   return <span title={exact ?? undefined} data-exact={exact ?? undefined} className={`tabular-nums ${align === "right" ? "text-right" : ""}`}>{text}</span>;
 }
 
-/** Label/value table for a recorded object (assumptions, results, metrics). Never prints JSON. */
-export function ReadableValueTable({ title, values, options = {}, emptyText = "Nothing recorded.", note }: {
-  title: string; values: Record<string, unknown>; options?: ReadableFormatOptions; emptyText?: string; note?: string;
+/** Label/value table for a recorded value (assumptions, results, metrics). Never prints JSON; a non-object value is shown as one row. */
+export function ReadableValueTable({ title, values, options = {}, emptyText = "Nothing recorded.", note, className, ...rest }: {
+  title?: string; values: unknown; options?: ReadableFormatOptions; emptyText?: string; note?: string; className?: string;
+  "aria-label"?: string; "data-testid"?: string;
 }) {
-  const rows = readableRows(values, options);
-  return <section aria-label={title} className={SECTION}>
-    <h3 className={HEADING}>{title}</h3>
+  const record = values !== null && typeof values === "object" && !Array.isArray(values) ? values as Record<string, unknown> : values === undefined || values === null ? {} : { value: values };
+  const rows = readableRows(record, options);
+  const label = rest["aria-label"] ?? title ?? "Details";
+  return <section aria-label={label} data-testid={rest["data-testid"]} className={className ?? SECTION}>
+    {title && <h3 className={HEADING}>{title}</h3>}
     {note && <p className="mb-2 font-ui text-[12px] text-muted-foreground">{note}</p>}
     {rows.length ? <table className="w-full text-left font-ui text-[13px]">
-      <caption className="sr-only">{title}</caption>
+      <caption className="sr-only">{label}</caption>
       <thead className="sr-only"><tr><th scope="col">Item</th><th scope="col">Value</th></tr></thead>
       <tbody>{rows.map(row => <tr key={row.id} className="border-b border-border/30 last:border-0">
         <th scope="row" className="w-1/2 py-1.5 pr-3 align-top font-normal text-muted-foreground">{row.label}</th>

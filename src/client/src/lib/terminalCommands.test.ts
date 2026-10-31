@@ -81,11 +81,6 @@ test("parseTerminalCommand maps new M&A and FP&A aliases", () => {
     view: "mnadesk",
   });
 
-  assert.deepEqual(parseTerminalCommand("INTEG"), {
-    raw: "INTEG",
-    view: "integration",
-  });
-
   assert.deepEqual(parseTerminalCommand("FPA"), {
     raw: "FPA",
     view: "fpa",

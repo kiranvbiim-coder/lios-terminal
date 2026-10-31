@@ -5,10 +5,29 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Progress } from "@/components/ui/progress";
 import { Slider } from "@/components/ui/slider";
+import { Input } from "@/components/ui/input";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { AreaChart, Area, ResponsiveContainer, XAxis, YAxis, Tooltip, CartesianGrid, BarChart, Bar, Legend, LineChart, Line, Cell } from "recharts";
 import { computeNPV, computeIRR, computeMIRR, paybackPeriod, discountedPaybackPeriod } from "@/lib/quantModels";
 
+
+function AssumptionField({ label, value, onChange, step = 1 }: { label: string; value: number; onChange: (value: number) => void; step?: number }) {
+  return (
+    <label className="flex items-center justify-between gap-3 font-terminal text-[10px] text-muted-foreground">
+      <span>{label}</span>
+      <Input type="number" step={step} value={value} onChange={(e) => onChange(Number(e.target.value) || 0)} className="h-7 w-28 text-right text-xs" />
+    </label>
+  );
+}
+
+type BudgetLine = { metric: string; kind: "income" | "cost"; budget: number; actual: number };
+const EMPTY_BUDGET: BudgetLine[] = [
+  { metric: "Gross Revenue", kind: "income", budget: 0, actual: 0 },
+  { metric: "Cost of Goods (COGS)", kind: "cost", budget: 0, actual: 0 },
+  { metric: "Personnel Expenses", kind: "cost", budget: 0, actual: 0 },
+  { metric: "Sales & Marketing", kind: "cost", budget: 0, actual: 0 },
+  { metric: "R&D Expenditures", kind: "cost", budget: 0, actual: 0 },
+];
 
 function FpaDashboardPanel() {
   const [activeTab, setActiveTab] = useTerminalArtifactState("FpaDashboardPanel.activeTab", "budget");
@@ -58,79 +77,96 @@ function FpaDashboardPanel() {
   }, [cbCashflows, cbDiscountRate]);
 
   // Baseline financials (for Year 0)
-  const baseCustomers = 12000;
-  const baseSalary = 85000; // Average Salary ($)
+  // Plan assumptions are the analyst's own inputs (edited in the Assumptions cards).
+  const [baseCustomers, setBaseCustomers] = useTerminalArtifactState("FpaDashboardPanel.baseCustomers", 12000);
+  const [baseSalary, setBaseSalary] = useTerminalArtifactState("FpaDashboardPanel.baseSalary", 85000);
+  const [baselineStaff, setBaselineStaff] = useTerminalArtifactState("FpaDashboardPanel.baselineStaff", 150);
+  const [cogsPct, setCogsPct] = useTerminalArtifactState("FpaDashboardPanel.cogsPct", 25);
+  const [cacBudgetM, setCacBudgetM] = useTerminalArtifactState("FpaDashboardPanel.cacBudgetM", 1);
+  const [gaOpexM, setGaOpexM] = useTerminalArtifactState("FpaDashboardPanel.gaOpexM", 2.5);
+  const [arrGrowthPct, setArrGrowthPct] = useTerminalArtifactState("FpaDashboardPanel.arrGrowthPct", 22);
+  const [tariff, setTariff] = useTerminalArtifactState("FpaDashboardPanel.tariff", 48);
+  const [capacityFactorPct, setCapacityFactorPct] = useTerminalArtifactState("FpaDashboardPanel.capacityFactorPct", 35);
+  const [projectOpexPct, setProjectOpexPct] = useTerminalArtifactState("FpaDashboardPanel.projectOpexPct", 20);
+  const [debtServiceM, setDebtServiceM] = useTerminalArtifactState("FpaDashboardPanel.debtServiceM", 10.2);
+  const [capEx, setCapEx] = useTerminalArtifactState("FpaDashboardPanel.capExM", 120);
+  const [idcRatePct, setIdcRatePct] = useTerminalArtifactState("FpaDashboardPanel.idcRatePct", 6);
+  const [capacityMw, setCapacityMw] = useTerminalArtifactState("FpaDashboardPanel.capacityMw", { P50: 120, P90: 95, P99: 75 });
+  const [budgetLines, setBudgetLines] = useTerminalArtifactState<BudgetLine[]>("FpaDashboardPanel.budgetLines", EMPTY_BUDGET);
   
   // Calculated Drivers outputs
   const projectedCustomers = useMemo(() => {
     // customers grow based on CAC investment (assuming flat budget of $1M CAC budget)
-    const newCust = Math.round(1000000 / cac);
+    const newCust = cac > 0 ? Math.round((cacBudgetM * 1000000) / cac) : 0;
     const lostCust = Math.round((baseCustomers + newCust) * (churnRate / 100));
     return baseCustomers + newCust - lostCust;
-  }, [cac, churnRate]);
+  }, [cac, churnRate, baseCustomers, cacBudgetM]);
 
   const projectedRevenue = useMemo(() => {
     return (projectedCustomers * pricePerUnit * 12) / 1000000; // in Millions ($M)
   }, [projectedCustomers, pricePerUnit]);
 
   const projectedHeadcountCost = useMemo(() => {
-    const baselineStaff = 150;
     const newStaff = Math.round(baselineStaff * (headcountGrowth / 100));
     return ((baselineStaff + newStaff) * baseSalary * 1.25) / 1000000; // assumes 25% benefits loading
-  }, [headcountGrowth]);
+  }, [headcountGrowth, baselineStaff, baseSalary]);
 
   const projectedEbitda = useMemo(() => {
-    const cogs = projectedRevenue * 0.25; // 25% COGS margin
-    const marketing = 1.0; // $1M flat CAC budget
-    const genericOpex = 2.5; // $2.5M G&A
-    return projectedRevenue - cogs - projectedHeadcountCost - marketing - genericOpex;
-  }, [projectedRevenue, projectedHeadcountCost]);
+    const cogs = projectedRevenue * (cogsPct / 100);
+    return projectedRevenue - cogs - projectedHeadcountCost - cacBudgetM - gaOpexM;
+  }, [projectedRevenue, projectedHeadcountCost, cogsPct, cacBudgetM, gaOpexM]);
 
-  // Budget vs Actual data sheet
-  const budgetSheetData = [
-    { metric: "Gross Revenue", budget: 18.5, actual: 19.2, variance: 0.7, pct: 3.8 },
-    { metric: "Cost of Goods (COGS)", budget: 4.6, actual: 4.8, variance: -0.2, pct: -4.3 },
-    { metric: "Personnel Expenses", budget: 6.8, actual: 7.0, variance: -0.2, pct: -2.9 },
-    { metric: "Sales & Marketing", budget: 2.2, actual: 2.1, variance: 0.1, pct: 4.5 },
-    { metric: "R&D Expenditures", budget: 1.8, actual: 1.7, variance: 0.1, pct: 5.6 },
-    { metric: "EBITDA Operating Income", budget: 3.1, actual: 3.6, variance: 0.5, pct: 16.1 },
-  ];
-
-  // EBITDA Variance Bridge data
-  const varianceBridgeData = [
-    { name: "Budget EBITDA", value: 3.1 },
-    { name: "Rev Gain", value: 0.7 },
-    { name: "COGS Rise", value: -0.2 },
-    { name: "Payroll Rise", value: -0.2 },
-    { name: "S&M Savings", value: 0.1 },
-    { name: "Actual EBITDA", value: 3.6 },
-  ];
+  // Budget vs Actual: variance is favourable-positive (income above plan, cost below plan).
+  const updateBudgetLine = (index: number, patch: Partial<BudgetLine>) =>
+    setBudgetLines((prev) => prev.map((line, i) => (i === index ? { ...line, ...patch } : line)));
+  const budgetSheetData = useMemo(() => {
+    const lines = budgetLines.map((line) => {
+      const variance = line.kind === "income" ? line.actual - line.budget : line.budget - line.actual;
+      return { ...line, variance, pct: line.budget !== 0 ? (variance / Math.abs(line.budget)) * 100 : null };
+    });
+    const sum = (pick: (line: BudgetLine) => number) => budgetLines.reduce((total, line) => total + (line.kind === "income" ? pick(line) : -pick(line)), 0);
+    const budgetEbitda = sum((line) => line.budget);
+    const actualEbitda = sum((line) => line.actual);
+    const ebitdaVariance = actualEbitda - budgetEbitda;
+    return {
+      lines,
+      budgetEbitda,
+      actualEbitda,
+      ebitdaVariance,
+      ebitdaPct: budgetEbitda !== 0 ? (ebitdaVariance / Math.abs(budgetEbitda)) * 100 : null,
+      hasEntries: budgetLines.some((line) => line.budget !== 0 || line.actual !== 0),
+    };
+  }, [budgetLines]);
+  const varianceBridgeData = useMemo(() => [
+    { name: "Budget EBITDA", value: budgetSheetData.budgetEbitda },
+    ...budgetSheetData.lines.map((line) => ({ name: line.metric, value: line.variance })),
+    { name: "Actual EBITDA", value: budgetSheetData.actualEbitda },
+  ], [budgetSheetData]);
 
   // SaaS KPIs
   const saasRuleOf40 = useMemo(() => {
     // Growth % + EBITDA Margin %
-    const growth = 22; // 22% ARR growth
+    const growth = arrGrowthPct;
     const margin = (projectedEbitda / projectedRevenue) * 100;
     return Math.round(growth + margin);
-  }, [projectedEbitda, projectedRevenue]);
+  }, [projectedEbitda, projectedRevenue, arrGrowthPct]);
 
   const ltvToCac = useMemo(() => {
     // LTV = Gross Margin ($) / Churn
-    const grossMargin = pricePerUnit * 0.75 * 12; // 75% gross margin
+    const grossMargin = pricePerUnit * (1 - cogsPct / 100) * 12;
     const ltv = grossMargin / (churnRate / 100);
     return Number((ltv / cac).toFixed(1));
-  }, [pricePerUnit, churnRate, cac]);
+  }, [pricePerUnit, churnRate, cac, cogsPct]);
 
   // Project Finance yield calculations (P50/P90/P99)
-  const yieldCapacity = pOption === "P50" ? 120 : pOption === "P90" ? 95 : 75; // MW hours
+  const yieldCapacity = capacityMw[pOption];
   const dscrData = useMemo(() => {
-    const pricePerMWh = 48; // $48/MWh tariff
-    const rev = (yieldCapacity * 8760 * 0.35 * pricePerMWh) / 1000000; // 35% capacity factor
-    const opex = rev * 0.20; // 20% opex
+    const rev = (yieldCapacity * 8760 * (capacityFactorPct / 100) * tariff) / 1000000;
+    const opex = rev * (projectOpexPct / 100);
     const cfads = rev - opex; // Cash Flow Available for Debt Service
     
     // Debt service payment (Senior debt)
-    const annualDebtService = 10.2 * (pOption === "P50" ? 1.0 : pOption === "P90" ? 0.9 : 0.8);
+    const annualDebtService = debtServiceM * (pOption === "P50" ? 1.0 : pOption === "P90" ? 0.9 : 0.8);
     const dscrValue = cfads / annualDebtService;
 
     return [
@@ -140,13 +176,12 @@ function FpaDashboardPanel() {
       { year: "Y4", CFADS: Number((cfads * 1.06).toFixed(2)), DebtService: Number((annualDebtService * 0.90).toFixed(2)), DSCR: Number((dscrValue * 1.18).toFixed(2)) },
       { year: "Y5", CFADS: Number((cfads * 1.08).toFixed(2)), DebtService: Number((annualDebtService * 0.85).toFixed(2)), DSCR: Number((dscrValue * 1.27).toFixed(2)) },
     ];
-  }, [pOption, yieldCapacity]);
+  }, [pOption, yieldCapacity, capacityFactorPct, tariff, projectOpexPct, debtServiceM]);
 
   // Interest during construction (IDC) Drawdown schedule
-  const capEx = 120; // $120M total construction costs
   const idcData = useMemo(() => {
     const monthlyCost = capEx / conceptionMonths;
-    const interestRateIDC = 0.06; // 6% IDC interest rate
+    const interestRateIDC = idcRatePct / 100;
     let cumDrawdown = 0;
     let cumInterest = 0;
     const items = [];
@@ -165,7 +200,7 @@ function FpaDashboardPanel() {
       });
     }
     return items;
-  }, [conceptionMonths]);
+  }, [conceptionMonths, capEx, idcRatePct]);
 
   return (
     <div className="h-full flex flex-col bg-[#050505] text-foreground overflow-hidden">
@@ -206,21 +241,29 @@ function FpaDashboardPanel() {
                         </TableRow>
                       </TableHeader>
                       <TableBody>
-                        {budgetSheetData.map((row, idx) => (
-                          <TableRow key={idx} className="border-b border-border hover:bg-white/5 transition-colors">
+                        {budgetSheetData.lines.map((row, idx) => (
+                          <TableRow key={row.metric} className="border-b border-border hover:bg-white/5 transition-colors">
                             <TableCell className="font-semibold text-xs text-foreground">{row.metric}</TableCell>
-                            <TableCell className="text-xs text-right font-terminal">${row.budget.toFixed(1)}M</TableCell>
-                            <TableCell className="text-xs text-right font-terminal text-slate-200">${row.actual.toFixed(1)}M</TableCell>
+                            <TableCell className="text-right"><Input aria-label={`${row.metric} budget plan ($M)`} type="number" step="0.1" value={row.budget} onChange={(e) => updateBudgetLine(idx, { budget: Number(e.target.value) || 0 })} className="ml-auto h-7 w-24 text-right text-xs" /></TableCell>
+                            <TableCell className="text-right"><Input aria-label={`${row.metric} actual YTD ($M)`} type="number" step="0.1" value={row.actual} onChange={(e) => updateBudgetLine(idx, { actual: Number(e.target.value) || 0 })} className="ml-auto h-7 w-24 text-right text-xs" /></TableCell>
                             <TableCell className={`text-xs text-right font-terminal font-semibold ${row.variance >= 0 ? "text-emerald-400" : "text-rose-400"}`}>
                               {row.variance >= 0 ? "+" : ""}${row.variance.toFixed(1)}M
                             </TableCell>
-                            <TableCell className={`text-xs text-right font-terminal font-semibold ${row.pct >= 0 ? "text-emerald-400" : "text-rose-400"}`}>
-                              {row.pct >= 0 ? "+" : ""}{row.pct.toFixed(1)}%
+                            <TableCell className={`text-xs text-right font-terminal font-semibold ${(row.pct ?? 0) >= 0 ? "text-emerald-400" : "text-rose-400"}`}>
+                              {row.pct === null ? "—" : `${row.pct >= 0 ? "+" : ""}${row.pct.toFixed(1)}%`}
                             </TableCell>
                           </TableRow>
                         ))}
+                        <TableRow className="border-t border-border bg-white/[0.03]">
+                          <TableCell className="font-bold text-xs text-foreground">EBITDA (derived)</TableCell>
+                          <TableCell className="text-xs text-right font-terminal">${budgetSheetData.budgetEbitda.toFixed(1)}M</TableCell>
+                          <TableCell className="text-xs text-right font-terminal">${budgetSheetData.actualEbitda.toFixed(1)}M</TableCell>
+                          <TableCell className={`text-xs text-right font-terminal font-semibold ${budgetSheetData.ebitdaVariance >= 0 ? "text-emerald-400" : "text-rose-400"}`}>{budgetSheetData.ebitdaVariance >= 0 ? "+" : ""}${budgetSheetData.ebitdaVariance.toFixed(1)}M</TableCell>
+                          <TableCell className="text-xs text-right font-terminal">{budgetSheetData.ebitdaPct === null ? "—" : `${budgetSheetData.ebitdaPct.toFixed(1)}%`}</TableCell>
+                        </TableRow>
                       </TableBody>
                     </Table>
+                    {!budgetSheetData.hasEntries && <p className="p-3 font-terminal text-[9px] text-muted-foreground">Enter your budget and actual figures ($M). Variance and the EBITDA bridge are derived from what you enter.</p>}
                   </div>
                 </div>
 
@@ -239,7 +282,7 @@ function FpaDashboardPanel() {
                           <Tooltip contentStyle={{ backgroundColor: "#0d0d0d", borderColor: "#333", color: "#fff" }} />
                           <Bar dataKey="value" fill="hsl(38,95%,50%)" radius={[4, 4, 0, 0]}>
                             {varianceBridgeData.map((entry, index) => {
-                              const color = entry.value >= 3.0 ? "hsl(38,95%,50%)" : entry.value >= 0 ? "#10b981" : "#f43f5e";
+                              const color = index === 0 || index === varianceBridgeData.length - 1 ? "hsl(38,95%,50%)" : entry.value >= 0 ? "#10b981" : "#f43f5e";
                               return <Cell key={`cell-${index}`} fill={color} />;
                             })}
                           </Bar>
@@ -253,6 +296,18 @@ function FpaDashboardPanel() {
 
             {/* TABS CONTENT 2: DRIVER-BASED PLANNING */}
             <TabsContent value="drivers" className="space-y-4 m-0">
+              <Card className="bg-[#070707] border-border">
+                <CardHeader className="p-4 border-b border-border"><CardTitle className="text-xs font-bold uppercase tracking-wider text-[hsl(38,95%)]">Plan Assumptions (your inputs)</CardTitle></CardHeader>
+                <CardContent className="grid grid-cols-1 gap-3 p-4 md:grid-cols-3">
+                  <AssumptionField label="Starting customers" value={baseCustomers} onChange={setBaseCustomers} />
+                  <AssumptionField label="Average salary ($)" value={baseSalary} onChange={setBaseSalary} />
+                  <AssumptionField label="Current headcount" value={baselineStaff} onChange={setBaselineStaff} />
+                  <AssumptionField label="COGS (% of revenue)" value={cogsPct} onChange={setCogsPct} />
+                  <AssumptionField label="Acquisition budget ($M)" value={cacBudgetM} onChange={setCacBudgetM} step={0.1} />
+                  <AssumptionField label="G&A ($M)" value={gaOpexM} onChange={setGaOpexM} step={0.1} />
+                  <AssumptionField label="ARR growth (%)" value={arrGrowthPct} onChange={setArrGrowthPct} />
+                </CardContent>
+              </Card>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <Card className="bg-[#070707] border-border">
                   <CardHeader className="p-4 border-b border-border">
@@ -362,7 +417,7 @@ function FpaDashboardPanel() {
                     <div className="inline-flex items-center justify-center w-24 h-24 rounded-full border-4 border-emerald-950 bg-emerald-950/20 text-emerald-400 text-3xl font-bold mb-2">
                       {saasRuleOf40}%
                     </div>
-                    <span className="text-[10px] text-muted-foreground block">Growth rate (22%) + EBITDA Margin ({Math.round((projectedEbitda / projectedRevenue) * 100)}%)</span>
+                    <span className="text-[10px] text-muted-foreground block">Growth rate ({arrGrowthPct}%) + EBITDA Margin ({Math.round((projectedEbitda / projectedRevenue) * 100)}%)</span>
                     <span className={`mt-2 inline-block text-[9px] px-2 py-0.5 border rounded font-semibold ${saasRuleOf40 >= 40 ? "text-emerald-400 bg-emerald-950/30 border-emerald-800" : "text-amber-500 bg-amber-950/30 border-amber-800"}`}>
                       {saasRuleOf40 >= 40 ? "OUTPERFORMING" : "UNDERPERFORMING"}
                     </span>
@@ -412,6 +467,20 @@ function FpaDashboardPanel() {
 
             {/* TABS CONTENT 4: PROJECT & YIELD FINANCE */}
             <TabsContent value="project" className="space-y-4 m-0">
+              <Card className="bg-[#070707] border-border">
+                <CardHeader className="p-4 border-b border-border"><CardTitle className="text-xs font-bold uppercase tracking-wider text-[hsl(38,95%)]">Project Assumptions (your inputs)</CardTitle></CardHeader>
+                <CardContent className="grid grid-cols-1 gap-3 p-4 md:grid-cols-3">
+                  <AssumptionField label="P50 capacity (MW)" value={capacityMw.P50} onChange={(v) => setCapacityMw((prev) => ({ ...prev, P50: v }))} />
+                  <AssumptionField label="P90 capacity (MW)" value={capacityMw.P90} onChange={(v) => setCapacityMw((prev) => ({ ...prev, P90: v }))} />
+                  <AssumptionField label="P99 capacity (MW)" value={capacityMw.P99} onChange={(v) => setCapacityMw((prev) => ({ ...prev, P99: v }))} />
+                  <AssumptionField label="Tariff ($/MWh)" value={tariff} onChange={setTariff} />
+                  <AssumptionField label="Capacity factor (%)" value={capacityFactorPct} onChange={setCapacityFactorPct} />
+                  <AssumptionField label="Opex (% of revenue)" value={projectOpexPct} onChange={setProjectOpexPct} />
+                  <AssumptionField label="Annual debt service ($M)" value={debtServiceM} onChange={setDebtServiceM} step={0.1} />
+                  <AssumptionField label="Construction cost ($M)" value={capEx} onChange={setCapEx} />
+                  <AssumptionField label="IDC rate (%)" value={idcRatePct} onChange={setIdcRatePct} step={0.1} />
+                </CardContent>
+              </Card>
               <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
                 <Card className="bg-[#070707] border-border lg:col-span-2">
                   <CardHeader className="p-4 border-b border-border flex flex-row items-center justify-between">

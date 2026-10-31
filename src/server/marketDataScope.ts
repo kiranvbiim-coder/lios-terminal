@@ -1,5 +1,6 @@
 import crypto from "node:crypto";
 import type { ConversationSourceScope } from "@shared/sourceScope";
+import { isProviderAuthorizedBySelection } from "@shared/marketDataAccess";
 import { getRequestIdentity, type RequestIdentity } from "./requestContext";
 import { isRetailSoftwareProfile } from "./retailSoftwareProfile";
 
@@ -125,11 +126,10 @@ export function isMarketDataProviderAuthorized(
   providerId: string,
   scope: ResolvedMarketDataScope,
 ): boolean {
+  // Unscoped work (no signed-in owner: scripts, tests, jobs that never bound one) keeps the historical global namespace.
+  // Anything that runs for a person MUST bind that person first (server/ownerRequestIdentity.ts) or it is unscoped here.
   if (!scope.scoped) return true;
-  if (!scope.selectedConnectorIds.includes(providerId)) return false;
-  if (providerId === "yahoo_finance") return !scope.retail || scope.communityYahooConsent;
-  if (providerId === "stooq") return !scope.retail || scope.publicFillerConsent;
-  return true;
+  return isProviderAuthorizedBySelection(providerId, scope);
 }
 
 export function areMarketDataProvidersAuthorized(

@@ -33,7 +33,6 @@ const ANONYMOUS_ROUTES: Record<string, string> = {
   "POST /api/client/auth/sso/device/start": "SSO device flow",
   "POST /api/client/auth/sso/device/poll": "SSO device flow",
   "GET /api/public/desktop-distribution": "public download metadata (GM-24 reviews the marketing/distribution surface)",
-  "POST /api/public/leads": "marketing lead capture (GM-24 reviews the marketing surface)",
 };
 
 await initDb();

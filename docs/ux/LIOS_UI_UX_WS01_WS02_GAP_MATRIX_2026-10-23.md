@@ -17,7 +17,7 @@
 | Versioned P4 Artifacts | `src/client/src/components/terminal/SavedArtifactCards.tsx`, `src/client/src/components/terminal/ArtifactPane.tsx`, `src/client/src/components/terminal/ConversationArtifactSidecar.tsx` | Real selected Artifact and version-aware sidecar; large #98→#102 stack pending | ID/version, guarded changes, crash-save, ownership and restart |
 | Specialist Workbench | `src/client/src/pages/Terminal.tsx`, `src/client/src/components/terminal/DockviewWorkspaceGrid.tsx` | Original professional layout and deterministic engine interfaces exist | Bidirectional Chat↔Workbench exact-state journey |
 | Connected providers | `src/client/src/pages/DataConnectionCenter.tsx` | Large mixed setup surface; custom ModalShell and microtype still on main; #105 pending | Rendered dialog/keyboard/first-use AI connection test |
-| Assistive/visual test harnesses | `src/script/visual_smoke_capture.cjs`, `src/script/validate_ux_flagship_acceptance.ts`, `src/script/validate_desktop_accessibility.ts` | Fixture smoke cases and mostly static source-based checks exist | Real rendered UI screenshot and installed macOS/Windows AT proof |
+| Assistive/visual test harnesses | `src/script/visual_smoke_capture.cjs`, `src/script/validate_desktop_accessibility.ts` | Fixture smoke cases and mostly static source-based checks exist | Real rendered UI screenshot and installed macOS/Windows AT proof |
 
 **Counts from indexed tree:** 3,049 total entries (untruncated); 343 React `.tsx` component files, 48 `components/ui` files, 123 `components/terminal` files, and 25 CSS files in the client/source scope counted during plan audit. Large, high-coupling owners include `ProjectExperienceShell.tsx` (2,474 lines), `Terminal.tsx` (1,110), `ArtifactPane.tsx` (798), `DataConnectionCenter.tsx` (1,831). Code size is a change-risk indicator, **not** a defect by itself.
 
@@ -167,7 +167,7 @@
 | WS-61 | P0 | source-present-unqualified | `src/client/src/components/terminal/ProjectExperienceShell.tsx` | #102 | No lost input or fake success through representative faults |
 | WS-62 | P1 | source-present-unqualified | `src/client/src/components/terminal/ArtifactChart.tsx` | — | Defined device benchmark, memory/scroll, cold+warm traces |
 | WS-63 | P0 | source-present-unqualified | `src/client/src/components/terminal/ConversationTrustPanel.tsx` | #109 | Explicit consent, no cross-tenant, revoked source or unsafe share |
-| WS-64 | P0 | needs-runtime-evidence | `src/script/validate_ux_flagship_acceptance.ts` | #98/#102 | One full flagship plus non-finance/connected/file/denied/restart |
+| WS-64 | P0 | needs-runtime-evidence | `src/script/visual_smoke_capture.cjs` | #98/#102 | One full flagship plus non-finance/connected/file/denied/restart |
 | WS-65 | P0 | needs-runtime-evidence | `src/script/validate_desktop_accessibility.ts` | — | Native clean install, keyboard, VoiceOver/Narrator and owner sign-off |
 
 ## 5. Actionable prioritized gaps (not a second backlog)
@@ -323,7 +323,7 @@ Levels: **L** = locally implemented and source-gated; **E** = exercised in sourc
 | 60 | L | real-task disclosure audit |
 | 62 | X | measured cold/warm/long-Chat/scroll/memory on declared hardware |
 | 63 | L | cross-tenant/revoked-source replay with real rights |
-| 64 | X | `validate_ux_flagship_acceptance` is intentionally NOT_RUN in this source distribution (withheld `ux-visual-smoke.yml`); needs private qualification |
+| 64 | X | flagship UX acceptance requires private qualification (the static validator was removed from this source distribution) |
 | 65 | X | clean macOS/Windows install-update-restart, signing/notarization, owner sign-off |
 
 ## 11. Current product-integration correction — 2026-10-26

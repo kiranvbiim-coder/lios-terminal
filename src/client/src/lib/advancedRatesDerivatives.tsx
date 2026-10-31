@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useTerminalQuantRun } from "./useTerminalQuantRun";
 import { useTerminalArtifactContext, useTerminalArtifactState } from "./terminalArtifactState";
+import { ReadableValueTable } from "@/components/terminal/ReadableValueTable";
 
 export type AdvancedRatesModel = {
   path: string;
@@ -113,6 +114,6 @@ export function AdvancedRatesDerivativesRunner({ modelPaths, title = "ADVANCED A
     <div className="flex items-center justify-between gap-2"><span className="font-terminal text-[8px] text-muted-foreground">SOURCE CLASSIFICATION: MANUAL · CONNECTOR/KEY REQUIRED FOR LIVE QUOTES; IMPORT AN IMMUTABLE SNAPSHOT TO BIND ONE.</span><button type="button" disabled={running} onClick={run} className="shrink-0 border border-amber-500/50 px-2 py-1 font-terminal text-[8px] text-amber-400 disabled:opacity-50">{running ? "RUNNING…" : "RUN ANALYTIC"}</button></div>
     {error && <div role="alert" className="font-terminal text-[8px] text-red-400">{error}</div>}
     {result && <p className="text-xs text-muted-foreground">Recorded native result and receipt · editing inputs does not recalculate this run. Run Analytic explicitly to retain a new result on this same terminal Artifact.</p>}
-    {result && <><pre className="max-h-48 overflow-auto border border-border bg-black/30 p-2 font-mono text-[8px] text-foreground">{JSON.stringify(Object.fromEntries(Object.entries(result).filter(([key]) => key !== "receipt")), null, 2)}</pre><ReceiptSummary receipt={result.receipt} /></>}
+    {result && <><ReadableValueTable values={Object.fromEntries(Object.entries(result).filter(([key]) => key !== "receipt"))} className="max-h-64 overflow-auto rounded border border-border bg-black/30 p-2" /><ReceiptSummary receipt={result.receipt} /></>}
   </section>;
 }

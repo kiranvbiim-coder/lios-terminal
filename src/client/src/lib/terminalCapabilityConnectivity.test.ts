@@ -30,7 +30,7 @@ import type { ViewMode } from "./terminalTypes";
 // the point: it forces a decision (wire it in, or justify the isolation
 // here) instead of letting the catalog grow unnoticed.
 const KNOWN_DISCONNECTED_VIEWS = new Set<ViewMode>([
-  "heatmap", "cryptochain", "integration",
+  "heatmap", "cryptochain",
   "developer", "adminconsole", "consultinginbox", "publishdesk", "globalindicators", "marketbreadth",
   "mediaindicators", "mediadashboard", "tourismindicators", "uide", "advisory", "activity", "environment",
 ]);

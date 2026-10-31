@@ -14,7 +14,6 @@ import GraphExplorer from "./GraphExplorer";
 import ImpactMap from "./ImpactMap";
 import ImmersiveDock from "./ImmersiveDock";
 import IntelligenceActionCoordinator from "./IntelligenceActionCoordinator";
-import IntelligencePulse from "./IntelligencePulse";
 import MiniInspector from "./MiniInspector";
 import ObjectWorkbench from "./ObjectWorkbench";
 import ProvenanceDrawer from "./ProvenanceDrawer";
@@ -96,6 +95,10 @@ export default function TerminalUxOverlays({ experienceSurface, activeView, acti
   const lastSessionFingerprint = useRef("");
 
   const openSurface = useCallback((next: TerminalUxSurface | null) => {
+    // Pulse and Workbench are experience-shell surfaces, not overlays: every entry
+    // point (event bus, dock, shortcuts) funnels through here.
+    if (next === "wave-c-shell") { setExperienceSurface("pulse"); next = null; }
+    else if (next === "workbench") { setExperienceSurface("workbench"); next = null; }
     if (next === "research-tray") setResearchOpened(true);
     setSurface(next);
     setContextMenu(null);
@@ -124,19 +127,7 @@ export default function TerminalUxOverlays({ experienceSurface, activeView, acti
     setInspector(request);
   }, []);
 
-  useEffect(() => subscribeTerminalUxSurface((next) => {
-    if (next === "wave-c-shell" || next === "intelligence-pulse") {
-      setExperienceSurface("pulse");
-      openSurface(null);
-      return;
-    }
-    if (next === "workbench") {
-      setExperienceSurface("workbench");
-      openSurface(null);
-      return;
-    }
-    openSurface(next);
-  }), [openSurface]);
+  useEffect(() => subscribeTerminalUxSurface(openSurface), [openSurface]);
   useEffect(() => subscribeTerminalContextMenu(openContextMenu), [openContextMenu]);
   useEffect(() => subscribeTerminalPeek(openPeek, () => openPeek(null)), [openPeek]);
   useEffect(() => subscribeTerminalInspector(openInspector), [openInspector]);
@@ -222,10 +213,18 @@ export default function TerminalUxOverlays({ experienceSurface, activeView, acti
         return;
       }
       if (!editable && event.key === "?" && !modifier) { event.preventDefault(); openSurface("shortcuts"); return; }
+      // Pulse: ⌘/Ctrl U (outside text fields) or ⌘/Ctrl ⇧ U / ⇧ V anywhere. Plain ⌘/Ctrl V stays paste.
+      const pulseKey = event.key.toLowerCase();
+      if (modifier && !event.altKey && (event.shiftKey ? pulseKey === "u" || pulseKey === "v" : pulseKey === "u" && !editable)) {
+        event.preventDefault();
+        event.stopPropagation();
+        openSurface(null);
+        setExperienceSurface("pulse");
+        return;
+      }
       if (!modifier || !event.shiftKey) return;
       const key = event.key.toLowerCase();
       if (key === "g") { event.preventDefault(); openSurface("cognitive-core"); return; }
-      if (key === "u" || key === "v") { event.preventDefault(); setExperienceSurface("pulse"); openSurface(null); return; }
       if (key === "k") { event.preventDefault(); openSurface("impact-map"); return; }
       if (key === "t") { event.preventDefault(); openSurface("trust-ledger"); return; }
       if (key === "j") { event.preventDefault(); openSurface("decision-drift"); return; }
@@ -262,7 +261,6 @@ export default function TerminalUxOverlays({ experienceSurface, activeView, acti
       {peek && !surface && !contextMenu && !inspector && <AnalyticalPeek request={peek} isInternal={isInternal} onOpen={onOpen} onClose={() => setPeek(null)} />}
       {inspector && !surface && !contextMenu && <MiniInspector request={inspector} onOpen={onOpen} onClose={() => setInspector(null)} />}
       {surface === "cognitive-core" && <CognitiveCore activeView={activeView} activeSymbol={activeSymbol} onOpen={onOpen} onClose={() => setSurface(null)} />}
-      {surface === "intelligence-pulse" && <IntelligencePulse onOpen={onOpen} onStageAiReview={onStageAiReview} onClose={() => setSurface(null)} />}
       {surface === "impact-map" && <ImpactMap onOpen={onOpen} onClose={() => setSurface(null)} />}
       {surface === "trust-ledger" && <TrustLedger onClose={() => setSurface(null)} />}
       {surface === "decision-drift" && <DecisionDrift onClose={() => setSurface(null)} />}
@@ -280,7 +278,7 @@ export default function TerminalUxOverlays({ experienceSurface, activeView, acti
       {surface === "macros" && <TerminalMacroManager activeSymbol={activeSymbol} isInternal={isInternal} onRunStep={runMacroStep} onClose={() => setSurface(null)} />}
       {surface === "missions" && <TerminalMissionCenter isInternal={isInternal} onOpenView={(view) => onOpen(view, "current", activeSymbol)} onClose={() => setSurface(null)} />}
       {surface === "evidence" && <ProvenanceDrawer onClose={() => setSurface(null)} />}
-      {surface === "settings" && <TerminalUxSettings preferences={preferences} onChange={onPreferencesChange} onClose={() => setSurface(null)} />}
+      {surface === "settings" && <TerminalUxSettings preferences={preferences} onChange={onPreferencesChange} onClose={() => setSurface(null)} isInternal={isInternal} onOpenView={(view) => onOpen(view, "tab")} />}
       {surface === "share" && <WorkspaceSharePreview workspace={workspace} onClose={() => setSurface(null)} />}
       {surface === "wave-e-shell" && isInternal && <WaveEExperienceShell activeView={activeView} activeSymbol={activeSymbol} onOpen={onOpen} onClose={() => setSurface(null)} />}
       {contextMenu && <AnalyticalContextMenu x={contextMenu.x} y={contextMenu.y} view={contextMenu.view} symbol={contextMenu.symbol} isInternal={isInternal} onOpen={onOpen} onEvidence={() => openSurface("evidence")} onClose={() => setContextMenu(null)} />}

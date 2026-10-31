@@ -48,9 +48,6 @@ export function extractConversationEntityQuery(request: ConversationRequest): {
   symbol: string | null;
   entityQuery: string | null;
 } {
-  const contextual = request.context?.symbol?.trim();
-  if (contextual) return { symbol: contextual.toUpperCase(), entityQuery: contextual };
-
   const dollarTicker = request.message.match(/\$([A-Za-z][A-Za-z0-9.\-]{0,15})\b/);
   if (dollarTicker?.[1]) return { symbol: dollarTicker[1].toUpperCase(), entityQuery: dollarTicker[1].toUpperCase() };
 
@@ -60,7 +57,8 @@ export function extractConversationEntityQuery(request: ConversationRequest): {
   const exchangeTicker = request.message.match(/\b(\d{1,5}\.[A-Za-z]{1,3})\b/);
   if (exchangeTicker?.[1]) return { symbol: exchangeTicker[1].toUpperCase(), entityQuery: exchangeTicker[1].toUpperCase() };
 
-  const uppercase = request.message.match(/\b[A-Z][A-Z0-9]{0,5}(?:\.[A-Z]{1,3}|-[A-Z]{3})?\b/g) ?? [];
+  // "P/E", "EV/EBITDA": ratio fragments are never tickers.
+  const uppercase = request.message.match(/(?<![\/\w])[A-Z][A-Z0-9]{0,5}(?:\.[A-Z]{1,3}|-[A-Z]{3})?(?![\/\w])/g) ?? [];
   const ticker = uppercase.find((token) => !COMMON_UPPERCASE_WORDS.has(token));
   if (ticker) return { symbol: ticker, entityQuery: ticker };
 
@@ -75,6 +73,12 @@ export function extractConversationEntityQuery(request: ConversationRequest): {
   const soft = named || ofSubject ? null : request.message.match(SOFT_COMPANY_PHRASING);
   const subject = named?.[1] ?? ofSubject?.[1] ?? soft?.slice(1).find(Boolean);
   const entityQuery = subject ? cleanEntityPhrase(subject) : null;
+  const contextual = request.context?.symbol?.trim() || request.context?.selection?.symbol?.trim();
+  // The Workbench ticker applies only when the message names no subject of its own and either refers
+  // back to it or asks for an analysis of the selected security; "history of Rome" never inherits it.
+  const refersToSelection = /\b(?:its?|this|that|these|those|the (?:company|stock|security|ticker))\b/i.test(request.message)
+    || /\b(?:charts?|technicals?|momentum|quote|price|valuation|dcf|fundamentals?|financials?|earnings|rsi|macd|backtest|support|resistance)\b/i.test(request.message);
+  if (!entityQuery && contextual && refersToSelection) return { symbol: contextual.toUpperCase(), entityQuery: contextual };
   return { symbol: null, entityQuery };
 }
 

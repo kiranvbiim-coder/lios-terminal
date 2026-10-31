@@ -10,6 +10,7 @@ import { ADVANCED_QUANT_EXAMPLES } from "@/lib/advancedQuantExamples";
 import { StructuredJsonEditor, applySchemaDefaults, type JsonFieldSchema } from "@/components/ui/StructuredJsonEditor";
 import { QUANT_LAB_MODEL_SCHEMAS } from "@/lib/quantLabModelSchemas";
 import { buildDynamicAnalyticsCatalog, buildQuantSeries } from "@shared/waveCContracts";
+import { ReadableValueTable } from "@/components/terminal/ReadableValueTable";
 
 type LabModel = QuantModelRegistryEntry & { workspace: QuantWorkspace; executable: boolean };
 type Experiment = { id: string; name: string; description: string; workspace: QuantWorkspace; status: "active" | "archived"; modelId: string; modelVersion: string; parameters: Record<string, unknown>; datasetSnapshotIds: string[]; datasetInputBindings: QuantDatasetInputBinding[]; seed: number | null; timeoutMs: number; investigationId: number | null; organizationId: number | null; parentExperimentId: string | null; updatedAt: string };
@@ -68,18 +69,18 @@ function tone(status: Run["status"]) {
 }
 
 function date(value: string | null | undefined) { return value ? new Date(value).toISOString().replace("T", " ").slice(0, 19) : "-"; }
-function pretty(value: unknown) { return JSON.stringify(value, null, 2); }
 
 function QuantResultReceipt({ value }: { value: unknown }) {
   if (!value || typeof value !== "object" || !("result" in value) || !("diagnostics" in value)) {
-    return <pre className="font-mono text-[7px] whitespace-pre-wrap break-words text-muted-foreground">{pretty(value)}</pre>;
+    return <ReadableValueTable values={value} />;
   }
   const receipt = value as { result: unknown; diagnostics: Record<string, unknown>; warnings?: string[] };
   return <div>
     {receipt.warnings?.length ? <div className="mb-3 border-y border-amber-400/25 bg-amber-400/[0.04] px-3 py-2">{receipt.warnings.map((warning) => <div key={warning} className="font-mono text-[7px] leading-relaxed text-amber-200">{warning}</div>)}</div> : null}
-    <div className="mb-3 grid grid-cols-2 gap-px border border-border bg-border md:grid-cols-3">{Object.entries(receipt.diagnostics).slice(0, 9).map(([label, item]) => <div key={label} className="min-w-0 bg-background p-2"><div className="truncate font-terminal text-[6px] text-muted-foreground">{label.replaceAll("_", " ").toUpperCase()}</div><div className="mt-1 break-words font-mono text-[7px] text-sky-200">{typeof item === "object" ? pretty(item) : String(item)}</div></div>)}</div>
+    <div className="mb-3 grid grid-cols-2 gap-px border border-border bg-border md:grid-cols-3">{Object.entries(receipt.diagnostics).slice(0, 9).map(([label, item]) => <div key={label} className="min-w-0 bg-background p-2"><div className="truncate font-terminal text-[6px] text-muted-foreground">{label.replaceAll("_", " ").toUpperCase()}</div><div className="mt-1 break-words text-sky-200"><ReadableValueTable values={item} className="text-[12px]" /></div></div>)}</div>
+    {Object.keys(receipt.diagnostics).length > 9 && <details className="mb-3"><summary className="cursor-pointer text-muted-foreground">More diagnostics</summary><ReadableValueTable values={Object.fromEntries(Object.entries(receipt.diagnostics).slice(9))} options={{ showExact: false }} /></details>}
     <div className="mb-1 font-terminal text-[7px] text-muted-foreground">STATISTICAL RESULT</div>
-    <pre className="font-mono text-[7px] whitespace-pre-wrap break-words text-muted-foreground">{pretty(receipt.result)}</pre>
+    <ReadableValueTable values={receipt.result} />
   </div>;
 }
 
@@ -149,7 +150,7 @@ export default function QuantLabPanel() {
   function seedParameters(id: string, example: Record<string, unknown>) {
     const schema = QUANT_LAB_MODEL_SCHEMAS[id];
     if (schema) setParameters(applySchemaDefaults(schema, example));
-    else setRawParameters(pretty(example));
+    else setRawParameters(JSON.stringify(example, null, 2));
   }
 
   function selectModel(id: string) {
@@ -260,7 +261,7 @@ export default function QuantLabPanel() {
               {selectedRun && !["queued", "running"].includes(selectedRun.status) && <button onClick={() => action("POST", `/api/quant-lab/runs/${selectedRun.id}/rerun`, { bypassCache: true })} className="h-8 px-3 border border-border font-terminal text-[7px]"><RefreshCw className="inline w-3.5 h-3.5 mr-2" />RERUN</button>}
             </div>
             <div className="min-h-0 flex-1 overflow-auto p-3">
-              {comparison ? <><div className="mb-2 font-terminal text-[8px] text-amber-300">RUN COMPARISON / {comparison.comparison.changedPaths} OF {comparison.comparison.comparedPaths} PATHS CHANGED</div><pre className="font-mono text-[7px] whitespace-pre-wrap text-muted-foreground">{pretty(comparison.comparison)}</pre></> : selectedRun ? <><div className="grid grid-cols-2 gap-px bg-border border border-border mb-3">{[["STATUS", selectedRun.status], ["INPUT", selectedRun.inputHash.slice(0, 16)], ["OUTPUT", selectedRun.outputHash?.slice(0, 16) ?? "-"], ["CACHE", selectedRun.cachedFromRunId ? "HIT" : "MISS"], ["SEED", selectedRun.seed ?? "-"], ["DURATION", selectedRun.durationMs === null ? "-" : `${selectedRun.durationMs}ms`]].map(([label, value]) => <div key={String(label)} className="bg-background p-2"><div className="font-terminal text-[6px] text-muted-foreground">{label}</div><div className="font-mono text-[8px]">{String(value).toUpperCase()}</div></div>)}</div>{selectedRun.error && <div className="mb-2 text-red-300 font-mono text-[7px]">{selectedRun.error}</div>}<QuantResultReceipt value={selectedRun.output ?? selectedRun.diagnostics} /></> : <div className="h-full grid place-items-center font-terminal text-[8px] text-muted-foreground">SELECT A RUN</div>}
+              {comparison ? <><div className="mb-2 font-terminal text-[8px] text-amber-300">RUN COMPARISON / {comparison.comparison.changedPaths} OF {comparison.comparison.comparedPaths} PATHS CHANGED</div><ReadableValueTable values={comparison.comparison} /></> : selectedRun ? <><div className="grid grid-cols-2 gap-px bg-border border border-border mb-3">{[["STATUS", selectedRun.status], ["INPUT", selectedRun.inputHash.slice(0, 16)], ["OUTPUT", selectedRun.outputHash?.slice(0, 16) ?? "-"], ["CACHE", selectedRun.cachedFromRunId ? "HIT" : "MISS"], ["SEED", selectedRun.seed ?? "-"], ["DURATION", selectedRun.durationMs === null ? "-" : `${selectedRun.durationMs}ms`]].map(([label, value]) => <div key={String(label)} className="bg-background p-2"><div className="font-terminal text-[6px] text-muted-foreground">{label}</div><div className="font-mono text-[8px]">{String(value).toUpperCase()}</div></div>)}</div>{selectedRun.error && <div className="mb-2 text-red-300 font-mono text-[7px]">{selectedRun.error}</div>}<QuantResultReceipt value={selectedRun.output ?? selectedRun.diagnostics} /></> : <div className="h-full grid place-items-center font-terminal text-[8px] text-muted-foreground">SELECT A RUN</div>}
             </div>
           </div>
         </div>

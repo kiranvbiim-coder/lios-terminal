@@ -1,6 +1,6 @@
 /** Public news only: bounded Commons context discovery, never an editorial photo grant. */
 import type { CommonsCandidate } from "@shared/commonsMedia";
-import { safeCommonsFilePage, safeCommonsPreview } from "@shared/commonsMedia";
+import { commonsLicenseRank, commonsLicenseValid, safeCommonsFilePage, safeCommonsPreview } from "@shared/commonsMedia";
 
 const COMMON_WORDS = new Set([
   "about", "after", "against", "amid", "amidst", "among", "ahead",
@@ -22,26 +22,28 @@ export function automaticContextSearchTerm(title: unknown): string | null {
   return term.length >= 3 && term.length <= 100 ? term : null;
 }
 
-/** Reject injected image links, non-CC0 grants and unrelated image names.
- * Commons metadata is never treated as event-photography verification.
+/** Reject injected image links, unaccepted licenses and unrelated image names.
+ * Commons metadata is never treated as event-photography verification. Among
+ * matching images the no-credit grants (CC0, public domain) win over CC BY and
+ * CC BY-SA; the picture is always rendered with its credit and license.
  */
 export function chooseAutomaticContextImage(payload: unknown, term: string): CommonsCandidate | null {
   if (!payload || typeof payload !== "object" || !term) return null;
   const found = payload as { status?: unknown; results?: unknown };
   if (found.status !== "unreviewed" || !Array.isArray(found.results)) return null;
   const keywords = term.toLowerCase().split(/\s+/).filter(word => word.length >= 3);
+  let best: CommonsCandidate | null = null;
   for (const value of found.results.slice(0, 8)) {
     if (!value || typeof value !== "object") continue;
     const candidate = value as CommonsCandidate;
-    if (candidate.license !== "CC0 1.0" ||
-      candidate.licenseUrl !== "https://creativecommons.org/publicdomain/zero/1.0/" ||
+    if (!commonsLicenseValid(candidate) ||
       typeof candidate.fileTitle !== "string" ||
       !candidate.fileTitle.startsWith("File:") ||
       typeof candidate.creator !== "string" ||
       !safeCommonsPreview(candidate) || !safeCommonsFilePage(candidate)) continue;
     const fileName = candidate.fileTitle.toLowerCase().replace(/[_\-]/g, " ");
     if (!keywords.some(keyword => fileName.includes(keyword))) continue;
-    return candidate;
+    if (!best || commonsLicenseRank(candidate.license) < commonsLicenseRank(best.license)) best = candidate;
   }
-  return null;
+  return best;
 }

@@ -6,7 +6,7 @@
 
 ## Existing machinery, reused without duplication
 
-- P14 qualification is already authoritative via `shared/p14ReleaseEvidence.ts`, its 14 typed evidence categories, 12 release tasks, and `script/validate_p14_desktop_acceptance.ts --mode=release`.
+- P14 qualification is already authoritative via `shared/p14ReleaseEvidence.ts`, its 14 typed evidence categories, 12 release tasks, and the private (withheld) release-mode P14 validator.
 - Packaged flagship proof is already defined by `shared/flagshipReleaseEvidence.ts`, `script/validate_packaged_flagship_evidence.ts`, and `docs/technical/PACKAGED_FLAGSHIP_RELEASE_ACCEPTANCE.md`. Requires same signed Mac/Win client release, real BYOAI and user-owned source, nonfixture AI/deterministic work, reviewed Artifact/version, export, relaunch and revocation.
 - Source accessibility contract `script/validate_desktop_accessibility.ts` and P2 VoiceOver/Narrator runbook exist; neither proves a real OS screen-reader walkthrough. Mac/Win clean-install automation produces only some P14 evidence categories; does not certify interactive UX.
 - WS-64 tests all seven source-level scenarios via `npm run test:ws64`; installed checks and owner sign-off are absent. WS-65 uses that same seven-case gate catalogue and accepts **no scenario** from fixture testing alone.
@@ -27,7 +27,7 @@
 4. Do a keyboard-only end-to-end path and native VoiceOver/Narrator path on their respective OS. Check readable focus rings, Tab/Shift+Tab/Escape/arrow keys, modal focus return, Omnibox/Work Search, Artifact and share/export confirmation, 320/390/768/1440 narrow/wide render and 200% zoom, motion reduction. Use a screen-reader trace and real navigation recording, not merely a source assertion.
 5. Capture and hash CPU/memory cold/warm/large Chat/stream/search/charts/table performance trace per WS-62, denied provider/offline/reconnect/wrong account traces per WS-61/63, and all observable release workflows. Logs must be sanitized and retained in a release-owned restricted evidence directory.
 6. An authorized human reviewer checks footage and provenance, resolves defects, and provides a signed-off review file (or an attested record if organization signing is available). WS-65 currently checks the signoff **file hash**, not a reviewer cryptographic identity signature; do not claim identity attestation from file hashing.
-7. Complete official P14 flagship report and all 14 P14 category files separately. Bind the flagship P14 category to the exact flagship report SHA256 and require one full P14 qualification board. The authoritative `acceptance:p14:release`, packaged flagship and release workflow still must pass; WS-65 alone cannot certify a build.
+7. Complete official P14 flagship report and all 14 P14 category files separately. Bind the flagship P14 category to the exact flagship report SHA256 and require one full P14 qualification board. The authoritative private release-mode P14 validation, packaged flagship and release workflow still must pass; WS-65 alone cannot certify a build.
 
 ## File layout and execution
 

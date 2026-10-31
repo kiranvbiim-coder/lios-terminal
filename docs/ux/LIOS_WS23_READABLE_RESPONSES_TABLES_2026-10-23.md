@@ -25,7 +25,7 @@ Run on the exact WS-23 stacked head from the src directory:
 ```bash
 node --import tsx --test client/src/lib/chatTableCopy.test.ts client/src/components/terminal/ChatTableBlock.test.ts client/src/components/terminal/ChatCodeBlock.test.ts client/src/components/terminal/ChatMarkdown.test.ts script/validate_ws23_readable_answers.test.mjs
 npm run test:ux
-npm run acceptance:ux
+npm run validate:visual-environments
 ```
 
 | Evidence | Status |

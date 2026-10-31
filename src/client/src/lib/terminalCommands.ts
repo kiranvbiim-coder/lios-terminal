@@ -1,11 +1,12 @@
 import type { ViewMode } from "./terminalTypes";
 import type { WorkSearchResult } from "@shared/workSearch";
 
-export type CanonicalNavigationTarget = "conversation" | "projects" | "chats" | "library" | "automations" | "plugins" | "connections" | "doctor" | "search";
+export type CanonicalNavigationTarget = "conversation" | "discover" | "projects" | "chats" | "library" | "automations" | "plugins" | "connections" | "doctor" | "search";
 
 // These are destinations in the existing shell, not analytical functions or tools.
 export const CANONICAL_NAVIGATION = [
   { target: "conversation", label: "Conversation", aliases: ["conversation", "back to conversation"], description: "Return to the selected conversation without sending a message." },
+  { target: "discover", label: "Discover · Pulse", aliases: ["discover", "pulse", "lios pulse", "explore", "stories", "news"], description: "Open source-backed stories, Following, Markets and Research discovery. Opening does not send a message." },
   { target: "projects", label: "Projects", aliases: ["projects", "project"], description: "Browse your accessible Projects; no Project is created." },
   { target: "chats", label: "Chats & history", aliases: ["chats", "chat", "history", "chat history"], description: "Browse your saved conversations." },
   { target: "search", label: "Search saved work", aliases: ["search", "saved work", "search saved work", "files"], description: "Search your permitted Projects, Chats, exact Artifacts and Project files using existing work search." },
@@ -113,7 +114,6 @@ const VIEW_ALIASES: Record<string, ViewMode> = {
   NET: "risknetwork",
   NETWORK: "risknetwork",
   SPILL: "risknetwork",
-  ORDERBOOK: "risknetwork",
   RISKNET: "risknetwork",
   FILG: "filingintel",
   SEC: "filingintel",
@@ -304,9 +304,6 @@ const VIEW_ALIASES: Record<string, ViewMode> = {
   SYNERGY: "mnadesk",
   PPA: "mnadesk",
   MERGER: "mnadesk",
-  INTEG: "integration",
-  TRACK: "integration",
-  PMI: "integration",
   FPA: "fpa",
   BUDGET: "fpa",
   FCST: "fpa",

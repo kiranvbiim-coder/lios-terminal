@@ -24,7 +24,7 @@ node --import tsx --test client/src/lib/evidencePrism.test.ts client/src/compone
 npm run check
 npm run test:p3
 npm run test:ux
-npm run acceptance:ux
+npm run validate:visual-environments
 ```
 
 ## Boundaries and remaining acceptance

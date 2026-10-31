@@ -29,7 +29,7 @@
 cd src
 node --import tsx --test client/src/lib/conversationSwitchPolicy.test.ts script/validate_ws16_sidebar_lifecycle.test.mjs
 npm run test:ux
-npm run acceptance:ux
+npm run validate:visual-environments
 ```
 
 ## PR ownership and collision matrix

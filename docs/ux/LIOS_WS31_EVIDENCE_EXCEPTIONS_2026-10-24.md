@@ -31,7 +31,7 @@ node --import tsx --test client/src/lib/evidenceExceptions.test.ts client/src/li
 npm run check
 npm run test:p3
 npm run test:ux
-npm run acceptance:ux
+npm run validate:visual-environments
 ```
 
 New tests cover multiple observations per conflicting ref, unresolved evidence refs, exact recorded source state, revoked/denied/unknown/allowed distinctions, unsupported claims, original recovery actions, always-visible warnings and escaped adversarial provider/source labels. Tests require **exact-head hosted verification**; written test definitions do not establish a pass.

@@ -26,7 +26,7 @@ Targeted (run from `src/`):
 node --import tsx --test client/src/lib/researchCheckpoint.test.ts client/src/lib/useInterruptedAgentRun.test.ts client/src/lib/observedResearchProgress.test.ts client/src/components/terminal/ConversationRuntimeTrace.test.ts
 npm run check
 npm run test:ux
-npm run acceptance:ux
+npm run validate:visual-environments
 ```
 
 Added regression assertions for strict server-record eligibility; terminal/nonresumable exclusion; no foreign-request counts; invalid/duplicate/legacy/outcome-unknown checkpoint metadata; no fabricated progress; partial work copy; no sensitive continuation leak; absent action under busy/no callback; static exact-request-only RPC path; and shell busy cleanup on unexpected failure.

@@ -48,7 +48,6 @@ export function validateP10VisualEvidence(uxManifest: string, analyticalManifest
 if (process.argv[1] && import.meta.url === pathToFileURL(path.resolve(process.argv[1])).href) {
 
 const currentMode = mode();
-const experience = read("client/src/pages/ExperienceCenter.tsx");
 const accessibility = read("script/validate_desktop_accessibility.ts");
 const artifactPerformance = read("server/artifactPerformance.test.ts");
 const calculationPerformance = read("client/src/lib/calculationPerformance.test.ts");
@@ -57,9 +56,6 @@ const releaseWorkflow = readQualificationWorkflow(path.resolve(process.cwd(), ".
 const runtimePacks = read("server/p10RuntimePacks.ts");
 const observability = read("server/p10Observability.ts");
 
-requireText(experience, /data-experience-demo="read-only"/, "P10 Experience Center guided demo is missing.");
-requireText(experience, /No login · no API key · no live data/, "Experience Center must explicitly disclose its static/no-live-data boundary.");
-requireText(experience, /Connect your data[\s\S]+Ask in Project context[\s\S]+Inspect evidence and models[\s\S]+Save the workflow/, "Experience Center must cover the real four-step LiOS loop.");
 
 requireText(accessibility, /focusIndicators:\s*true/, "Desktop accessibility acceptance must preserve focus indicators.");
 requireText(accessibility, /reducedMotion:\s*true/, "Desktop accessibility acceptance must preserve reduced motion.");
@@ -99,7 +95,6 @@ if (currentMode === "release") {
 console.log(JSON.stringify({
   contractVersion: "1.0.0",
   mode: currentMode,
-  experienceCenterGuidedDemo: true,
   performanceBudgets: true,
   accessibilitySourceContract: true,
   visualSmokeContract: { uxCases: 15, analyticalCases: 12 },

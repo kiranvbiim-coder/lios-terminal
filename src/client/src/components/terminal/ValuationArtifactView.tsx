@@ -113,8 +113,8 @@ export default function ValuationArtifactView({ content, facts = {}, disabled = 
     {Object.keys(extraSummary).length > 0 && <ReadableValueTable title="Recorded details" values={extraSummary} options={options} />}
     <ArtifactFootnote facts={facts} model={modelVersion} fingerprint={outputHash} units={unitsNote} />
     <ExpertViewDisclosure defaultOpen={expertDefaultOpen} summary="Expert view" hint="Recorded valuation inputs and outputs · read only">
-      <p className="mb-2 font-ui text-[12px] text-amber-200">This is recorded calculation evidence, not an input editor. Saving edited JSON would not recalculate a model. Use a governed recalculation to create new values and a new receipt.</p>
-      <pre aria-label="Recorded valuation JSON" className="max-h-96 overflow-auto whitespace-pre-wrap break-words rounded border border-border/50 p-3 font-terminal text-[12px] text-muted-foreground">{JSON.stringify(content, null, 2)}</pre>
+      <p className="mb-2 font-ui text-[12px] text-amber-200">This is recorded calculation evidence, not an input editor. It shows every stored value exactly. Use a governed recalculation to create new values and a new receipt.</p>
+      <ReadableValueTable values={content} options={{ showExact: true }} aria-label="Recorded valuation data" className="max-h-96 overflow-auto rounded border border-border/50 p-3 text-[12px] text-muted-foreground" />
     </ExpertViewDisclosure>
   </section>;
 }

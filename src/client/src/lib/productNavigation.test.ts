@@ -71,3 +71,19 @@ test("domain navigation does not leak finance-only analysis into supply chain", 
   assert.equal(allViews.includes("valuation"), false);
   assert.equal(allViews.includes("market"), false);
 });
+
+test("Settings › Advanced tools are absent from Workbench navigation and listed in Settings", async () => {
+  const { getSettingsAdvancedCapabilities } = await import("./terminalCatalog");
+  const moved = [
+    "developer", "adminconsole", "enginereadiness", "coveragemap", "qualitygate", "connectors", "marketdatafabric",
+    "universefabric", "crossassetfabric", "economicdatafabric", "datastats", "conflictdetector", "environment",
+  ];
+  const workbenchViews = getProductNavigation(internalFinance).flatMap((section) => section.items.map((item) => item.view));
+  for (const view of moved) assert.equal(workbenchViews.includes(view as never), false, view);
+  assert.ok(workbenchViews.includes("valuation"));
+  const settingsViews = getSettingsAdvancedCapabilities(true).map((capability) => capability.view);
+  for (const view of moved.filter((view) => view !== "environment")) assert.equal(settingsViews.includes(view as never), true, view);
+  const clientSettings = getSettingsAdvancedCapabilities(false).map((capability) => capability.view);
+  assert.equal(clientSettings.includes("developer"), false);
+  assert.equal(clientSettings.includes("adminconsole"), false);
+});

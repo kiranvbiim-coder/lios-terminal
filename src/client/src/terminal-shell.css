@@ -205,6 +205,11 @@ body,
   z-index: 1;
 }
 
+/* The top bar's ticker search and notification popovers must cover the workspace below it. */
+.terminal-root > header {
+  z-index: 40;
+}
+
 .terminal-root[data-density='terminal'] {
   --lios-shell-height: 28px;
   --lios-context-height: 29px;
@@ -1268,7 +1273,7 @@ body,
 .terminal-root :is(.text-amber-300, .text-amber-200) { color: var(--lios-brand-hover) !important; }
 .terminal-root :is(.text-emerald-300, .text-green-300) { color: var(--lios-success) !important; }
 
-.terminal-root :where(.panel-label, th, [role='columnheader']) {
+.terminal-root :where(th, [role='columnheader']) {
   letter-spacing: .095em;
 }
 

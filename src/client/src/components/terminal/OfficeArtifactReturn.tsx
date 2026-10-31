@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { readOfficeArtifactRoundtrip, OFFICE_ARTIFACT_LIMITS } from "@shared/officeArtifactRoundtrip";
 import type { ArtifactContent } from "@shared/artifactContracts";
 import { proposeOfficeArtifactReturn } from "@/lib/useArtifacts";
+import { ReadableValueTable } from "@/components/terminal/ReadableValueTable";
 
 type ReturnFile = Awaited<ReturnType<typeof readOfficeArtifactRoundtrip>> & { fileHash: string; filename: string };
 function previewChanges(source: ArtifactContent, proposed: ArtifactContent): string[] {
@@ -74,7 +75,7 @@ export default function OfficeArtifactReturn({ artifactId, version, contentHash,
     {file && <><p className="break-words text-sm">{file.filename} · {file.format.toUpperCase()} · source v{file.sourceVersion} · SHA-256 {file.fileHash}</p>
       {file.warnings.map((warning, index) => <p key={index} className="text-sm text-amber-200">{warning}</p>)}
       <details><summary>Inspect returned changes</summary>{changes.map((change, index) => <pre key={index} className="max-h-48 overflow-auto whitespace-pre-wrap break-words text-xs">{change}</pre>)}</details>
-      <details onToggle={event => setInspectContent(event.currentTarget.open)}><summary>Complete proposed canonical content</summary>{inspectContent && <pre className="max-h-80 overflow-auto whitespace-pre-wrap break-words text-xs">{JSON.stringify(file.content, null, 2)}</pre>}</details>
+      <details onToggle={event => setInspectContent(event.currentTarget.open)}><summary>Complete proposed canonical content</summary>{inspectContent && <ReadableValueTable values={file.content} options={{ showExact: true }} className="max-h-80 overflow-auto text-xs" />}</details>
       <button type="button" disabled={busy} onClick={() => void stage()} className="rounded border border-cyan-300/40 px-3 py-2" data-testid="artifact-stage-office-return">Stage Office changes for review</button>
     </>}
     {notice && <p role="status" data-testid="artifact-office-return-status">{notice}</p>}

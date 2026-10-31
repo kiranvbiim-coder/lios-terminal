@@ -98,7 +98,7 @@ export default function CrossDomainFusionPanel() {
   const exposurePct = selectedSector && exposure ? exposure[selectedSector] ?? 0 : 0;
 
   const status: DataStatus = {
-    provider: "Limuria Intelligence",
+    provider: "LiOS Intelligence",
     freshness: "current",
     asOf: new Date().toISOString(),
     delayLabel: "Live Federal Reserve policy rate + sector ETF price history",

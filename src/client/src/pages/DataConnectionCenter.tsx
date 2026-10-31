@@ -886,7 +886,7 @@ export default function DataConnectionCenter({ session, onComplete, onLogout, em
     discoveryComplete: modelDiscoveryComplete,
   });
   const aiModelBlocked = aiModelAccess === "blocked";
-  const continueWithoutAi = Boolean(aiProviderId && (aiModelBlocked || !aiModelId.trim() || aiModelId.trim().length > 200));
+  const aiSelectionIncomplete = Boolean(aiProviderId && (aiModelBlocked || !aiModelId.trim() || aiModelId.trim().length > 200));
   const chatVerified = Boolean(selectedAiProvider?.available && chatVerification?.provider === aiProviderId
     && chatVerification.model === aiModelId.trim()
     && (!selectedAiProvider.isLocal || (modelDiscovery?.endpoint && chatVerification.endpoint === modelDiscovery.endpoint)));
@@ -1225,13 +1225,13 @@ export default function DataConnectionCenter({ session, onComplete, onLogout, em
       setAiProviderId(provider);
       setAiModelId(model);
     } catch (error) {
-      setAiNotice(`The selection was not changed because Master AI could not be turned off. ${error instanceof Error ? error.message : ""}`);
+      setAiNotice(`The selection was not changed because Chat could not be switched away from your current AI. ${error instanceof Error ? error.message : ""}`);
     } finally {
       setAiBusy(false);
     }
   }
 
-  async function persistSetup(complete: boolean, withoutAi = false): Promise<void> {
+  async function persistSetup(complete: boolean): Promise<void> {
     const response = await apiRequest("PUT", "/api/setup/status", {
       selectedConnectorIds: connectionsQuery.data
         ? Array.from(new Set(connectionsQuery.data.map(connection => connection.connectorId)))
@@ -1242,8 +1242,8 @@ export default function DataConnectionCenter({ session, onComplete, onLogout, em
       pythonRuntimeId,
       pythonEnvironmentPath: pythonEnvironmentPath || null,
       pythonPackIds: runtimeQuery.data?.status.installedPacks ?? setupQuery.data?.setup?.pythonPackIds ?? ["core"],
-      aiProviderId: withoutAi ? null : aiProviderId || null,
-      aiModelId: !withoutAi && aiProviderId ? aiModelId.trim() || null : null,
+      aiProviderId: aiProviderId || null,
+      aiModelId: aiProviderId ? aiModelId.trim() || null : null,
       complete,
     });
     const saved = await response.json() as Pick<SetupResponse, "setup" | "setupNeeded">;
@@ -1321,7 +1321,7 @@ export default function DataConnectionCenter({ session, onComplete, onLogout, em
       setChatVerification(result);
       setAiNotice(result.detail);
     } catch (error) {
-      setAiNotice(`Chat remains unverified. ${permissionOff ? "Master AI is OFF." : "Master AI could not be confirmed OFF; its previous permission may remain."} ${error instanceof Error ? error.message : "Verification failed."}`);
+      setAiNotice(`Chat is not connected yet.${permissionOff ? "" : " Your previous AI may still be in use for Chat."} ${error instanceof Error ? error.message : "The check did not finish."}`);
     } finally {
       await Promise.all([
         qc.invalidateQueries({ queryKey: ["/api/setup/status"] }),
@@ -1346,7 +1346,7 @@ export default function DataConnectionCenter({ session, onComplete, onLogout, em
         delete next[provider.id];
         return next;
       });
-      setAiNotice("Local endpoint disconnected. Master AI is OFF; deterministic tools and your original chat draft remain available.");
+      setAiNotice("Local server disconnected. Connect an AI again to use Chat; your draft stays in Chat.");
     } catch (error) {
       setAiNotice(`Could not disconnect the endpoint. ${error instanceof Error ? error.message : "Retry."}`);
     } finally {
@@ -1367,8 +1367,11 @@ export default function DataConnectionCenter({ session, onComplete, onLogout, em
     setSaveNotice(null);
     setSaving(true);
     try {
-      if (continueWithoutAi) await turnMasterAiOff();
-      await persistSetup(true, continueWithoutAi);
+      if (aiSelectionIncomplete) {
+        setSaveNotice("Choose a model your AI provider offers, then save.");
+        return;
+      }
+      await persistSetup(true);
       onComplete();
     } catch (error) {
       setSaveNotice(`Your setup could not be saved. ${error instanceof Error ? error.message.slice(0, 160) : "Try again."}`);
@@ -1431,10 +1434,10 @@ export default function DataConnectionCenter({ session, onComplete, onLogout, em
                 className="min-h-11 rounded border border-border px-3 py-2 font-ui text-sm text-foreground hover:bg-white/[0.04] focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary disabled:opacity-40">
                 {embedded ? "Return to Chat" : "Return to previous work"}
               </button>
-              <button type="button" onClick={handleEnterTerminal} disabled={saving || aiBusy || masterBusy}
-                title={continueWithoutAi ? "Continue with AI disabled. You can choose and verify a model later." : undefined}
+              <button type="button" onClick={handleEnterTerminal} disabled={saving || aiBusy || masterBusy || aiSelectionIncomplete}
+                title={aiSelectionIncomplete ? "Choose a model your AI provider offers before saving." : undefined}
                 className="flex items-center gap-1.5 border border-[hsl(38,95%,50%)]/60 bg-[hsl(38,95%,50%)]/10 px-3 py-2 font-terminal text-[9px] uppercase text-[hsl(38,95%,55%)] hover:bg-[hsl(38,95%,50%)]/20 disabled:opacity-40">
-                <Terminal className="w-3 h-3" /> {saving ? "Saving..." : embedded ? "Save and return to Chat" : continueWithoutAi ? "Continue without AI" : connectionSummary.ctaLabel}
+                <Terminal className="w-3 h-3" /> {saving ? "Saving..." : embedded ? "Save and return to Chat" : connectionSummary.ctaLabel}
               </button>
             </div>
           </div>
@@ -1454,7 +1457,7 @@ export default function DataConnectionCenter({ session, onComplete, onLogout, em
               ))}
             </div>
           ) : (
-            <p className="font-terminal text-[8px] leading-relaxed text-muted-foreground">AI is optional: deterministic analytics work without it. Connect a provider below; existing local servers do not require an API key.</p>
+            <p className="font-terminal text-[8px] leading-relaxed text-muted-foreground">Chat needs one AI. Connect a cloud provider with your own key, or an AI app on this computer; local apps don't need a key.</p>
           )}
           {(aiConnectorsToAdd.length > 0 || aiProviders.some((provider) => provider.isLocal)) && (
             <div>
@@ -1482,7 +1485,7 @@ export default function DataConnectionCenter({ session, onComplete, onLogout, em
       <div>
         <label htmlFor="ai-provider-select" className="mb-1 block font-ui text-sm font-medium text-muted-foreground">Use this provider</label>
         <select id="ai-provider-select" value={aiProviderId} onChange={(event) => void changeAiSelection(event.target.value, "")} disabled={aiBusy || saving || masterBusy} className={inputCls}>
-          <option value="">AI disabled — deterministic engines only</option>
+          <option value="" disabled>Choose a provider</option>
           {selectableAiProviders.map((provider) => (
             <option key={provider.id} value={provider.id} disabled={!provider.available && !provider.isLocal}>
               {provider.name}{provider.isLocal ? " (local)" : ""}{provider.available ? "" : " (not connected)"}
@@ -1539,7 +1542,7 @@ export default function DataConnectionCenter({ session, onComplete, onLogout, em
                     setChatVerification(null);
                     setAiModelId(event.target.value);
                     setAiNotice(null);
-                    void turnMasterAiOff().catch(() => setAiNotice("The model draft changed, but Master AI could not be confirmed OFF. Resolve the permission error before continuing."));
+                    void turnMasterAiOff().catch(() => setAiNotice("The model changed, but Chat could not be switched off the previous model. Fix the permission error before continuing."));
                   }}
                   disabled={aiBusy || saving || masterBusy}
                   list={`ai-models-${selectedAiProvider.id}`}
@@ -1583,7 +1586,7 @@ export default function DataConnectionCenter({ session, onComplete, onLogout, em
             ) : null}
             {modelDiscoveryComplete && aiModelId && !selectedModelWasReturned && (
               <p className="mt-2 border border-rose-500/30 bg-rose-500/[0.04] px-2 py-1.5 font-terminal text-[8px] leading-relaxed text-rose-200" role="alert" data-testid="gemini-model-not-entitled">
-                Your selected model was not returned by this key’s complete chat-capable model list. Master AI is forced OFF and this setup cannot be saved until you choose a returned model or disable the AI provider.
+                Your selected model was not returned by this key’s chat-capable model list. Chat stays off for this model, and setup can't be saved until you choose a model from the list.
               </p>
             )}
             {aiProviderId === "gemini" && /^gemini-2\.5-/.test(aiModelId) && (
@@ -2083,10 +2086,10 @@ export default function DataConnectionCenter({ session, onComplete, onLogout, em
             className="min-h-10 rounded border border-border px-3 py-2 font-ui text-sm text-foreground focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary">
             Return to previous work
           </button>
-          <button type="button" onClick={handleEnterTerminal} disabled={saving || aiBusy || masterBusy}
-            title={continueWithoutAi ? "Continue with AI disabled. You can choose and verify a model later." : undefined}
+          <button type="button" onClick={handleEnterTerminal} disabled={saving || aiBusy || masterBusy || aiSelectionIncomplete}
+            title={aiSelectionIncomplete ? "Choose a model your AI provider offers before saving." : undefined}
             className="flex items-center gap-2 border border-[hsl(38,95%,50%)] bg-[hsl(38,95%,50%)]/10 px-5 py-2.5 font-terminal text-[10px] uppercase text-[hsl(38,95%,55%)] hover:bg-[hsl(38,95%,50%)]/20 disabled:opacity-40">
-            <Terminal className="w-4 h-4" /> {saving ? "Saving..." : continueWithoutAi ? "Continue without AI" : connectionSummary.ctaLabel}
+            <Terminal className="w-4 h-4" /> {saving ? "Saving..." : connectionSummary.ctaLabel}
           </button>
         </div>
       </div>

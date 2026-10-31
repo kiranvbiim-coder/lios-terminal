@@ -24,6 +24,7 @@ import { rankSecuritySearchResults, type SecuritySearchResult } from "@/lib/term
 import { useGuidedMode } from "@/hooks/use-guided-mode";
 import { useAudience } from "@/lib/audience";
 import { prefetchLikelyDestination } from "@/lib/prefetch";
+import ReferenceUniverseLoadPrompt from "@/components/data/ReferenceUniverseLoadPrompt";
 
 interface Props {
   onClose: () => void;
@@ -454,7 +455,7 @@ export default function CommandBar({ onClose, onExecute, onAskLios, onExploreFie
             {discoveringTools && universalToolResults.length === 0 && (mode === "all" || mode === "tools") && <div className="font-ui m-1 flex items-center gap-2 rounded-lg px-3 py-2 text-[8px] text-muted-foreground"><ActivityPulse /> Discovering LiOS capabilities…</div>}
             {mode === "tools" && browsedSpecialists.length > 24 && <p className="font-ui px-3 py-2 text-xs text-muted-foreground">Showing the first results. Search or choose a workspace to find additional tools.</p>}
             {results.length === 0 ? (
-              <div className="flex min-h-[340px] flex-col items-center justify-center px-8 text-center"><div className="flex h-11 w-11 items-center justify-center rounded-2xl border border-border/55 bg-white/[0.012]"><Search className="h-5 w-5 text-muted-foreground/45" /></div><div className="font-ui mt-4 text-[11px] font-semibold text-foreground">{isClient ? "Search LiOS" : "Search the analytical system"}</div>{!isClient && <p className="font-ui mt-2 max-w-md text-[8px] leading-relaxed text-muted-foreground">Try a company, task, model, dataset or provider: <span className="lios-pane-code text-amber-300/85">AAPL GP</span>, <span className="lios-pane-code text-amber-300/85">reverse DCF</span>, <span className="font-medium text-foreground/80">credit merton</span>, <span className="font-medium text-foreground/80">FRED macro</span>.</p>}</div>
+              <div className="flex min-h-[340px] flex-col items-center justify-center px-8 text-center"><div className="flex h-11 w-11 items-center justify-center rounded-2xl border border-border/55 bg-white/[0.012]"><Search className="h-5 w-5 text-muted-foreground/45" /></div><div className="font-ui mt-4 text-[11px] font-semibold text-foreground">{isClient ? "Search LiOS" : "Search the analytical system"}</div>{!isClient && <p className="font-ui mt-2 max-w-md text-[8px] leading-relaxed text-muted-foreground">Try a company, task, model, dataset or provider: <span className="lios-pane-code text-amber-300/85">AAPL GP</span>, <span className="lios-pane-code text-amber-300/85">reverse DCF</span>, <span className="font-medium text-foreground/80">credit merton</span>, <span className="font-medium text-foreground/80">FRED macro</span>.</p>}{query.trim() && <ReferenceUniverseLoadPrompt compact />}</div>
             ) : results.map((result, index) => {
               const Icon = result.icon;
               const active = index === selected;

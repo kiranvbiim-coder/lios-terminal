@@ -11,6 +11,6 @@ The [SI execution plan](../LIOS_SUPER_INTELLIGENCE_EXECUTION_PLAN.md) and [Shipp
 
 ## Verification boundary
 
-`npm run acceptance:ux` checks static source contracts and visual asset presence. It does not establish that the interface was rendered, visually reviewed, exercised interactively, or verified in a packaged desktop app. Report those checks separately and only after they are actually run.
+`npm run validate:visual-environments` checks static source contracts and visual asset presence. It does not establish that the interface was rendered, visually reviewed, exercised interactively, or verified in a packaged desktop app. Report those checks separately and only after they are actually run.
 
 Human aesthetic sign-off is also bounded evidence, not P14 release certification. SP-01–SP-07 require real MSJs, applicable target execution, no fake success, regression protection and exact build/environment/journey/outcome/limitations records. Screenshots, source presence and unsigned smoke cannot be promoted to Shipping Point acceptance or signed release proof; this index asserts neither.

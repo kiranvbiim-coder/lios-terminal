@@ -460,14 +460,28 @@ export function registerClientRoutes(app: Express): void {
 
   app.get("/api/client/dashboard/market-snapshot", requireFullClient, async (_req, res) => {
     const quotes = await getQuotes(["^GSPC", "^DJI", "^IXIC", "^VIX"]);
-    res.json(quotes.map((q) => ({ symbol: q.symbol, price: q.price, changePercent: q.changePercent })));
+    res.json(quotes.map((q) => {
+      // A fallback/zero price is not an observation: never present 0 as real.
+      const unavailable = q.status.isFallback || !Number.isFinite(q.price) || q.price === 0;
+      return {
+        symbol: q.symbol,
+        price: unavailable ? null : q.price,
+        changePercent: unavailable ? null : q.changePercent,
+        unavailable,
+        status: q.status,
+      };
+    }));
   });
 
   app.get("/api/client/dashboard/quote/:symbol", requireClient, async (req, res) => {
     const symbol = String(req.params.symbol).toUpperCase();
     const [quote] = await getQuotes([symbol]);
-    const history = await getOHLCV(symbol, "3M", "1d").catch(() => []);
-    res.json({ quote, history });
+    try {
+      const history = await getOHLCV(symbol, "3M", "1d");
+      res.json({ quote, history, historyError: null });
+    } catch (error) {
+      res.json({ quote, history: [], historyError: error instanceof Error ? error.message : "Price history unavailable." });
+    }
   });
 
   // ─── Economics & Public Policy domain ───────────────────────────────────

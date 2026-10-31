@@ -94,6 +94,7 @@ import { deriveWorkingContext, resolveWorkingContextRequest, restoreWorkingConte
 import type { WorkingContextOwner, WorkingContextResolution } from "@shared/workingContext";
 import type { WorkingContextSnapshot } from "@shared/conversationRuntime";
 import { ConversationExecutionTranscript, ConversationJournalError, getConversationExecutionJournal, withConversationExecutionScope } from "./exec/execution-scope";
+import { withOwnerRequestIdentity } from "./ownerRequestIdentity";
 import { SandboxRuntimeConfigurationError } from "./exec/sandbox-runtime-profile";
 import type { AgentEventInput } from "./exec/agent-run-events";
 import { AgentDispatchOutcomeUnknownError, agentPlanSha256, type AgentLoopContinuationState, type AgentLoopReopen } from "./agentLoop";
@@ -267,27 +268,17 @@ async function assertWorkingContextArtifacts(
 
 async function resolveEffectiveConversationRequest(
   user: ConversationUser,
-  requestInput: ConversationRequest,
+  request: ConversationRequest,
 ): Promise<{ request: ConversationRequest; plan: WorkflowPlan }> {
-  let request = requestInput;
-  let plan = planConversationWorkflow(request);
-
+  const plan = planConversationWorkflow(request);
+  // An explicit deterministic request (staged personal-finance inputs, saved refreshes) needs no model.
   if (request.executionMode === "deterministic_first") return { request, plan };
 
+  // Chat never answers without the user's AI: an unconnected or stale connection is refused with a code
+  // the client turns into its Reconnect AI prompt, keeping the draft.
   const gate = await requireMasterAiOn(user);
   if (gate.ok) return { request, plan };
-
-  if (plan.intent.requiresAI) throw new ConversationStartError(gate.status, { error: gate.error });
-
-  // AI-assisted synthesis is optional for deterministic work. Respect an
-  // explicit AI-off preference (or unavailable preference service) by
-  // degrading to deterministic-only execution without blocking the task.
-  request = conversationRequestSchema.parse({
-    ...request,
-    executionMode: "deterministic_first",
-  });
-  plan = planConversationWorkflow(request);
-  return { request, plan };
+  throw new ConversationStartError(gate.status, { code: gate.code, error: gate.error, requestId: request.requestId });
 }
 
 function assertVoiceReviewed(
@@ -463,7 +454,7 @@ async function prepareRestartRun(input: {
       await getProjectChat(input.tenant, input.chatId);
       if (input.chat.projectId) await getProject(input.tenant, input.chat.projectId);
       const gate = await requireMasterAiOn(input.user);
-      if (!gate.ok) throw new ConversationStartError(gate.status, { error: gate.error, requestId: record.id });
+      if (!gate.ok) throw new ConversationStartError(gate.status, { code: gate.code, error: gate.error, requestId: record.id });
     },
   };
 }
@@ -770,7 +761,8 @@ async function runProjectChat(
             }
           }
           : undefined;
-        const result = await withConversationExecutionScope(request.requestId, () => executeConversationRuntime({
+        // Gateway (WebSocket) runs are not Express requests; bind the owner's market-data identity so Chat obeys the same source selection and consent as the HTTP routes.
+        const result = await withConversationExecutionScope(request.requestId, () => withOwnerRequestIdentity(context, () => executeConversationRuntime({
           tenant: context,
           signal,
           runSignal,
@@ -900,7 +892,7 @@ async function runProjectChat(
             if (event.type === "error") held.errored = true;
             emit(event);
           },
-        }), sourceRelease, adopted?.assertCurrent, incomingAiDispatch);
+        })), sourceRelease, adopted?.assertCurrent, incomingAiDispatch);
         await adopted?.assertCurrent();
         if (!result.cancelled && !result.awaitingApproval && !conversationRuns.claimCompletion(request.requestId, user.id)) {
           // Stop won before durable output commit. Do not save a completed
@@ -1394,7 +1386,7 @@ export async function startTemporaryRun(user: ConversationUser, rawBody: unknown
       chatId: null,
     }, async (emit, signal) => {
       const held: HeldRun = { done: null, errored: false };
-      const result = await withConversationExecutionScope(request.requestId, () => executeConversationRuntime({
+      const result = await withConversationExecutionScope(request.requestId, () => withOwnerRequestIdentity(context, () => executeConversationRuntime({
         tenant: context,
         signal,
         scope: "temporary",
@@ -1418,7 +1410,7 @@ export async function startTemporaryRun(user: ConversationUser, rawBody: unknown
             emit(runtimeEvent);
           }
         },
-      })).catch((error: unknown) => {
+      }))).catch((error: unknown) => {
         endFailedRun(emit, request.requestId, held, error, preRun);
         return null;
       });

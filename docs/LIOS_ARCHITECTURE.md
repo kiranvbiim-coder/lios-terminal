@@ -644,15 +644,13 @@ Authority rules:
 - Engineering-owned source controls must be complete before P7 can report `engineering_ready`.
 - Real signing/notarization, Authenticode, native secret custody, packaged sidecar, clean installs, update/rollback, assistive technology, production privacy/security review and exact release-rights evidence remain external until observed.
 - Tenant IdP/private deployment verification is deployment-bound and does not masquerade as generic package certification.
-- Final `acceptance:p7:release` consumes the same typed P14 evidence bundle for one exact release tag/version, so P7 and P14 cannot disagree about what was actually certified.
-- The existing Quality Gate runs `acceptance:p7`; the final P14 certification workflow additionally runs `acceptance:p7:release`.
+- Release-mode P7 certification consumes the same typed P14 evidence bundle for one exact release tag/version, so P7 and P14 cannot disagree about what was actually certified. That validator and its workflow are withheld from this public source tree (`third_party/source-distribution.json`); only the P7 research footprint guard (`npm run acceptance:p7`) runs here.
 
 Canonical active-P7 files:
 - `shared/p7ReleaseContracts.ts`
 - `server/p7ReleaseReadiness.ts`
 - `server/operationalReadinessRoutes.ts`
 - `client/src/components/panels/P7ReleaseReadinessPanel.tsx`
-- `script/validate_p7_active_release_acceptance.ts`
 - `docs/technical/P7_DESKTOP_ENTERPRISE_RELEASE.md`
 
 **Recorded Active P7 engineering status: COMPLETE (2026-09-27).** This records the repository-side seven-phase convergence scope at that date, not completion of SI-01–SI-07 or acceptance of SP-01–SP-07. `release_certified` remains intentionally unavailable until one exact release candidate carries the required typed external evidence; P14 retains final release authority.
@@ -1941,7 +1939,7 @@ Pipeline:
 
 Voice never bypasses permissions or invents a parallel command system.
 
-**P12 implementation status — 2026-09-25:** The active Connection Center now mounts local Voice Runtime setup from the #59 baseline. The conversation implementation preserves voice transcript evidence through the editable composer and enforces server-derived review requirements in authenticated Project/Quick and Temporary execution routes before Project persistence or execution. Project chat also provides governed picker/drop upload, private Project Resource storage, runtime-only bounded content extraction, policy-aware AI transmission and saved-message download references. Raw voice audio is not persisted. Source acceptance is not release acceptance: packaged voice walkthrough, real local-runtime benchmark/clean-machine evidence, attachment restart/reopen/error UX and explicitly authorized live-provider vision acceptance remain open. See `docs/technical/P12_VOICE_MULTIMODAL_SPEC.md` and `npm run acceptance:p12`.
+**P12 implementation status — 2026-09-25:** The active Connection Center now mounts local Voice Runtime setup from the #59 baseline. The conversation implementation preserves voice transcript evidence through the editable composer and enforces server-derived review requirements in authenticated Project/Quick and Temporary execution routes before Project persistence or execution. Project chat also provides governed picker/drop upload, private Project Resource storage, runtime-only bounded content extraction, policy-aware AI transmission and saved-message download references. Raw voice audio is not persisted. Source acceptance is not release acceptance: packaged voice walkthrough, real local-runtime benchmark/clean-machine evidence, attachment restart/reopen/error UX and explicitly authorized live-provider vision acceptance remain open. See `docs/technical/P12_VOICE_MULTIMODAL_SPEC.md`.
 
 
 ### Observability and Show Work

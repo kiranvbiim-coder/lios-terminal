@@ -7,7 +7,7 @@ import { automaticContextSearchTerm, chooseAutomaticContextImage } from "@/lib/n
 /**
  * Opt-in only: recorded Wave D cards may contain private research. Nothing
  * reaches Wikimedia Commons until the person deliberately requests imagery.
- * This does not convert a Commons CC0 preview to an editorial rights grant.
+ * This does not convert a Commons preview to an editorial rights grant.
  */
 export function RecordedContextPicture({ title, hasPublicEvidence }: {
   title: string;
@@ -39,14 +39,14 @@ export function RecordedContextPicture({ title, hasPublicEvidence }: {
     setLoading(true);
     setError(null);
     try {
-      const response = await fetch("/api/media/commons/cc0?q=" + encodeURIComponent(term), {
+      const response = await fetch("/api/media/commons/images?q=" + encodeURIComponent(term), {
         credentials: "same-origin", signal: abort.signal,
       });
       if (!response.ok) throw new Error("Commons lookup unavailable.");
       const payload: unknown = await response.json();
       if (abort.signal.aborted) return;
       const choice = chooseAutomaticContextImage(payload, term);
-      if (!choice) { setError("No matching CC0 context image was found."); return; }
+      if (!choice) { setError("No matching licensed context image was found."); return; }
       setImage(choice);
       setOpen(true);
     } catch {
@@ -59,7 +59,7 @@ export function RecordedContextPicture({ title, hasPublicEvidence }: {
     <button type="button" onClick={() => void load()} disabled={loading}
       aria-expanded={open}
       className="min-h-10 rounded-lg border border-border/60 px-3 py-2 font-ui text-xs text-amber-100 disabled:opacity-50 focus-visible:outline-2 focus-visible:outline-amber-300">
-      {loading ? "Checking CC0 source…" : open ? "Hide context picture" : "Find context picture"}
+      {loading ? "Checking Commons license…" : open ? "Hide context picture" : "Find context picture"}
     </button>
     {!open && <p className="mt-1 font-ui text-xs text-muted-foreground">
       Optional: sends only this recorded headline to Wikimedia Commons after your click.

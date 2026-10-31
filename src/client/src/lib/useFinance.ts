@@ -1,5 +1,6 @@
 import { useQuery, useQueries } from "@tanstack/react-query";
-import type { Quote, OHLCVSeries, NewsItem, NewsArticle, PortfolioAnalytics, PortfolioPositionInput, EconomicsSnapshot, EconomicCalendarEvent, EconomicEventDetail, DirectoryScreenResult, CatalogScreenRow } from "./finance";
+import type { Quote, OHLCVSeries, NewsItem, NewsArticle, PortfolioAnalytics, PortfolioPositionInput, EconomicsSnapshot, EconomicCalendarEvent, EconomicEventDetail, DirectoryScreenResult, DirectoryEntry, CatalogScreenRow } from "./finance";
+import { pickCatalogEntry } from "./referenceOnlyInstrument";
 import { useLiveQuotes } from "./useWebSocket";
 import { isObservedQuote, observedQuotes } from "./quoteObservation";
 
@@ -453,6 +454,21 @@ export function useDirectoryScreener(filters: Record<string, string>, page: numb
   });
 }
 
+/** The global-securities catalog row for exactly this symbol (null when it is not in the catalog). */
+export function useCatalogEntry(symbol: string) {
+  return useQuery<DirectoryEntry | null>({
+    queryKey: ["/api/finance/directory", "entry", symbol.toUpperCase()],
+    queryFn: async () => {
+      const res = await fetch(`/api/finance/directory?q=${encodeURIComponent(symbol)}`);
+      if (!res.ok) throw new Error("Catalog lookup unavailable");
+      const page: DirectoryScreenResult = await res.json();
+      return pickCatalogEntry(page.items, symbol);
+    },
+    staleTime: 5 * 60_000,
+    enabled: !!symbol,
+  });
+}
+
 export interface DirectoryCatalogFacets {
   total: number;
   active: number;
@@ -498,6 +514,8 @@ export interface DirectoryCatalogInstallStatus {
   completedAt: string | null;
   filesExtracted: number;
   bytesExtracted: number;
+  bytesDownloaded: number;
+  stepDetail: string | null;
   importedCount: number | null;
   upstreamCommit: string;
   error: string | null;
@@ -510,7 +528,7 @@ export function useDirectoryInstallStatus() {
       if (!res.ok) throw new Error("Reference import state unavailable");
       return res.json();
     },
-    refetchInterval: 3000,
+    refetchInterval: (query) => ["fetching", "extracting", "verifying"].includes(query.state.data?.state ?? "") ? 1000 : 5000,
   });
 }
 

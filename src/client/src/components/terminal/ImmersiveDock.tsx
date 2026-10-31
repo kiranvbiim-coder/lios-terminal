@@ -73,7 +73,7 @@ export default function ImmersiveDock({ activeView, activeSymbol, preferences, o
       <div className="h-5 w-px bg-border/55" aria-hidden="true" />
 
       <button type="button" className="lios-dock-action min-h-11" onClick={() => onOpenSurface("cognitive-core")} title="Lenses, scenarios, objects and outcome use cases" aria-label="Core analysis"><Boxes className="h-3 w-3 text-[hsl(38,100%,58%)]" /> <span className="hidden sm:inline">Core</span></button>
-      <button type="button" className="lios-dock-action min-h-11" onClick={() => onOpenSurface("intelligence-pulse")} title="What changed, what matters, and what needs attention" aria-label="Open Pulse"><Radar className="h-3 w-3 text-[hsl(38,100%,58%)]" /> <span className="hidden md:inline">Pulse</span></button>
+      <button type="button" className="lios-dock-action min-h-11" onClick={() => onOpenSurface("wave-c-shell")} title="What changed, what matters, and what needs attention" aria-label="Open Pulse"><Radar className="h-3 w-3 text-[hsl(38,100%,58%)]" /> <span className="hidden md:inline">Pulse</span></button>
       <button type="button" className="lios-dock-action min-h-11" onClick={() => onOpenSurface("scenario-workbench")} title="Branch and explicitly apply scenarios to model assumptions" aria-label="Scenario workbench"><GitBranch className="h-3 w-3 text-[hsl(38,100%,58%)]" /> <span className="hidden xl:inline">Scenario</span></button>
 
       <div className="h-5 w-px bg-border/55" aria-hidden="true" />

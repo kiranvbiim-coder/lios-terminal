@@ -21,3 +21,11 @@ test("Commons preview only permits exact Wikimedia image URLs with CC0 status", 
   assert.equal(safeCommonsPreview({ ...candidate, license: "CC BY 4.0" as "CC0 1.0" }), null);
   assert.equal(safeCommonsFilePage({ ...candidate, filePage: "https://example.org/wiki/File:Unknown.jpg" }), null);
 });
+
+test("only credit-compatible licenses with their exact deed URL are displayable", () => {
+  const by = { ...candidate, license: "CC BY-SA 4.0" as const, licenseUrl: "https://creativecommons.org/licenses/by-sa/4.0/" };
+  assert.equal(safeCommonsPreview(by), candidate.previewUrl);
+  assert.equal(safeCommonsPreview({ ...candidate, license: "Public domain", licenseUrl: null }), candidate.previewUrl);
+  assert.equal(safeCommonsPreview({ ...by, licenseUrl: "https://creativecommons.org/licenses/by/4.0/" }), null);
+  assert.equal(safeCommonsPreview({ ...by, license: "CC BY-NC 4.0" as "CC BY 4.0", licenseUrl: "https://creativecommons.org/licenses/by-nc/4.0/" }), null);
+});

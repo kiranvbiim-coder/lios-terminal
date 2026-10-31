@@ -2829,11 +2829,9 @@ export const workstreamCommentsRelations = relations(workstreamComments, ({ one 
   author: one(users, { fields: [workstreamComments.authorUserId], references: [users.id] }),
 }));
 
-// ─── Leads (LIOS Experience Center: public, pre-signup lead capture) ──────
-// Deliberately unauthenticated at the route level (see server/publicRoutes.ts)
-// -- a prospect filling this out has no account yet, that's the entire point
-// of the Experience Center. `source` distinguishes this from any future
-// public capture surface without needing a schema change.
+// ─── Leads (historical rows from the retired public capture form) ─────────
+// No route writes this table any more; internal staff can still read the
+// retained rows via /api/admin/leads. The table is kept to preserve data.
 export const leads = pgTable("leads", {
   id: integer("id").primaryKey().generatedAlwaysAsIdentity(),
   name: text("name").notNull(),
@@ -2844,14 +2842,6 @@ export const leads = pgTable("leads", {
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 
-export const insertLeadSchema = z.object({
-  name: z.string().trim().min(1).max(200),
-  email: z.string().trim().toLowerCase().email(),
-  company: z.string().trim().max(200).optional(),
-  message: z.string().trim().max(2000).optional(),
-});
-
-export type InsertLead = z.infer<typeof insertLeadSchema>;
 export type Lead = typeof leads.$inferSelect;
 
 // ─── Client-facing audit trail (Wave 5) ────────────────────────────────────

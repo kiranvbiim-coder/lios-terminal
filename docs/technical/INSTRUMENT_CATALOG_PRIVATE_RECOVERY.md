@@ -1,6 +1,6 @@
 # Recovering LiOS private instrument catalogs (2026-10-26)
 
-**Source:** private `kiranvbiim-coder/lios-v1.0.0` (`main`). **Target:** public-source `kiranvbiim-coder/lios-terminal`, with *local-only ignored files* inside `src/server/data/`. The public repository's first commit intentionally omitted proprietary/private-data material; that omission is **not** data loss. No private history is copied to the public repository.
+**Source:** a local directory containing a previously obtained snapshot of the three catalogs at `src/server/data/`. **Target:** this public-source repository, with *local-only ignored files* inside `src/server/data/`. The public repository intentionally omits proprietary/private-data material; that omission is **not** data loss. The tooling performs no network access and refers to no private repository.
 
 ## Verified source inventory
 
@@ -16,30 +16,21 @@ An additional `shillerCape.json` academic dataset remains private, but **it is n
 
 ## Local recovery commands
 
-From the **public repo's `src/` directory**, with installed `git` and authenticated `gh` CLI that can read the existing private repo:
+From this repository's `src/` directory, with a local snapshot directory that contains `src/server/data/{tickers.json,provider_ingested_universe.json,crypto_coingecko_ids.json}`:
 
 ```bash
-# Authenticated PRIVATE clone, with sparse checkout, to a temporary directory;
-# only validated files are copied into this local checkout.
-npm run data:recover
+npm run data:recover -- --from-dir /absolute/path/to/snapshot-checkout
 npm run data:verify
 npm run test:catalog-recovery
 ```
 
-If a legitimate, up-to-date checkout of the private repo is already present:
-
-```bash
-node script/recover_instrument_catalogs.cjs --restore --from-dir /absolute/path/to/lios-v1.0.0
-node script/recover_instrument_catalogs.cjs --verify
-```
-
-The recovery command never writes auth tokens or private history into public source; it uses the operator's existing GitHub CLI credentials, and it deletes its temporary sparse checkout. Existing local files that do not match the pinned snapshot are **never overwritten**. Ask the owner to preserve independent data modifications and review provenance before updating the pins. `src/server/data/` remains ignored in the public repository and will not be committed by standard `git add`.
+The recovery command never writes credentials or history into public source and performs no network access. Existing local files that do not match the pinned snapshot are **never overwritten**. Ask the owner to preserve independent data modifications and review provenance before updating the pins. `src/server/data/` remains ignored in the public repository and will not be committed by standard `git add`.
 
 ## Packaging and completeness gate
 
-Public packaging does not require access to the private source repository. The consolidated FinanceDatabase importer provides a separate opt-in, user-local reference catalog; recovered historical snapshots remain optional local inputs. `npm run data:verify` verifies those private inputs explicitly, not as an unconditional desktop-build prerequisite.
+Public packaging does not require any snapshot source. The consolidated FinanceDatabase importer provides a separate opt-in, user-local reference catalog; recovered historical snapshots remain optional local inputs. `npm run data:verify` verifies those private inputs explicitly, not as an unconditional desktop-build prerequisite.
 
-The consolidated package excludes `server/data/**/*`. Never add recovered datasets to the public repository, GitHub Actions artifacts or Releases without independently recorded redistribution rights. Private access and snapshot verification do not grant those rights. Public CI uses synthetic recovery fixtures and no private-repository credentials. Recovery publishes owner-only files using atomic no-replace links, including when another local writer creates the destination concurrently.
+The consolidated package excludes `server/data/**/*`. Never add recovered datasets to the public repository, GitHub Actions artifacts or Releases without independently recorded redistribution rights. Private access and snapshot verification do not grant those rights. Public CI uses synthetic recovery fixtures and no credentials. Recovery publishes owner-only files using atomic no-replace links, including when another local writer creates the destination concurrently.
 
 ## Follow-up engineering checks after recovery
 

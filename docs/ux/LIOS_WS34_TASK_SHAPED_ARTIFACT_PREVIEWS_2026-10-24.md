@@ -25,7 +25,7 @@ node --import tsx --test client/src/lib/recordedArtifactPreview.test.ts client/s
 npm run check
 npm run test:p4
 npm run test:ux
-npm run acceptance:ux
+npm run validate:visual-environments
 ```
 
 All new tests require **exact-head CI**, including macOS/Linux/Windows. Passing an older parent SHA would not qualify new code.

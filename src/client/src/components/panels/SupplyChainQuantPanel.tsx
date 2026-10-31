@@ -6,6 +6,7 @@ import { InputSourceSelector, ModelInputEditor, ProvenanceReceipt, advancedInput
 import type { JsonFieldSchema } from "@/components/ui/StructuredJsonEditor";
 import { useAdvancedWorkflow } from "./advancedMacroForecastResearch";
 import { useTerminalQuantRun } from "@/lib/useTerminalQuantRun";
+import { ReadableValueTable } from "@/components/terminal/ReadableValueTable";
 
 // Supply Chain domain's own real quant engine (LIMURIA_ENGINES port plan
 // Phase 8) -- lives here, under the actual `supply_chain` domain's own
@@ -524,7 +525,7 @@ export default function SupplyChainQuantPanel() {
           const { receipt, ...rest } = result as Record<string, unknown> & { receipt?: AdvancedReceipt };
           return (
             <>
-              <pre className="max-h-64 overflow-auto whitespace-pre-wrap border border-border p-2.5 font-mono text-[8px] leading-relaxed text-muted-foreground">{JSON.stringify(rest, null, 2)}</pre>
+              <ReadableValueTable values={rest} className="max-h-96 overflow-auto rounded border border-border p-2.5" />
               <ProvenanceReceipt receipt={receipt} />
             </>
           );

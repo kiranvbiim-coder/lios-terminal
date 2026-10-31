@@ -9,6 +9,7 @@ import { apiRequest } from "@/lib/queryClient";
 import { getTerminalPersona, resolveTerminalPersonaId, type TerminalPersonaId } from "@/lib/terminalPersona";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import ChangePasswordForm from "@/components/ChangePasswordForm";
+import ReferenceUniverseLoadPrompt from "@/components/data/ReferenceUniverseLoadPrompt";
 import { useAudience } from "@/lib/audience";
 import { isSecuritySearchResult, rankSecuritySearchResults, resolveVerifiedSecuritySelection, type SecuritySearchResult } from "@/lib/terminalSecuritySearch";
 
@@ -271,7 +272,7 @@ export default function TopBar({ activeSymbol, view, onNav, onSymbol, onOpenCmd,
   const dateStr = clock.toLocaleDateString("en-US", { month: "short", day: "2-digit", year: "numeric" }).toUpperCase();
 
   return (
-    <header className="flex items-center gap-0 h-9 min-w-0 bg-[#0a0a0a] border-b border-border shrink-0">
+    <header className="relative z-40 flex items-center gap-0 h-9 min-w-0 bg-[#0a0a0a] border-b border-border shrink-0">
       <div className="flex shrink-0 items-center gap-2 px-2 sm:px-3 h-full border-r border-border bg-[hsl(38,95%,50%)] sm:min-w-[140px]">
         <Terminal className="w-3.5 h-3.5 text-black" strokeWidth={2.5} />
         <span className="hidden sm:inline font-terminal text-[10px] font-extrabold uppercase tracking-[0.08em] text-black">LiOS Terminal</span>
@@ -381,6 +382,11 @@ export default function TopBar({ activeSymbol, view, onNav, onSymbol, onOpenCmd,
         {(isFocused || searchNotice) && searchVal.trim() && (searchResults.length === 0 || completedSearch?.trim().toUpperCase() !== searchVal.trim().toUpperCase()) && (
           <div id="lios-topbar-lookup-status" role="status" aria-live="polite" className="absolute left-0 top-full z-40 w-72 max-w-[90vw] border border-border bg-[#090909] px-3 py-2 font-ui text-xs leading-relaxed text-muted-foreground">
             {searchNotice ?? (searchingSecurity ? "Searching permitted security listings…" : completedSearch?.trim().toUpperCase() === searchVal.trim().toUpperCase() && searchResults.length === 0 ? "No matching securities returned by the source. Nothing was selected." : "Select a returned security. GO only opens one exact ticker match.")}
+            {!searchNotice && !searchingSecurity && completedSearch?.trim().toUpperCase() === searchVal.trim().toUpperCase() && searchResults.length === 0 && (
+              <div onMouseDown={(event) => event.preventDefault()}>
+                <ReferenceUniverseLoadPrompt compact />
+              </div>
+            )}
           </div>
         )}
       </form>

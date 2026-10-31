@@ -1,7 +1,11 @@
-/** Bounded, read-only Wikimedia Commons CC0 discovery for opt-in LiOS image search. */
-import type { CommonsCandidate } from "../shared/commonsMedia";
+/**
+ * Bounded, read-only Wikimedia Commons discovery. Two modes share one parser:
+ * the strict CC0-only mode feeds the build-time bundled-media importer, and the
+ * display mode (runtime News/Pulse context illustrations) also accepts public
+ * domain, CC BY and CC BY-SA, which are only ever shown with credit.
+ */
+import { commonsLicenseRank, commonsLicenseUrl, type CommonsCandidate, type CommonsLicense } from "../shared/commonsMedia";
 const COMMONS_API = "https://commons.wikimedia.org/w/api.php";
-const CC0_URL = "https://creativecommons.org/publicdomain/zero/1.0/";
 const MAX_BYTES = 4 * 1024 * 1024;
 const MAX_CANDIDATES = 8;
 // Search a broader page because most Commons images are BY/SA rather than CC0.
@@ -57,36 +61,64 @@ function safeTitle(value: unknown): value is string {
     && value.length >= 7 && value.length <= 260 && !/[\r\n<>]/.test(value);
 }
 
-/** Strict CC0 AND canonical waiver URL. Other licenses always need manual review. */
-export function cc0Candidate(page: CommonsFile): CommonsCandidate | null {
+/** Map Commons' license name onto an accepted license; null when not accepted. */
+function acceptedLicense(shortName: string): CommonsLicense | null {
+  const name = shortName.trim().replace(/\s+/g, " ");
+  const lower = name.toLowerCase();
+  if (lower === "cc0" || lower === "cc0 1.0") return "CC0 1.0";
+  if (lower === "public domain") return "Public domain";
+  const match = /^cc (by|by-sa) (2\.0|2\.5|3\.0|4\.0)$/i.exec(name);
+  return match ? (`CC ${match[1].toUpperCase()} ${match[2]}` as CommonsLicense) : null;
+}
+
+/** Does the published license URL equal the canonical deed for this license? */
+function licenseUrlMatches(license: CommonsLicense, published: string): boolean {
+  const expected = commonsLicenseUrl(license);
+  if (expected === null) return published === "" ; // public domain has no deed
+  if (!expected) return false;
+  let url: URL;
+  try { url = new URL(published); } catch { return false; }
+  if (!["http:", "https:"].includes(url.protocol) || url.hostname !== "creativecommons.org"
+    || url.search || url.hash || url.username || url.password) return false;
+  // Commons sometimes publishes the HTTP form or a /deed.en suffix of the same deed.
+  const canonical = new URL(expected).pathname;
+  return [canonical, canonical.replace(/\/$/, ""), canonical + "deed.en"].includes(url.pathname);
+}
+
+/**
+ * Accepts only explicit, canonical license metadata. `cc0Only` is the strict
+ * mode; otherwise public domain, CC BY and CC BY-SA are also accepted. NonFree,
+ * NC/ND and unknown licenses are always refused.
+ */
+export function commonsCandidate(page: CommonsFile, options: { cc0Only?: boolean } = {}): CommonsCandidate | null {
   const info = page.imageinfo?.[0];
   if (!safeTitle(page.title) || !info || !validCommonsPage(info.descriptionurl)) return null;
-  if (!["cc0", "cc0 1.0"].includes(metadata(info.extmetadata, "LicenseShortName").toLowerCase())) return null;
+  const license = acceptedLicense(metadata(info.extmetadata, "LicenseShortName"));
+  if (!license || (options.cc0Only && license !== "CC0 1.0")) return null;
   if (metadata(info.extmetadata, "NonFree").toLowerCase() === "true") return null;
-  const license = metadata(info.extmetadata, "LicenseUrl");
-  // Commons sometimes publishes the canonical CC0 deed URL as HTTP or with
-  // /deed.en. Require exact CC0 host/path; never downgrade to BY/BY-SA.
-  let licenseUrl: URL;
-  try { licenseUrl = new URL(license); } catch { return null; }
-  if (!["http:", "https:"].includes(licenseUrl.protocol)
-    || licenseUrl.hostname !== "creativecommons.org"
-    || !["/publicdomain/zero/1.0", "/publicdomain/zero/1.0/", "/publicdomain/zero/1.0/deed.en"].includes(licenseUrl.pathname)
-    || licenseUrl.search || licenseUrl.hash || licenseUrl.username || licenseUrl.password) return null;
+  if (!licenseUrlMatches(license, metadata(info.extmetadata, "LicenseUrl"))) return null;
   const mime = info.mime;
   if (!["image/jpeg", "image/png", "image/webp", "image/avif"].includes(mime ?? "")) return null;
   const previewUrl = info.thumburl;
   if (!safeUploadUrl(previewUrl)) return null;
-  const creator = metadata(info.extmetadata, "Attribution") ||
-    metadata(info.extmetadata, "Artist") || metadata(info.extmetadata, "Credit") || "Commons contributor (see file page)";
+  const credit = metadata(info.extmetadata, "Attribution") ||
+    metadata(info.extmetadata, "Artist") || metadata(info.extmetadata, "Credit");
+  // CC BY and CC BY-SA require a credit; never invent one for them.
+  if (!credit && license !== "CC0 1.0" && license !== "Public domain") return null;
   return {
     fileTitle: page.title,
     filePage: info.descriptionurl,
     previewUrl,
-    creator,
-    license: "CC0 1.0",
-    licenseUrl: CC0_URL,
+    creator: credit || "Commons contributor (see file page)",
+    license,
+    licenseUrl: commonsLicenseUrl(license) ?? null,
     mime: mime as CommonsCandidate["mime"],
   };
+}
+
+/** Strict CC0 AND canonical waiver URL (bundled-media importer). */
+export function cc0Candidate(page: CommonsFile): CommonsCandidate | null {
+  return commonsCandidate(page, { cc0Only: true });
 }
 
 export function commonsQuery(params: Record<string, string>): string {
@@ -116,25 +148,48 @@ async function fetchCommons(url: string, requester: FetchLike): Promise<CommonsP
   return JSON.parse(text) as CommonsPayload;
 }
 
-function candidates(payload: CommonsPayload): CommonsCandidate[] {
+function candidates(payload: CommonsPayload, options: { cc0Only?: boolean }): CommonsCandidate[] {
   return Object.values(payload.query?.pages ?? {})
-    .map(cc0Candidate).filter((item): item is CommonsCandidate => item !== null).slice(0, MAX_CANDIDATES);
+    .map(page => commonsCandidate(page, options)).filter((item): item is CommonsCandidate => item !== null)
+    // No-credit grants first, then CC BY, then CC BY-SA; stable otherwise.
+    .sort((a, b) => commonsLicenseRank(a.license) - commonsLicenseRank(b.license))
+    .slice(0, MAX_CANDIDATES);
 }
 
-export async function searchCommonsCC0(term: string, requester: FetchLike = fetch): Promise<CommonsCandidate[]> {
+function searchUrl(term: string): string {
   const q = term.trim();
   if (q.length < 3 || q.length > 100) throw new Error("Search must be between 3 and 100 characters.");
-  const url = commonsQuery({ generator: "search", gsrsearch: q,
+  // filetype:bitmap keeps results to raster photos (no PDFs, SVG logos or audio).
+  return commonsQuery({ generator: "search", gsrsearch: `${q} filetype:bitmap`,
     gsrnamespace: "6", gsrlimit: String(DISCOVERY_PAGE_LIMIT) });
-  return candidates(await fetchCommons(url, requester));
 }
 
-export async function lookupCommonsCC0(title: string, requester: FetchLike = fetch): Promise<CommonsCandidate> {
+/** Strict CC0-only search for the build-time bundled-media importer. */
+export async function searchCommonsCC0(term: string, requester: FetchLike = fetch): Promise<CommonsCandidate[]> {
+  return candidates(await fetchCommons(searchUrl(term), requester), { cc0Only: true });
+}
+
+/** Runtime display search: CC0, public domain, CC BY and CC BY-SA, shown with credit. */
+export async function searchCommonsImages(term: string, requester: FetchLike = fetch): Promise<CommonsCandidate[]> {
+  return candidates(await fetchCommons(searchUrl(term), requester), {});
+}
+
+async function lookup(title: string, requester: FetchLike, options: { cc0Only?: boolean }): Promise<CommonsCandidate> {
   if (!safeTitle(title)) throw new Error("Choose a specific Commons File: title.");
-  const url = commonsQuery({ titles: title });
-  const list = candidates(await fetchCommons(url, requester));
+  const list = candidates(await fetchCommons(commonsQuery({ titles: title }), requester), options);
   const match = list.find(item => item.fileTitle === title);
-  if (!match) throw new Error("File has no confirmed CC0 metadata or supported image preview.");
+  if (!match) throw new Error(options.cc0Only
+    ? "File has no confirmed CC0 metadata or supported image preview."
+    : "File has no confirmed accepted license or supported image preview.");
   return match;
+}
+
+export function lookupCommonsCC0(title: string, requester: FetchLike = fetch): Promise<CommonsCandidate> {
+  return lookup(title, requester, { cc0Only: true });
+}
+
+/** Re-verifies a saved illustration against CURRENT license metadata. */
+export function lookupCommonsImage(title: string, requester: FetchLike = fetch): Promise<CommonsCandidate> {
+  return lookup(title, requester, {});
 }
 

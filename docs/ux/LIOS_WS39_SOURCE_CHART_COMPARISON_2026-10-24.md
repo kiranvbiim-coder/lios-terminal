@@ -23,7 +23,7 @@ node --import tsx --test client/src/lib/artifactChartContext.test.ts client/src/
 npm run check
 npm run test:p4
 npm run test:ux
-npm run acceptance:ux
+npm run validate:visual-environments
 ```
 
 **Not yet qualified until observed:** exact-head cross-platform hosted CI, signed-in exact P4 revision/owner isolation, source rights and revoked access negative cases, 200% zoom, narrow-layout keyboard/screen reader traversal for 100 series, long table scrolling, chart-legend hiding vs independent comparison, real ECharts + Recharts mounted browser acceptance, user accessibility tests, independent review and P14/SP release approval.

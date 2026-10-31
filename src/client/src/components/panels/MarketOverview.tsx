@@ -3,6 +3,7 @@ import { useState, useEffect } from "react";
 import { useQuotes, useIndexSparklines } from "@/lib/useFinance";
 import { formatPrice, pctClass, INDICES } from "@/lib/finance";
 import DataStatusBadge from "@/components/data/DataStatusBadge";
+import ReferenceUniverseLoadPrompt from "@/components/data/ReferenceUniverseLoadPrompt";
 import { Skeleton } from "@/components/ui/skeleton";
 import type { ViewMode } from "@/lib/terminalTypes";
 import { LineChart, Line, ResponsiveContainer } from "recharts";
@@ -98,6 +99,7 @@ export default function MarketOverview({ activeSymbol, onSymbol, onNav }: Props)
   const [currentPage, setCurrentPage] = useTerminalArtifactState<number>("MarketOverview.currentPage", 1);
   const [dirData, setDirData] = useState<{ items: any[]; total: number; totalPages: number } | null>(null);
   const [dirLoading, setDirLoading] = useState<boolean>(false);
+  const [directoryRevision, setDirectoryRevision] = useState(0);
   const [clocks, setClocks] = useState<any[]>([]);
   const [overlapMessage, setOverlapMessage] = useState<string>("");
 
@@ -241,7 +243,7 @@ export default function MarketOverview({ activeSymbol, onSymbol, onNav }: Props)
     };
     
     fetchDirectory();
-  }, [activeTab, currentPage, directorySearch, selectedSector, selectedAsset]);
+  }, [activeTab, currentPage, directorySearch, selectedSector, selectedAsset, directoryRevision]);
 
   return (
     <div className="h-full flex flex-col gap-px bg-border overflow-hidden">
@@ -480,12 +482,13 @@ export default function MarketOverview({ activeSymbol, onSymbol, onNav }: Props)
                     <th className="py-1 px-3">EXCHANGE</th>
                     <th className="py-1 px-3">SECTOR</th>
                     <th className="py-1 px-3 text-center">REGION</th>
+                    <th className="py-1 px-3">PRICE</th>
                   </tr>
                 </thead>
                 <tbody>
                   {dirData.items.map((stock) => (
                     <tr
-                      key={stock.symbol}
+                      key={`${stock.symbol}:${stock.exchange ?? ""}`}
                       onClick={() => onSymbol(stock.symbol)}
                       className={`border-b border-border/30 hover:bg-white/5 cursor-pointer font-terminal text-[10px] text-foreground transition-colors group ${
                         stock.symbol === activeSymbol ? "bg-amber-500/10 border-l-2 border-l-[hsl(38,95%,55%)] font-semibold" : ""
@@ -506,6 +509,9 @@ export default function MarketOverview({ activeSymbol, onSymbol, onNav }: Props)
                       <td className="py-1.5 px-3 text-center font-semibold text-muted-foreground">
                         {stock.region || "—"}
                       </td>
+                      <td className="py-1.5 px-3 text-muted-foreground/70 whitespace-nowrap">
+                        Reference only — no live price
+                      </td>
                     </tr>
                   ))}
                 </tbody>
@@ -513,6 +519,7 @@ export default function MarketOverview({ activeSymbol, onSymbol, onNav }: Props)
             ) : (
               <div className="p-8 text-center text-muted-foreground font-terminal text-[10px]">
                 No matching directory entries found.
+                <ReferenceUniverseLoadPrompt onLoaded={() => setDirectoryRevision(r => r + 1)} />
               </div>
             )}
           </div>

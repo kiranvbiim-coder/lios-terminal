@@ -111,7 +111,6 @@ Final P14 certification downloads both assets, re-validates the report, verifies
 
 The following are useful but insufficient by themselves:
 
-- `npm run acceptance:flagship`;
 - `npm run acceptance:flagship:live`;
 - `npm run acceptance:flagship:live-service`;
 - unit/contract tests;

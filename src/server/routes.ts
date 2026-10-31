@@ -57,7 +57,6 @@ import { registerContentRoutes } from "./contentRoutes";
 import { registerClientRoutes } from "./clientRoutes";
 import { registerPersonaPreferenceRoutes } from "./personaPreferenceRoutes";
 import { registerTrialRoutes } from "./trialAccess";
-import { registerPublicRoutes } from "./publicRoutes";
 import { registerEnvironmentSetupRoutes } from "./environmentSetupRoutes";
 import { resolvePackagedNativeRuntimeBundleAuthority } from "./nativeRuntimeBundle";
 import { configureRuntimeDoctorProvisioning } from "./runtimeDoctorTool";
@@ -255,11 +254,8 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   registerP9AutomationRoutes(app);
   registerP13ExtensionRoutes(app);
 
-  // Deliberately small anonymous surface: marketing/product preview support
-  // and explicit lead capture only. The public entry experience is
-  // non-executable; research, data, AI, engines, Projects, Artifacts and
-  // connectors require an authenticated LiOS principal.
-  registerPublicRoutes(app);
+  // No unauthenticated write surface exists; research, data, AI, engines,
+  // Projects, Artifacts and connectors require an authenticated LiOS principal.
   registerProductionControlRoutes(app);
 
   // Everything else requires a signed-in internal account, EXCEPT the path
@@ -385,13 +381,21 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       return q.price === 0 && q.status?.isFallback === true;
     });
   }
+  // An empty quote list or empty price series (nothing selected, consent pending, provider miss) must not be pinned
+  // in the browser cache: choosing a source in Connections has to take effect on the next request, not in 30 minutes.
+  function isEmptyMarketAnswer(req: { path?: string }, data: unknown): boolean {
+    if (Array.isArray(data)) return data.length === 0 && req.path === "/api/finance/quotes";
+    if (!data || typeof data !== "object") return false;
+    const series = data as { bars?: unknown; status?: { reason?: unknown } };
+    return (Array.isArray(series.bars) && series.bars.length === 0) || series.status?.reason !== undefined;
+  }
 
   // Wrap handlers and set Cache-Control headers to let browser cache responses
   const handleFinance = <T>(loader: (req: any) => Promise<T>, cacheSecs = 60) => {
     return async (req: any, res: any) => {
       try {
         const data = await loader(req);
-        const secs = hasHardFallback(data) ? HARD_FALLBACK_CACHE_SECS : cacheSecs;
+        const secs = hasHardFallback(data) || isEmptyMarketAnswer(req, data) ? HARD_FALLBACK_CACHE_SECS : cacheSecs;
         res.set("Cache-Control", `public, max-age=${secs}, stale-while-revalidate=${secs * 2}`);
         res.json(data);
       } catch (error) {
@@ -411,8 +415,11 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   // Cross-Domain Intelligence Fusion (Phase 4): live FEDFUNDS + live sector
   // ETF history, joined server-side; the client's own real sector exposure
   // is joined on top of this client-side (see CrossDomainFusionPanel.tsx).
-  app.get("/api/finance/rate-cycle-impact", handleFinance(async (req) => {
-    const sector = String(req.query.sector || "Technology");
+  app.get("/api/finance/rate-cycle-impact", (req, res, next) => {
+    if (!String(req.query.sector ?? "").trim()) { res.status(400).json({ error: "sector is required" }); return; }
+    next();
+  }, handleFinance(async (req) => {
+    const sector = String(req.query.sector).trim();
     return getRateCycleImpact(sector);
   }, 3600));
 
@@ -437,8 +444,11 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     return getQuotes(symbols);
   }, 90));
 
-  app.get("/api/finance/ohlcv", handleFinance(async (req) => {
-    const symbol = String(req.query.symbol || "AAPL").toUpperCase();
+  app.get("/api/finance/ohlcv", (req, res, next) => {
+    if (!String(req.query.symbol ?? "").trim()) { res.status(400).json({ error: "symbol is required" }); return; }
+    next();
+  }, handleFinance(async (req) => {
+    const symbol = String(req.query.symbol).trim().toUpperCase();
     const range = String(req.query.range || "1Y");
     const interval = String(req.query.interval || "1d") as "5m" | "15m" | "1h" | "1d";
     return getOHLCVSeries(symbol, range, interval);
@@ -482,8 +492,11 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       : getNews(requested.symbol, requested.query), 300)(req, res);
   });
 
-  app.get("/api/finance/news/ai-smart-search", handleFinance(async (req) => {
-    const q = String(req.query.q || req.query.symbol || "NUVAMA").trim();
+  app.get("/api/finance/news/ai-smart-search", (req, res, next) => {
+    if (!String(req.query.q ?? req.query.symbol ?? "").trim()) { res.status(400).json({ error: "q or symbol is required" }); return; }
+    next();
+  }, handleFinance(async (req) => {
+    const q = String(req.query.q || req.query.symbol).trim();
     return getGeminiNewsAnalysis(q);
   }, 300));
 
@@ -524,8 +537,11 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     }
   });
 
-  app.get("/api/finance/peers", handleFinance(async (req) => {
-    const symbol = String(req.query.symbol || "AAPL").toUpperCase();
+  app.get("/api/finance/peers", (req, res, next) => {
+    if (!String(req.query.symbol ?? "").trim()) { res.status(400).json({ error: "symbol is required" }); return; }
+    next();
+  }, handleFinance(async (req) => {
+    const symbol = String(req.query.symbol).trim().toUpperCase();
     return getPeers(symbol);
   }));
 
@@ -769,246 +785,11 @@ Available VIEW_MODE choices: market, quote, chart, news, agent, screener, watchl
       auditLog("chat_assistant_message", { contentLength: fullContent.length, provider });
       res.write(`data: ${JSON.stringify({ done: true })}\n\n`);
     } catch (err) {
-      console.warn("All AI providers failed, executing local superpower fallback engine:", err);
-      const cleanMsg = message.toUpperCase();
-      let matchedSymbol = "AAPL";
-
-      const DEGRADED_NOTICE = "> ⚠️ **AI analysis engine offline** — all configured AI providers are unreachable right now, so this is a degraded local fallback. Figures above are live market data; anything requiring AI-assisted modeling is unavailable until a provider is back online.";
-
-      const symbols = [
-        "AAPL", "MSFT", "NVDA", "TSLA", "GOOGL", "AMZN", "META", "BRK-B",
-        "JPM", "BAC", "GS", "MS", "V", "MA", "PYPL", "XOM", "CVX", "COP", "SLB",
-        "UNH", "JNJ", "PFE", "KO", "PEP", "WMT", "HD", "DIS", "NFLX", "CRM",
-        "ADBE", "AMD", "INTC", "QCOM", "TXN", "AVGO", "MU", "AMAT", "ASML",
-        "RELIANCE.NS", "TCS.NS", "HDFCBANK.NS", "INFY.NS", "ICICIBANK.NS",
-        "SBIN.NS", "TATAMOTORS.NS", "BHARTIARTL.NS", "LT.NS", "ITC.NS",
-        "7203.T", "9984.T", "6758.T", "3690.HK", "0700.HK", "9988.HK",
-        "BTC-USD", "ETH-USD", "SOL-USD", "XRP-USD"
-      ];
-
-      // Exact-token match on word boundaries -- a plain .includes() substring
-      // check previously matched e.g. the ticker "V" against any message
-      // containing the letter sequence "V" (like the word "DELIVERABLE"),
-      // firing a completely unrelated Visa response.
-      const escapeRegex = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-      for (const sym of symbols) {
-        const baseSym = sym.split(".")[0].split("-")[0];
-        const symPattern = new RegExp(`\\b${escapeRegex(sym)}\\b`);
-        const basePattern = new RegExp(`\\b${escapeRegex(baseSym)}\\b`);
-        if (symPattern.test(cleanMsg) || basePattern.test(cleanMsg)) {
-          matchedSymbol = sym;
-          break;
-        }
-      }
-
-      let viewMode: string | null = null;
-      if (cleanMsg.match(/\b(CHART|GRAPH|PLOT|GP)\b/)) viewMode = "chart";
-      else if (cleanMsg.match(/\b(DCF|LBO|DUPONT|VALUE|VALUATION|INSOLVENCY|ALTMAN|Z-SCORE)\b/)) viewMode = "valuation";
-      else if (cleanMsg.match(/\b(MONTE|CARLO|SIMULATION|SIMULATE|MCST)\b/)) viewMode = "montecarlo";
-      else if (cleanMsg.match(/\b(OPTION|OPTIONS|BLACK|SCHOLES|STRIKE|CALL|PUT|OPCV)\b/)) viewMode = "options";
-      else if (cleanMsg.match(/\b(FILING|FILINGS|PATTERN|PATTERNS|10-K|10-Q)\b/)) viewMode = "filingintel";
-      else if (cleanMsg.match(/\b(FRACTAL|CHAOS|GARCH|FORECAST)\b/)) viewMode = "fractal";
-      else if (cleanMsg.match(/\b(QUANTUM|TUNNEL|BARRIER)\b/)) viewMode = "quantum";
-      else if (cleanMsg.match(/\b(FX|FOREX|CURRENCY|CURRENCIES)\b/)) viewMode = "forex";
-      else if (cleanMsg.match(/\b(NEWS|HEADLINE|HEADLINES)\b/)) viewMode = "news";
-      else if (cleanMsg.match(/\b(SCREENER|EQS)\b/)) viewMode = "screener";
-      else if (cleanMsg.match(/\b(WATCHLIST|WLT)\b/)) viewMode = "watchlist";
-      else if (cleanMsg.match(/\b(ALERT|ALERTS|MON)\b/)) viewMode = "alerts";
-      else if (cleanMsg.match(/\b(ECONOMIC|ECONOMICS|ECST|MACRO|FED|RATES|INFLATION)\b/)) viewMode = "economics";
-      else if (cleanMsg.match(/\b(PORTFOLIO|PRTU|HOLDINGS)\b/)) viewMode = "portfolio";
-      else if (cleanMsg.match(/\b(CORRELATION|MATRIX|CORR)\b/)) viewMode = "correlation";
-      else if (cleanMsg.match(/\b(ISING|HERD|MAGNET)\b/)) viewMode = "ising";
-      else if (cleanMsg.match(/\b(OPTIMIZER|OPTIMIZE|OPTZ)\b/)) viewMode = "optimizer";
-      else if (cleanMsg.match(/\b(FIXED|INCOME|SOVEREIGN|YIELD|YILD)\b/)) viewMode = "fixedincome";
-      else if (cleanMsg.match(/\b(RISK|SPILLOVER|NETWORK)\b/)) viewMode = "risknetwork";
-      else if (cleanMsg.match(/\b(HAWKES|POINT|EXCITE)\b/)) viewMode = "hawkes";
-      else if (cleanMsg.match(/\b(ENTROPY|SHANNON|LEAD)\b/)) viewMode = "entropy";
-      else if (cleanMsg.match(/\b(FLOW|SYNTHESIS)\b/)) viewMode = "flow";
-      else if (cleanMsg.match(/\b(SENTIMENT|SENT|FEAR|GREED|FNG|FEAR.GREED)\b/)) viewMode = "sentiment";
-      else if (cleanMsg.match(/\b(STRESS|STRS|SCENARIO|SHOCK|CRISIS|CRASH|RECESSION)\b/)) viewMode = "macrostress";
-
-      let msg = "";
-      try {
-        const quotes = await getQuotes([matchedSymbol]);
-        const quote = quotes.find((q) => q.symbol === matchedSymbol);
-        
-        if (quote) {
-          const sign = quote.change >= 0 ? "+" : "";
-          const currency = quote.symbol.includes(".NS") ? "₹" : quote.symbol.includes(".T") ? "¥" : quote.symbol.includes(".HK") ? "HK$" : "$";
-          const mc = quote.marketCap ? `${(quote.marketCap / 1e9).toFixed(1)}B` : "N/A";
-          
-          if (viewMode === "chart") {
-            let rsiText = "N/A (insufficient price history)";
-            let macdText = "N/A (insufficient price history)";
-            let supportResistanceText = "N/A (insufficient price history)";
-            try {
-              const bars = await getOHLCV(matchedSymbol, "6M", "1d");
-              const closes = bars.map((b) => b.close);
-              const rsi = calculateRSI(closes);
-              if (rsi !== null) {
-                const rsiLabel = rsi >= 70 ? "Overbought" : rsi <= 30 ? "Oversold" : "Neutral";
-                rsiText = `${rsi.toFixed(1)} (${rsiLabel} momentum)`;
-              }
-              const macd = calculateMACDCrossover(closes);
-              if (macd) {
-                const histText = `${macd.histogram >= 0 ? "+" : ""}${macd.histogram.toFixed(2)}`;
-                macdText = macd.crossover === "bullish"
-                  ? `Bullish crossover (histogram ${histText})`
-                  : macd.crossover === "bearish"
-                  ? `Bearish crossover (histogram ${histText})`
-                  : `No active crossover (histogram ${histText})`;
-              }
-              if (bars.length >= 5) {
-                const recent = bars.slice(-20);
-                const recentLow = Math.min(...recent.map((b) => b.low));
-                const recentHigh = Math.max(...recent.map((b) => b.high));
-                supportResistanceText = `Support near ${currency}${recentLow.toFixed(2)} (${recent.length}-day low), Resistance near ${currency}${recentHigh.toFixed(2)} (${recent.length}-day high)`;
-              }
-            } catch (e) {
-              console.error("Local engine OHLCV fetch failure:", e);
-            }
-            msg = `### 📈 TECHNICAL ANALYSIS DESK: ${quote.symbol} (${quote.name})
-- **Current Spot**: ${currency}${quote.price} (${sign}${quote.changePercent}%)
-- **52-Week Range**: ${currency}${quote.low52} - ${currency}${quote.high52}
-- **Volume / Avg**: ${(quote.volume / 1e6).toFixed(1)}M / ${(quote.avgVolume / 1e6).toFixed(1)}M
-- **Signal Indicators** (computed from live daily price history):
-  * **RSI (14)**: ${rsiText}
-  * **MACD (12,26,9)**: ${macdText}
-  * **Support / Resistance**: ${supportResistanceText}
-
-<<NAVIGATE: ${quote.symbol}, chart>>`;
-          } else if (viewMode === "valuation") {
-            const revenueText = quote.revenue ? `${currency}${(quote.revenue / 1e9).toFixed(2)}B` : "N/A";
-            msg = `### 📊 VALUATION ANALYSIS DESK: ${quote.symbol} (${quote.name})
-- **Exchange / Sector**: ${quote.exchange} / ${quote.sector ?? "N/A"}
-- **Market Capitalization**: ${currency}${mc}
-- **Trailing P/E**: ${quote.pe ?? "N/A"}x | **Earnings Per Share (EPS)**: ${currency}${quote.eps ?? "N/A"}
-- **Revenue (TTM)**: ${revenueText}
-
-${DEGRADED_NOTICE} DCF/DuPont model outputs require AI-assisted modeling and are not shown here.
-
-<<NAVIGATE: ${quote.symbol}, valuation>>`;
-          } else if (viewMode === "options") {
-            msg = `### 🧪 OPTIONS DESK: ${quote.symbol} (${quote.name})
-- **Spot Price**: ${currency}${quote.price} (${sign}${quote.changePercent}%)
-
-${DEGRADED_NOTICE} Option chain pricing, implied volatility, and Greeks require live options market data plus AI-assisted modeling, neither of which is available in this fallback mode.
-
-<<NAVIGATE: ${quote.symbol}, options>>`;
-          } else if (viewMode === "risknetwork") {
-            msg = `### 🕸️ RISK SPILLOVER NETWORK: ${quote.symbol} (${quote.name})
-- **Current Spot**: ${currency}${quote.price} (${sign}${quote.changePercent}%)
-
-${DEGRADED_NOTICE} Cross-asset correlation and VaR spillover analysis require AI-assisted modeling and are not shown here.
-
-<<NAVIGATE: ${quote.symbol}, risknetwork>>`;
-          } else if (viewMode === "montecarlo") {
-            let volText = "N/A (insufficient price history)";
-            try {
-              const bars = await getOHLCV(matchedSymbol, "1Y", "1d");
-              const closes = bars.map((b) => b.close);
-              if (closes.length >= 30) {
-                const logReturns: number[] = [];
-                for (let i = 1; i < closes.length; i++) logReturns.push(Math.log(closes[i] / closes[i - 1]));
-                const mean = logReturns.reduce((a, b) => a + b, 0) / logReturns.length;
-                const variance = logReturns.reduce((a, r) => a + (r - mean) ** 2, 0) / (logReturns.length - 1);
-                const annualVol = Math.sqrt(variance * 252);
-                volText = `${(annualVol * 100).toFixed(1)}% (realized, trailing ${Math.round(closes.length / 21)}mo)`;
-              }
-            } catch (e) {
-              console.error("Local engine OHLCV fetch failure:", e);
-            }
-            msg = `### 🎲 MONTE CARLO PROBABILITY DESK: ${quote.symbol} (${quote.name})
-- **Current Price**: ${currency}${quote.price}
-- **Realized Volatility (Ann.)**: ${volText}
-
-${DEGRADED_NOTICE} Simulated price-path projections require AI-assisted modeling and are not shown here.
-
-<<NAVIGATE: ${quote.symbol}, montecarlo>>`;
-          } else if (viewMode) {
-            msg = `### 💻 REDIRECTING TO PANEL: ${viewMode.toUpperCase()} FOR ${quote.symbol}
-Loading active datasets for ${quote.name}...
-
-<<NAVIGATE: ${quote.symbol}, ${viewMode}>>`;
-          } else {
-            msg = `### 📋 DESK DESCRIPTION: ${quote.symbol} (${quote.name})
-- **Exchange / Sector**: ${quote.exchange} / ${quote.sector ?? "N/A"}
-- **Price**: ${currency}${quote.price} (${sign}${quote.changePercent}%)
-- **Market Cap**: ${currency}${mc}
-- **52-Week Range**: ${currency}${quote.low52} - ${currency}${quote.high52}
-
-Use commands like "chart ${quote.symbol}", "dcf ${quote.symbol}", or "options ${quote.symbol}" to run deep-dives.
-
-<<NAVIGATE: ${quote.symbol}, quote>>`;
-          }
-        }
-      } catch (e) {
-        console.error("Local engine quote fetch failure:", e);
-      }
-
-      if (!msg) {
-        if (viewMode === "economics") {
-          msg = `### 🏛️ MACROECONOMIC WATCH: POLICY DESK
-
-${DEGRADED_NOTICE} Live macro figures (Fed funds rate, CPI, payrolls, GDP, yield-curve spread) require an AI provider and are not shown here — open the Economics panel directly for the latest connected data.
-
-<<NAVIGATE: economics>>`;
-        } else if (viewMode === "heatmap") {
-          let moversText = "Movers unavailable (data fetch failed).";
-          try {
-            const [gainers, losers] = await Promise.all([
-              getMarketMovers("gainers", "US"),
-              getMarketMovers("losers", "US"),
-            ]);
-            const topGainer = gainers[0];
-            const topLoser = losers[0];
-            if (topGainer && topLoser) {
-              moversText = `**Top Advancer**: ${topGainer.symbol} (${topGainer.changePercent >= 0 ? "+" : ""}${topGainer.changePercent.toFixed(1)}%)\n- **Top Decliner**: ${topLoser.symbol} (${topLoser.changePercent.toFixed(1)}%)`;
-            }
-          } catch (e) {
-            console.error("Local engine market movers fetch failure:", e);
-          }
-          msg = `### 🗺️ GLOBAL HEAT MAP PANEL
-- ${moversText}
-
-<<NAVIGATE: heatmap>>`;
-        } else if (viewMode) {
-          msg = `### 💻 LOADING PANEL: ${viewMode.toUpperCase()}
-Navigating terminal desk to requested pane.
-
-<<NAVIGATE: ${viewMode}>>`;
-        } else {
-          if (cleanMsg.includes("YIELD CURVE")) {
-            msg = `### 🏛️ MACRO OUTLOOK: YIELD CURVE INVERSION
-A yield curve inversion occurs when short-term interest rates exceed long-term rates. Historically, a sustained inversion of the 10Y-2Y spread is a highly reliable recession indicator, preceding economic downturns by 12-18 months.
-
-${DEGRADED_NOTICE} The current spread reading requires an AI provider and is not shown here — open the Economics panel directly for the latest connected data.
-
-<<NAVIGATE: economics>>`;
-          } else if (cleanMsg.includes("VIX")) {
-            msg = `### 📉 CBOE VOLATILITY INDEX (VIX) ANALYSIS
-The VIX measures implied volatility of S&P 500 options over the next 30 days. 
-* VIX > 25 indicates high uncertainty, suggesting rising hedging demand and downside risk.
-* VIX < 15 signals complacency or broad stability.
-
-<<NAVIGATE: market>>`;
-          } else {
-            msg = `### 💻 LIMURIA TERMINAL ASSISTANT
-Welcome to the Limuria Intelligence Terminal command engine. I can help you analyze assets, check valuations, and simulate portfolios.
-
-**Try asking me**:
-* "Chart NVDA" or "Analyze reliance"
-* "DCF Apple" or "Simulate TSLA"
-* "Explain yield curve" or "Show macroeconomic status"
-
-<<NAVIGATE: market>>`;
-          }
-        }
-      }
-
-      await storage.addChatMessage(req.user!.id, { role: "assistant", content: msg });
-      auditLog("chat_assistant_fallback_message", { contentLength: msg.length });
-      res.write(`data: ${JSON.stringify({ text: msg, done: true })}\n\n`);
+      // No AI provider answered. Never fabricate an answer or persist one as an
+      // assistant message: report the unavailable state explicitly.
+      console.warn("All AI providers failed for /api/chat:", err);
+      auditLog("chat_ai_unavailable", {});
+      res.write(`data: ${JSON.stringify({ unavailable: true, error: "No AI provider answered this request and no answer was generated. Check the AI provider connection in Settings, then ask again. Nothing was saved as an assistant reply.", done: true })}\n\n`);
     }
 
     res.end();

@@ -11,19 +11,17 @@ import { resolveFamilyProviderOrder } from "./dataStackService";
 import type { DataStackPin, DataFamily } from "@shared/dataStackPins";
 import type { ConnectorDefinition, ConnectorRegistrySnapshot, ConnectorRuntimeReport } from "@shared/connectorRegistry";
 import { getRequestIdentity } from "./requestContext";
+import { isRetailSoftwareProfile } from "./retailSoftwareProfile";
+import {
+  CHOOSE_MARKET_SOURCE_ACTION,
+  MARKET_CONSENT_MESSAGE,
+  MARKET_DATA_SOURCE_IDS,
+  decideMarketDataAccess,
+  type MarketDataGapReason,
+} from "@shared/marketDataAccess";
 
-const PRICE_ROUTER_CONNECTOR_IDS = new Set([
-  "yahoo_finance",
-  "bse_india",
-  "coingecko",
-  "stooq",
-  "twelve_data",
-  "tiingo",
-  "eodhd",
-  "polygon",
-  "alpha_vantage",
-  "coinmarketcap",
-]);
+const ACCEPT_MARKET_CONSENT_ACTION = "Accept the market-data consent in Connections";
+const PRICE_ROUTER_CONNECTOR_IDS: ReadonlySet<string> = new Set(MARKET_DATA_SOURCE_IDS);
 
 function executionPathCompatible(request: UniversalDataRequest, connector: ConnectorDefinition): boolean {
   // A catalog definition is not an executable connector, even if its id
@@ -120,6 +118,8 @@ function needsConnectionState(state: ConnectorRuntimeReport["state"]): boolean {
 export interface UniversalDataPlanningOptions {
   globalStackOrder?: readonly string[];
   pins?: readonly DataStackPin[];
+  /** Set when the signed-in person's own selection/consent, not the provider, is why prices cannot be served. */
+  marketAccessGap?: MarketDataGapReason;
 }
 
 export function planUniversalDataFromSnapshot(
@@ -223,6 +223,9 @@ export function planUniversalDataFromSnapshot(
   for (const candidate of scoped.filter((item) => item.requiresConnection).slice(0, 4)) {
     recoveryActions.push(`Connect ${candidate.connectorId}`);
   }
+  if (request.capability === "prices" && availability !== "ready" && options.marketAccessGap) {
+    recoveryActions.unshift(options.marketAccessGap === "no_source_selected" ? CHOOSE_MARKET_SOURCE_ACTION : ACCEPT_MARKET_CONSENT_ACTION);
+  }
   if (availability !== "ready") {
     recoveryActions.push("Open Connection Center");
     if (request.capability !== "security_resolution") recoveryActions.push("Import compatible data");
@@ -262,9 +265,18 @@ export async function planUniversalDataRequest(
             }),
       }
     : snapshot;
+  const access = selected
+    ? decideMarketDataAccess({
+        selectedConnectorIds: identity?.selectedConnectorIds ?? [],
+        retail: isRetailSoftwareProfile(),
+        communityYahooConsent: identity?.communityYahooConsent === true,
+        publicFillerConsent: identity?.publicFillerConsent === true,
+      })
+    : null;
   return planUniversalDataFromSnapshot(rawRequest, scopedSnapshot, {
     globalStackOrder: options.globalStackOrder ?? identity?.providerStackOrder,
     pins: options.pins ?? identity?.dataStackPins,
+    marketAccessGap: options.marketAccessGap ?? (access && access.state !== "ready" ? access.reason : undefined),
   });
 }
 
@@ -281,6 +293,22 @@ export function explainUniversalDataGap(plan: UniversalDataPlan): {
       providersChecked: providers,
       nextActions: plan.recoveryActions,
       message: `The current LiOS price conversation route cannot establish ${plan.request.pointInTime.mode} point-in-time knowledge. Historical market bars alone do not verify what was known at that time.`,
+    };
+  }
+  if (plan.request.capability === "prices" && plan.recoveryActions.includes(CHOOSE_MARKET_SOURCE_ACTION)) {
+    return {
+      reason: "not_connected",
+      providersChecked: providers,
+      nextActions: plan.recoveryActions,
+      message: `No market-data source is selected for your account. ${CHOOSE_MARKET_SOURCE_ACTION}; LiOS will not use a source you have not selected.`,
+    };
+  }
+  if (plan.request.capability === "prices" && plan.recoveryActions.includes(ACCEPT_MARKET_CONSENT_ACTION)) {
+    return {
+      reason: "not_connected",
+      providersChecked: providers,
+      nextActions: plan.recoveryActions,
+      message: `${MARKET_CONSENT_MESSAGE.replace(" Open Connections.", "")}. ${ACCEPT_MARKET_CONSENT_ACTION}; LiOS will not use it until you do.`,
     };
   }
   if (plan.availability === "source_scope_blocked") {

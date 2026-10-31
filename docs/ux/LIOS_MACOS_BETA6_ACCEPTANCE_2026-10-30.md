@@ -35,3 +35,20 @@ Build: `1.0.0-beta.6`, protected source `6a970cdfd00773f3838978c0ec89d7dfe576317
 ## Defect diagnosed after the first pass
 
 - **News duplicated "Context imagery" slots (root cause found, source fix not yet shipped):** the packaged DOM grew by about four stale `news-image-discovery` sections per minute (1→4→13→21; selecting any story reset it to1). React fibers showed one live component and many orphaned mounts. Cause: `NewsPanel` gave `NewsImageDiscovery` and `NewsMediaPreview` the same sibling key (`selectedItem.url`). When the conditional automatic-context note flipped, React fell to keyed-map reconciliation, matched the wrong same-key sibling, and never deleted the old section. A standalone production-React/Chromium harness reproduced it (original keys:4 sections after six flips; distinct keys:1). Fix on branch `fix/news-keyed-sibling-leak`: keys are `context-image:<url>` and `media-preview:<url>`; typecheck passed. The harness was deleted; there is no permanent DOM regression test because the repo has no DOM test renderer. The installed beta.6 build still contains the defect until rebuilt, so News imagery acceptance stays **failed** for that build. Pointer-selection blocking and empty verified-photo inventory remain separate unresolved items.
+
+## Packaged journeys exercised after the diagnosis (beta.6, isolated profile)
+
+| Area | Result | Evidence / limit |
+| --- | --- | --- |
+| Saved Chat + sidecar Artifact edit | **Passed** | Toggling Stock ticker tape created v2 / 2 revisions; survived Return-to-Chat and a page reload with the checkbox still checked. |
+| Workbench expansion stability | **Passed (not reproduced)** | Expand workspace stayed in Workbench for 7s with Chat intact; the earlier apparent reversion did not recur. Root cause of that one-off is unknown. |
+| Artifact export | **Passed** | Export is disabled until the rights acknowledgement is checked; JSON produced 463 bytes and PDF 6,773 bytes; no renderer errors. Only these two formats were offered for this Artifact; DOCX/XLSX/report editing not exercised. |
+| Encrypted backup | **Passed** | UI saved destination/passphrase; Back up now wrote a 195,124,620-byte `.liosbak` (mode0600, `LIOSBAK1` header); no plaintext Project/account strings found in the file. |
+| Test restore | **Passed** | Scratch-database restore: every table matched. |
+| Real restore into the app | **Blocked** | Requires the desktop's native file chooser and confirmation dialog; CDP cannot drive them. Needs a manual owner step. |
+| Keyboard reachability | **Partial pass** | In the Connections drawer 14 consecutive Tab stops reached backup, device, pairing and navigation controls in logical order, each with a visible focus outline. VoiceOver, zoom, narrow-window and full-app keyboard coverage not tested. |
+| beta.5 -> new-build upgrade | **Not run** | Requires the rebuild that includes PR #402 (and merged main); do not touch the owner's installation before it passes on an isolated profile. |
+| Live AI/data/Telegram, notifications, voice | **Not run** | Deferred by owner until offline acceptance completes; credentials will be entered directly in the app. |
+| Windows | **Not run** | Needs the owner's Windows PC; source CI only. |
+
+The isolated backup folder `/tmp/lios-beta6-backups` holds synthetic data only and is deleted after acceptance.

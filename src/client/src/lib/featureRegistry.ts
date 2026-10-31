@@ -24,10 +24,7 @@ export interface WorkspaceDefinition {
 
 const WORKSPACE_VIEWS: Record<WorkspaceKey, readonly ViewMode[]> = {
   home: ["missioncontrol"],
-  data: [
-    "coveragemap", "clientdata", "datastats", "marketdatafabric", "economicdatafabric",
-    "universefabric", "crossassetfabric", "enginereadiness", "connectors",
-  ],
+  data: ["clientdata"],
   finance: [
     "market", "quote", "chart", "peercomp", "companyfundamentals", "financialstatements",
     "dividends", "economics", "forex", "crossasset", "cryptochain", "yieldcurve", "portfolio", "personalfinance",
@@ -46,31 +43,33 @@ const WORKSPACE_VIEWS: Record<WorkspaceKey, readonly ViewMode[]> = {
     "sentiment", "research", "consensus", "agent", "tradeideas", "morningbrief", "filingintel",
   ],
   intelligence: [
-    "entity", "brain", "decisionengine", "qualitygate", "alerts", "activity", "macrostress",
+    "entity", "brain", "decisionengine", "alerts", "activity", "macrostress",
     "decisionmemory", "crossdomainfusion", "supplychaindashboard",
     "supplychainindicators", "environmentdashboard", "environmentindicators", "globalclimate",
     "carbonintensity", "mediadashboard", "mediaindicators", "tourismdashboard", "tourismindicators",
-    "conflictdetector",
   ],
   outputs: [
-    "workspaces", "spreadsheet", "mnadesk", "integration", "fpa", "publishdesk", "advisory",
+    "workspaces", "spreadsheet", "mnadesk", "fpa", "publishdesk", "advisory",
     "consultinginbox",
   ],
-  advanced: [
-    "advancedrisk", "uide", "developer", "adminconsole",
+  advanced: ["advancedrisk", "uide"],
+  // Settings › Advanced: admin, developer and data-plumbing views. Still openable
+  // (same components, same audience rules) but never part of Workbench navigation.
+  settings: [
+    "environment", "developer", "adminconsole", "enginereadiness", "coveragemap", "qualitygate", "connectors",
+    "marketdatafabric", "universefabric", "crossassetfabric", "economicdatafabric", "datastats", "conflictdetector",
   ],
-  settings: ["environment"],
 };
 
 export const PRIMARY_WORKSPACES: readonly WorkspaceDefinition[] = [
   { key: "home", label: "Home", shortLabel: "HOME", description: "Resume role-aware work and saved contexts.", entryView: "missioncontrol", views: WORKSPACE_VIEWS.home },
-  { key: "data", label: "Data", shortLabel: "DATA", description: "Connect, govern, and inspect source data.", entryView: "coveragemap", views: WORKSPACE_VIEWS.data },
+  { key: "data", label: "Data", shortLabel: "DATA", description: "Connect, govern, and inspect source data.", entryView: "clientdata", views: WORKSPACE_VIEWS.data },
   { key: "finance", label: "Finance", shortLabel: "FIN", description: "Understand markets and financial entities.", entryView: "market", views: WORKSPACE_VIEWS.finance },
   { key: "modeling", label: "Modeling", shortLabel: "MODEL", description: "Calculate, value, compare, and stress-test.", entryView: "valuation", views: WORKSPACE_VIEWS.modeling },
   { key: "research", label: "Research", shortLabel: "FIND", description: "Investigate companies, markets, and evidence.", entryView: "news", views: WORKSPACE_VIEWS.research },
   { key: "intelligence", label: "Intelligence", shortLabel: "INTEL", description: "Synthesize signals into auditable decisions.", entryView: "entity", views: WORKSPACE_VIEWS.intelligence },
   { key: "outputs", label: "Outputs", shortLabel: "SEND", description: "Turn analysis into decision-ready work.", entryView: "mnadesk", views: WORKSPACE_VIEWS.outputs },
-  { key: "advanced", label: "Advanced", shortLabel: "ADV", description: "Open specialist and internal operating tools.", entryView: "advancedrisk", views: WORKSPACE_VIEWS.advanced },
+  { key: "advanced", label: "Advanced", shortLabel: "ADV", description: "Open specialist analysis tools.", entryView: "advancedrisk", views: WORKSPACE_VIEWS.advanced },
   { key: "settings", label: "Settings", shortLabel: "SET", description: "Manage preferences, providers, and environment.", entryView: "environment", views: WORKSPACE_VIEWS.settings },
 ];
 
@@ -159,4 +158,13 @@ export function resolveWorkspaceKey(value: string): WorkspaceKey | null {
   return PRIMARY_WORKSPACES.some((workspace) => workspace.key === key)
     ? key as WorkspaceKey
     : LEGACY_WORKSPACE_KEYS[key] ?? null;
+}
+
+/** Views that live in Settings › Advanced instead of Workbench navigation. */
+export function isSettingsAdvancedView(view: ViewMode): boolean {
+  return view !== "environment" && WORKSPACE_VIEWS.settings.includes(view);
+}
+
+export function getSettingsAdvancedViews(audience: WorkspaceAudience): readonly ViewMode[] {
+  return WORKSPACE_VIEWS.settings.filter((view) => isSettingsAdvancedView(view) && isViewVisibleToAudience(view, audience));
 }

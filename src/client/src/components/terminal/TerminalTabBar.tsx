@@ -8,6 +8,14 @@ import {
 import type { TerminalLinkGroup, TerminalLinkScope, TerminalTab } from "@/lib/terminalTabs";
 import { getExperienceViewLabel } from "@/lib/terminalExperience";
 import { dismissTerminalPeek, requestTerminalPeek } from "@/lib/terminalPeek";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import { PromptDialog } from "@/components/ui/prompt-dialog";
 
 interface Props {
   tabs: TerminalTab[];
@@ -62,6 +70,8 @@ export default function TerminalTabBar({
   onDuplicate, onGroup, onRename, onMove, onLinkGroup, onLinkScopes, className,
 }: Props) {
   const [menuTabId, setMenuTabId] = useState<string | null>(null);
+  const [prompt, setPrompt] = useState<{ kind: "rename" | "group"; tabId: string; value: string } | null>(null);
+  const promptOpener = useRef<string | null>(null);
   const [draggingTabId, setDraggingTabId] = useState<string | null>(null);
   const peekTimerRef = useRef<number | null>(null);
   const activeTabForContext = useMemo(() => tabs.find((tab) => tab.id === activeTabId), [activeTabId, tabs]);
@@ -102,10 +112,19 @@ export default function TerminalTabBar({
     }, 420);
   };
 
-  function rename(tab: TerminalTab) {
-    const title = window.prompt("Rename analytical tab", tab.title);
-    if (title?.trim()) onRename(tab.id, title);
-    setMenuTabId(null);
+  function openPrompt(kind: "rename" | "group", tabId: string, value: string) {
+    promptOpener.current = tabId;
+    setPrompt({ kind, tabId, value });
+  }
+
+  function confirmPrompt(value: string) {
+    if (!prompt) return;
+    if (prompt.kind === "rename") {
+      if (value.trim()) onRename(prompt.tabId, value);
+    } else {
+      onGroup(prompt.tabId, value.trim() || null);
+    }
+    setPrompt(null);
   }
 
   function toggleLinkScope(tab: TerminalTab, scope: TerminalLinkScope) {
@@ -126,7 +145,6 @@ export default function TerminalTabBar({
       linkScopes: getEffectiveTerminalTabLinkScopes(tab),
       linkScopesExplicit: true,
     });
-    setMenuTabId(null);
   }
 
   return (
@@ -210,23 +228,39 @@ export default function TerminalTabBar({
               {tab.dirty && <span className="shrink-0 text-amber-300" aria-label="Unsaved changes">●</span>}
             </button>
             {!tab.pinned && <button className="rounded p-1 text-muted-foreground/45 transition-colors hover:bg-white/[0.04] hover:text-foreground" onClick={() => { dismissTerminalPeek(); onClose(tab.id); }} title="Close tab" aria-label={`Close ${tab.title}`}><X className="h-3 w-3" /></button>}
-            <button className="mr-1 rounded p-1 text-muted-foreground/45 transition-colors hover:bg-white/[0.04] hover:text-foreground" onClick={() => { dismissTerminalPeek(); setMenuTabId(menuTabId === tab.id ? null : tab.id); }} aria-label={`Tab actions for ${tab.title}`}><span className="text-[12px] leading-none">⋯</span></button>
-            {menuTabId === tab.id && (
-              <div className="lios-v4-overlay absolute right-0 top-9 z-50 w-64 rounded-xl p-1.5" onMouseLeave={() => setMenuTabId(null)}>
-                <div className="border-b border-border/50 px-2 py-2"><div className="font-ui truncate text-[10px] font-semibold text-foreground">{tab.title}</div><div className="mt-1 lios-pane-code text-[7px] tracking-wider text-muted-foreground">{tab.entity ? `${tab.entity} · ${viewLabel}` : viewLabel}</div></div>
-                <button className="font-ui mt-1 flex w-full items-center gap-2 rounded-lg px-2 py-2 text-left text-[9px] text-muted-foreground transition-colors hover:bg-white/[0.045] hover:text-foreground" onClick={() => { onTogglePin(tab.id); setMenuTabId(null); }}>{tab.pinned ? <PinOff className="h-3 w-3" /> : <Pin className="h-3 w-3" />}{tab.pinned ? "Unpin tab" : "Pin tab"}</button>
-                <button className="font-ui flex w-full items-center gap-2 rounded-lg px-2 py-2 text-left text-[9px] text-muted-foreground transition-colors hover:bg-white/[0.045] hover:text-foreground" onClick={() => duplicateWithEffectiveScopes(tab)}><Copy className="h-3 w-3" />Duplicate tab</button>
-                <button className="font-ui flex w-full items-center gap-2 rounded-lg px-2 py-2 text-left text-[9px] text-muted-foreground transition-colors hover:bg-white/[0.045] hover:text-foreground" onClick={() => rename(tab)}>Rename tab</button>
-                <button className="font-ui flex w-full items-center gap-2 rounded-lg px-2 py-2 text-left text-[9px] text-muted-foreground transition-colors hover:bg-white/[0.045] hover:text-foreground" onClick={() => { const group = window.prompt("Group name (blank removes group)", tab.groupId ?? "")?.trim() || null; onGroup(tab.id, group); setMenuTabId(null); }}>Group tab</button>
-                {onLinkGroup && <div className="mt-1 border-t border-border/50 pt-1.5"><div className="font-ui px-2 py-1 text-[7px] font-medium tracking-[0.12em] text-muted-foreground">LINKED CONTEXT</div><div className="grid grid-cols-5 gap-1 px-1 pb-1">{(["A", "B", "C", "D"] as const).map((group) => <button key={group} onClick={() => onLinkGroup(tab.id, group)} className={`lios-pane-code rounded border py-1.5 text-[7px] ${linkGroup === group ? LINK_GROUP_CLASSES[group] : "border-border/70 text-muted-foreground hover:bg-white/[0.04] hover:text-foreground"}`} aria-pressed={linkGroup === group}>{group}</button>)}<button onClick={() => { onLinkGroup(tab.id, null); setMenuTabId(null); }} className={`lios-pane-code rounded border py-1.5 text-[7px] ${!linkGroup ? "border-border bg-white/[0.05] text-foreground" : "border-border/70 text-muted-foreground hover:bg-white/[0.04] hover:text-foreground"}`} aria-label="Unlink tab">—</button></div>{linkGroup && onLinkScopes && <div className="mx-1 mt-1 border-t border-border/50 pt-1"><div className="px-1 py-1 font-ui text-[6px] leading-relaxed text-muted-foreground/70">Choose exactly what this tab shares with group {linkGroup}.</div><div className="grid grid-cols-1 gap-0.5">{TERMINAL_ANALYTICAL_LINK_SCOPES.map((scope) => { const enabled = linkScopes.includes(scope); const locked = enabled && linkScopes.length === 1; return <button key={scope} onClick={() => toggleLinkScope(tab, scope)} disabled={locked} className={`flex items-center justify-between rounded px-2 py-1.5 font-ui text-[8px] transition-colors ${enabled ? "bg-cyan-400/[0.06] text-cyan-200" : "text-muted-foreground hover:bg-white/[0.035] hover:text-foreground"} disabled:cursor-not-allowed disabled:opacity-55`} aria-pressed={enabled}><span>{LINK_SCOPE_LABELS[scope]}</span><span className={`lios-pane-code flex h-3.5 w-3.5 items-center justify-center rounded border text-[7px] ${enabled ? "border-cyan-400/40 text-cyan-300" : "border-border text-transparent"}`}>✓</span></button>; })}</div></div>}</div>}
-              </div>
-            )}
+            <DropdownMenu open={menuTabId === tab.id} onOpenChange={(open) => { if (open) dismissTerminalPeek(); setMenuTabId(open ? tab.id : null); }}>
+              <DropdownMenuTrigger asChild>
+                <button className="mr-1 rounded p-1 text-muted-foreground/45 transition-colors hover:bg-white/[0.04] hover:text-foreground" data-tab-actions={tab.id} aria-label={`Tab actions for ${tab.title}`}><span className="text-[12px] leading-none">⋯</span></button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="lios-v4-overlay w-64 rounded-xl p-1.5">
+                <DropdownMenuLabel className="border-b border-border/50 px-2 py-2 font-normal"><div className="font-ui truncate text-[10px] font-semibold text-foreground">{tab.title}</div><div className="mt-1 lios-pane-code text-[7px] tracking-wider text-muted-foreground">{tab.entity ? `${tab.entity} · ${viewLabel}` : viewLabel}</div></DropdownMenuLabel>
+                <DropdownMenuItem className="font-ui flex w-full items-center gap-2 rounded-lg px-2 py-2 text-left text-[9px] text-muted-foreground transition-colors focus:bg-white/[0.045] focus:text-foreground" onSelect={() => onTogglePin(tab.id)}>{tab.pinned ? <PinOff className="h-3 w-3" /> : <Pin className="h-3 w-3" />}{tab.pinned ? "Unpin tab" : "Pin tab"}</DropdownMenuItem>
+                <DropdownMenuItem className="font-ui flex w-full items-center gap-2 rounded-lg px-2 py-2 text-left text-[9px] text-muted-foreground transition-colors focus:bg-white/[0.045] focus:text-foreground" onSelect={() => duplicateWithEffectiveScopes(tab)}><Copy className="h-3 w-3" />Duplicate tab</DropdownMenuItem>
+                <DropdownMenuItem className="font-ui flex w-full items-center gap-2 rounded-lg px-2 py-2 text-left text-[9px] text-muted-foreground transition-colors focus:bg-white/[0.045] focus:text-foreground" onSelect={() => openPrompt("rename", tab.id, tab.title)}>Rename tab</DropdownMenuItem>
+                <DropdownMenuItem className="font-ui flex w-full items-center gap-2 rounded-lg px-2 py-2 text-left text-[9px] text-muted-foreground transition-colors focus:bg-white/[0.045] focus:text-foreground" onSelect={() => openPrompt("group", tab.id, tab.groupId ?? "")}>Group tab</DropdownMenuItem>
+                {onLinkGroup && <div className="mt-1 border-t border-border/50 pt-1.5"><div className="font-ui px-2 py-1 text-[7px] font-medium tracking-[0.12em] text-muted-foreground">LINKED CONTEXT</div><div className="grid grid-cols-5 gap-1 px-1 pb-1">{(["A", "B", "C", "D"] as const).map((group) => <DropdownMenuItem key={group} onSelect={(event) => { event.preventDefault(); onLinkGroup(tab.id, group); }} className={`lios-pane-code rounded border py-1.5 text-[7px] ${linkGroup === group ? LINK_GROUP_CLASSES[group] : "border-border/70 text-muted-foreground hover:bg-white/[0.04] hover:text-foreground"}`} aria-pressed={linkGroup === group}>{group}</DropdownMenuItem>)}<DropdownMenuItem onSelect={() => onLinkGroup(tab.id, null)} className={`lios-pane-code rounded border py-1.5 text-[7px] ${!linkGroup ? "border-border bg-white/[0.05] text-foreground" : "border-border/70 text-muted-foreground hover:bg-white/[0.04] hover:text-foreground"}`} aria-label="Unlink tab">—</DropdownMenuItem></div>{linkGroup && onLinkScopes && <div className="mx-1 mt-1 border-t border-border/50 pt-1"><div className="px-1 py-1 font-ui text-[6px] leading-relaxed text-muted-foreground/70">Choose exactly what this tab shares with group {linkGroup}.</div><div className="grid grid-cols-1 gap-0.5">{TERMINAL_ANALYTICAL_LINK_SCOPES.map((scope) => { const enabled = linkScopes.includes(scope); const locked = enabled && linkScopes.length === 1; return <DropdownMenuItem key={scope} onSelect={(event) => { event.preventDefault(); toggleLinkScope(tab, scope); }} disabled={locked} className={`flex items-center justify-between rounded px-2 py-1.5 font-ui text-[8px] transition-colors ${enabled ? "bg-cyan-400/[0.06] text-cyan-200" : "text-muted-foreground hover:bg-white/[0.035] hover:text-foreground"} disabled:cursor-not-allowed disabled:opacity-55`} aria-pressed={enabled}><span>{LINK_SCOPE_LABELS[scope]}</span><span className={`lios-pane-code flex h-3.5 w-3.5 items-center justify-center rounded border text-[7px] ${enabled ? "border-cyan-400/40 text-cyan-300" : "border-border text-transparent"}`}>✓</span></DropdownMenuItem>; })}</div></div>}</div>}
+              </DropdownMenuContent>
+            </DropdownMenu>
             </div>
           </Fragment>
         );
       })}
       <button className="flex w-10 shrink-0 items-center justify-center border-r border-border/60 text-muted-foreground/65 transition-colors hover:bg-white/[0.04] hover:text-foreground" onClick={() => { dismissTerminalPeek(); onNew(); }} title="New tab (Ctrl/Cmd+T)" aria-label="New terminal tab"><Plus className="h-3.5 w-3.5" /></button>
       <button className="flex w-10 shrink-0 items-center justify-center text-muted-foreground/65 transition-colors hover:bg-white/[0.04] hover:text-foreground disabled:opacity-25" onClick={() => { dismissTerminalPeek(); onReopen(); }} disabled={!hasClosedTabs} title="Reopen closed tab (Ctrl/Cmd+Shift+T)" aria-label="Reopen closed tab"><RotateCcw className="h-3.5 w-3.5" /></button>
+      <PromptDialog
+        open={prompt !== null}
+        title={prompt?.kind === "group" ? "Group tab" : "Rename tab"}
+        label={prompt?.kind === "group" ? "Group name (leave blank to remove the group)" : "Tab name"}
+        initialValue={prompt?.value ?? ""}
+        confirmLabel={prompt?.kind === "group" ? "Set group" : "Rename"}
+        validate={(value) => (prompt?.kind === "rename" && !value.trim() ? "Enter a tab name." : null)}
+        onConfirm={confirmPrompt}
+        onCancel={() => setPrompt(null)}
+        onCloseAutoFocus={(event) => {
+          event.preventDefault();
+          document.querySelector<HTMLElement>(`[data-tab-actions="${CSS.escape(promptOpener.current ?? "")}"]`)?.focus();
+        }}
+      />
     </div>
   );
 }

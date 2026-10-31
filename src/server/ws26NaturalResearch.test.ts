@@ -87,7 +87,7 @@ test("WS-26 emits the real run plan and keeps one observed BYOAI call separate f
   assert.equal(result.plan.intent.action, "research");
   assert.match(systemPrompt, /No browser or connected provider retrieval is executed by this plan/);
   assert.match(systemPrompt, /Never fabricate citations/);
-  assert.match(result.text, /No external sources were retrieved by this workflow/);
+  assert.match(result.text, /This answer was not checked against live web sources\./);
   assert.equal(result.artifacts.length, 0);
   const plans = observed.filter((event) => event.type === "plan");
   assert.equal(plans.length, 1);
