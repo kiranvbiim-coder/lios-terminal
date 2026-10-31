@@ -6,7 +6,7 @@ const read = (path: string) => readFileSync(new URL(path, import.meta.url), "utf
 const paletteCss = read("../lios-product-palettes.css");
 const polishCss = read("../lios-product-experience.css");
 
-const themes = ["chatgpt-dark", "chatgpt-light", "claude-light", "claude-dark"] as const;
+const themes = ["chatgpt-dark", "chatgpt-light", "studio-light", "claude-light", "claude-dark"] as const;
 
 function hexLuminance(hex: string): number {
   assert.match(hex, /^#[0-9a-f]{6}$/i);
@@ -66,7 +66,7 @@ test("light palette status colors meet normal-text contrast on Chat and Project 
   for (const key of statuses) {
     const match = polishCss.match(new RegExp(key + ":\\s*(#[0-9a-fA-F]{6})"));
     assert.ok(match, "Missing accessible status token " + key);
-    for (const theme of ["chatgpt-light", "claude-light"]) {
+    for (const theme of ["chatgpt-light", "studio-light", "claude-light"]) {
       for (const bg of ["--lios-bg-app", "--lios-bg-panel"]) {
         assert.ok(contrastRatio(match[1], color(paletteCss, theme, bg)) >= 4.5,
           key + " fails AA on " + theme + " " + bg);
