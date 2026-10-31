@@ -1861,3 +1861,7 @@ These journeys connect the inventory above. Earlier passing bounded steps are ev
 - [ ] Apple membership/signing/notarization only when the owner elects to fund normal signed macOS distribution.
 
 **Finished means the supported product works end to end and its release evidence is accepted—not simply that all code compiles, a PR merges, or this document has checkmarks.**
+
+## Telegram live import correction — 2026-10-31
+
+An isolated packaged run imported the owner's test message exactly once into the selected Project Chat with AI context, incoming execution and outbound replies off. The edit test exposed a setup omission: the form relied on the schema's new-message-only default. The form now explicitly subscribes to `message` and `edited_message`; four focused form tests pass. Existing connections retain their saved subscription and require an explicit reconnect through setup. Rebuilt-app edit adoption remains unverified until the owner repeats the edit test.

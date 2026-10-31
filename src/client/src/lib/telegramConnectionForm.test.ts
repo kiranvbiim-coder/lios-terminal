@@ -22,6 +22,15 @@ test("a connect request requires explicit consent, an owned Project Chat target 
   }
 });
 
+test("connecting imports message edits without enabling AI work or replies", () => {
+  const built = buildTelegramConnectRequest(valid);
+  assert.ok("request" in built);
+  assert.ok(built.request.allowedUpdateTypes.includes("edited_message"));
+  assert.equal(built.request.allowAiTransmission, false);
+  assert.equal(built.request.autoRun, undefined);
+  assert.equal(built.request.allowOutbound, false);
+});
+
 test("validation errors never echo the entered bot token", () => {
   const result = buildTelegramConnectRequest({ ...valid, botToken: "9:SECRET value", consent: true });
   assert.ok("error" in result);
