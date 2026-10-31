@@ -8,7 +8,7 @@
  * No credentials, network providers, runtime AI or screenshot writes here.
  */
 const PALETTES = Object.freeze([
-  "chatgpt-dark", "chatgpt-light", "claude-light", "claude-dark", "lios-classic",
+  "chatgpt-dark", "chatgpt-light", "studio-light", "claude-light", "claude-dark", "lios-classic",
 ]);
 const DESKTOP_CASES = Object.freeze([
   "project-home", "conversation", "conversation-artifact", "workbench-real",
