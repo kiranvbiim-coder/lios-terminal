@@ -46,5 +46,6 @@ test("Project automation editor exposes typed form instead of raw JSON", () => {
   assert.match(source, /data-testid="p9-event-conditions"/);
   assert.match(source, /Add condition/);
   assert.match(source, /Remove condition/);
-  assert.doesNotMatch(source, /Matching event filters \\(JSON object\\)|setEventFiltersDraft/);
+  assert.ok(!source.includes("Matching event filters (JSON object)"));
+  assert.ok(!source.includes("setEventFiltersDraft"));
 });
