@@ -51,6 +51,11 @@ import "./project-conversation-shell.css";
 import { LifecycleCenter } from "./LifecycleCenter";
 import { ProjectArtifactsPanel } from "./ProjectArtifactsPanel";
 import { ProjectAutomationPanel } from "./ProjectAutomationPanel";
+import { DiscoverSurface } from "./DiscoverSurface";
+import { INTELLIGENCE_VIEWS } from "@/lib/intelligenceViews";
+import { openTerminalUxSurface } from "@/lib/terminalUxEvents";
+import type { AnalyticalOpenMode } from "@/lib/terminalActionContracts";
+import type { ExperienceShellSurface } from "@shared/waveCContracts";
 import { SaveWorkflowDialog } from "./SaveWorkflowDialog";
 import { useInvalidateP9Automation } from "@/lib/useP9Automation";
 import { ObjectActionMenu } from "./ObjectActionMenu";
@@ -232,7 +237,8 @@ interface Props {
   account: { name: string; email?: string };
   onLogout: () => void;
   onOpenSettings: () => void;
-  navigationRequest?: { id: number; section: NavigationSection | "search" } | null;
+  navigationRequest?: { id: number; section: NavigationSection | "search"; discoverSurface?: ExperienceShellSurface } | null;
+  onOpenAction: (view: ViewMode, mode: AnalyticalOpenMode, symbol?: string) => void;
   onNavigationContext?: (context: string) => void;
   onOpenCommand?: () => void;
 }
@@ -342,7 +348,7 @@ export default function ProjectExperienceShell({
   onOpenWorkbench: navigateWorkbench, workbenchReturn, universalChatHandoff,
   onOpenEnvironment, onExploreAdvisory, focusMode, presentationMode,
   account, onLogout, onOpenSettings,
-  navigationRequest, onNavigationContext,
+  navigationRequest, onNavigationContext, onOpenAction,
   renderTerminalPanel, chatWorkbenchReturn,
 }: Props) {
   const [lifecycleRequest, setLifecycleRequest] = useState<LifecycleRequest | null>(null);
@@ -359,6 +365,7 @@ export default function ProjectExperienceShell({
     lifecycleTrigger.current = null;
   });
   const [section, setSection] = useState<NavigationSection>("conversation");
+  const [discoverSurface, setDiscoverSurface] = useState<ExperienceShellSurface | undefined>(undefined);
   const [advisoryDismissed, setAdvisoryDismissed] = useState(false);
   useEffect(() => { setAdvisoryDismissed(false); }, [account.email]);
   const handledNavigation = useRef<number | null>(null);
@@ -380,6 +387,7 @@ export default function ProjectExperienceShell({
       setLifecycleNotice("Save or reset unsaved Artifact edits before leaving Chat.");
       return;
     }
+    setDiscoverSurface(navigationRequest.section === "discover" ? navigationRequest.discoverSurface : undefined);
     setSection(navigationRequest.section);
     if (navigationRequest.section === "conversation") setProjectHomeRequested(false);
     setShowLifecycleCenter(false);
@@ -1036,6 +1044,21 @@ export default function ProjectExperienceShell({
     setContextOpen(false);
     requestAnimationFrame(() => composerRef.current?.focus());
     return true;
+  };
+
+  // Discover's "Ask LiOS" uses the same reviewed-draft handoff: nothing is sent, and a busy or
+  // unsaved conversation is never replaced.
+  const askFromDiscover = (question?: string) => {
+    if (busy || busyRef.current || sendInFlightRef.current || chatCreationInFlightRef.current || projectCreationInFlightRef.current || artifactDraftDirtyRef.current) {
+      setLifecycleNotice("Finish the current response or save/reset Artifact edits before asking from Discover.");
+      return;
+    }
+    if (question?.trim()) setInput(current => stageUniversalChatQuestion(current, question));
+    setSection("conversation");
+    setProjectHomeRequested(false);
+    setShowLifecycleCenter(false);
+    setContextOpen(false);
+    requestAnimationFrame(() => composerRef.current?.focus());
   };
 
   const openWorkSearchResult = async (result: WorkSearchResult): Promise<boolean> => {
@@ -2247,6 +2270,7 @@ export default function ProjectExperienceShell({
             setLifecycleNotice("Save or reset unsaved Artifact edits before leaving Chat.");
             return;
           }
+          if (next === "discover") setDiscoverSurface(undefined);
           setSection(next);
           if (next === "conversation") setProjectHomeRequested(false);
           setShowLifecycleCenter(false);
@@ -2373,7 +2397,17 @@ export default function ProjectExperienceShell({
             {lifecycleNotice}
           </div>
         )}
-        {section !== "conversation" ? (
+        {section === "discover" ? (
+          <DiscoverSurface
+            initialSurface={discoverSurface}
+            activeView={workbenchView}
+            activeSymbol={workbenchSymbol}
+            onOpen={onOpenAction}
+            onAsk={askFromDiscover}
+            onWorkbench={() => navigateWorkbench()}
+            onBack={() => { setSection("conversation"); setProjectHomeRequested(false); }}
+          />
+        ) : section !== "conversation" ? (
           <section className="lios-section-surface" aria-label={section}>
             <header><h1>{({ projects: "Projects", chats: "History", library: "Artifacts", automations: "Automations", plugins: "Plugins" } as const)[section]}</h1>
               <button className="lios-section-action" onClick={() => { setSection("conversation"); setProjectHomeRequested(false); setShowLifecycleCenter(false); }}>Back to chat</button></header>
@@ -3083,6 +3117,14 @@ export default function ProjectExperienceShell({
                       </DropdownMenuItem>
                       <DropdownMenuSeparator />
                       <DropdownMenuItem onSelect={askActiveObject}>Ask this</DropdownMenuItem>
+                      <DropdownMenuSub>
+                        <DropdownMenuSubTrigger>Intelligence views</DropdownMenuSubTrigger>
+                        <DropdownMenuSubContent className="w-60">
+                          {INTELLIGENCE_VIEWS.map((view) => (
+                            <DropdownMenuItem key={view.surface} title={view.hint} onSelect={() => openTerminalUxSurface(view.surface)}>{view.label}</DropdownMenuItem>
+                          ))}
+                        </DropdownMenuSubContent>
+                      </DropdownMenuSub>
                       <DropdownMenuSub>
                         <DropdownMenuSubTrigger>Advanced</DropdownMenuSubTrigger>
                         <DropdownMenuSubContent className="w-56">

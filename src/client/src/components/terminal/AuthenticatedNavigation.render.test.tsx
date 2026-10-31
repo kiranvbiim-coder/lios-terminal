@@ -4,7 +4,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { createElement } from "react";
 import { AuthenticatedNavigation } from "./AuthenticatedNavigation";
 
-function render(section: "conversation" | "projects" | "chats" | "library" | "automations" | "plugins", activeSection?: typeof section) {
+function render(section: "conversation" | "discover" | "projects" | "chats" | "library" | "automations" | "plugins", activeSection?: typeof section) {
   const action = () => {};
   return renderToStaticMarkup(createElement(AuthenticatedNavigation, {
     section, activeSection, account: { name: "Test workspace" }, busy: false,
@@ -18,7 +18,7 @@ function render(section: "conversation" | "projects" | "chats" | "library" | "au
 test("real React render includes named destination links, Work and accessible compact controls", () => {
   const markup = render("conversation");
   assert.match(markup, /aria-label="Main navigation"/);
-  for (const label of ["Chat", "Projects", "History", "Artifacts", "Automations", "Plugins", "Connections", "Settings", "New chat", "Work"]) {
+  for (const label of ["Chat", "Discover", "Projects", "History", "Artifacts", "Automations", "Plugins", "Connections", "Settings", "New chat", "Work"]) {
     assert.ok(markup.includes(label), label + " must render in navigation");
   }
   assert.match(markup, /aria-label="Collapse navigation"/);

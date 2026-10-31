@@ -17,7 +17,6 @@ import QuickSwitcher from "@/components/terminal/QuickSwitcher";
 import DockviewWorkspaceGrid from "@/components/terminal/DockviewWorkspaceGrid";
 import TerminalUxOverlays from "@/components/terminal/TerminalUxOverlays";
 import TerminalTimeContextControl from "@/components/terminal/TerminalTimeContextControl";
-import WaveCExperienceShell from "@/components/terminal/WaveCExperienceShell";
 import ProjectExperienceShell from "@/components/terminal/ProjectExperienceShell";
 import WorkbenchArtifactPane from "@/components/terminal/WorkbenchArtifactPane";
 import { openArtifactWorkbench, returnFromArtifactWorkbench, loadArtifactWorkbenchRecovery, saveArtifactWorkbenchRecovery, clearArtifactWorkbenchRecovery } from "@/lib/artifactWorkbenchHandoff";
@@ -32,7 +31,7 @@ import VisualCanvas from "@/components/terminal/VisualCanvas";
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
 import { subscribeDecisionReview } from "@/lib/decisionReviewNavigation";
 import {
-  isExperienceHomeSurface,
+  hostedDiscoverSurface,
   loadExperienceSurface,
   requestExperienceField,
   setExperienceSurface,
@@ -300,7 +299,7 @@ export default function Terminal({ session, onLogout, onOpenEnvironment, domain,
   const [uxPreferences, setUxPreferences] = useState<TerminalUxPreferences>(() =>
     loadTerminalUxPreferences(isClient ? DEFAULT_RETAIL_TERMINAL_UX_PREFERENCES : undefined),
   );
-  const [experienceSurface, setExperienceSurfaceState] = useState<ExperienceShellSurface>(() => loadExperienceSurface());
+  const [experienceSurface, setExperienceSurfaceState] = useState<ExperienceShellSurface>(() => { const stored = loadExperienceSurface(); return hostedDiscoverSurface(stored) ? "projects" : stored; });
   const [timeContext, setTimeContext] = useState<TerminalTimeContext>(() => loadTerminalTimeContext());
   const [researchStarter, setResearchStarter] = useState<{ question: string; symbol: string } | null>(null);
   const [askLiosContext, setAskLiosContext] = useState<ClientAiContext | null>(null);
@@ -324,13 +323,8 @@ export default function Terminal({ session, onLogout, onOpenEnvironment, domain,
   // value -- LIOS_EXECUTION_ROADMAP.md LIOS-P1-17, "conversation remains
   // primary and cockpit density appears only on demand".
   //   "projects"                        -> cleanest: no global header.
-  //   "pulse"/"explore"/"signals"/"library" -> WaveCExperienceShell renders its
-  //     own header (wordmark/Ask LiOS/Master AI); the outer TopBar would just
-  //     duplicate it. WaveCExperienceShell's *internal* surface-switcher nav is
-  //     intentionally hidden when embedded (see WaveCExperienceShell.tsx), so
-  //     the outer Sidebar remains the way to move between these surfaces --
-  //     it must stay visible here even though the rest of the dense chrome
-  //     (TopBar/ticker tapes/ContextRail/FunctionBar) should not.
+  //   "pulse"/"explore"/"signals"/"library" -> hosted as Discover inside the
+  //     "projects" shell (see hostedDiscoverSurface); they never own a surface.
   //   "workbench"                       -> full dense professional Terminal.
   // Derived, not separate state: reuses the experience-surface event store,
   // and the Sidebar's existing Projects/Workbench
@@ -339,7 +333,7 @@ export default function Terminal({ session, onLogout, onOpenEnvironment, domain,
   const isWorkbenchSurface = experienceSurface === "workbench";
   const showDenseChrome = isWorkbenchSurface;
   const showSidebarNav = !isProjectsSurface;
-  const [projectNavigation, setProjectNavigation] = useState<{ id: number; section: Exclude<CanonicalNavigationTarget, "connections" | "doctor"> } | null>(null);
+  const [projectNavigation, setProjectNavigation] = useState<{ id: number; section: Exclude<CanonicalNavigationTarget, "connections" | "doctor">; discoverSurface?: ExperienceShellSurface } | null>(null);
   const [navigationContext, setNavigationContext] = useState("Saved Project/Chat selection");
   const activeCapability = getTerminalCapability(activePane.view);
   const intelligentCalm = uxPreferences.adaptiveCalm && isWorkbenchSurface && !presentationMode && (
@@ -466,6 +460,13 @@ export default function Terminal({ session, onLogout, onOpenEnvironment, domain,
   useEffect(() => subscribeExperienceSurface(surface => {
     if (workbenchDirtyRef.current && surface !== "workbench") { setExperienceSurface("workbench"); return; }
     if (surface !== "workbench") chatWorkbenchOriginRef.current = null;
+    // Pulse/Explore/Signals/Library live inside the Chat shell as Discover: one navigation,
+    // one account menu, one Chat. Every old entry point (shortcut, command, dock) lands there.
+    if (hostedDiscoverSurface(surface)) {
+      setProjectNavigation((current) => ({ id: (current?.id ?? 0) + 1, section: "discover", discoverSurface: surface }));
+      setExperienceSurface("projects");
+      return;
+    }
     setExperienceSurfaceState(surface);
   }), []);
   const handleOpenWorkbench = useCallback((context?: ArtifactWorkbenchContext, chatOrigin?: ChatWorkbenchOrigin) => {
@@ -1072,6 +1073,7 @@ export default function Terminal({ session, onLogout, onOpenEnvironment, domain,
             <ProjectExperienceShell
               navigationRequest={projectNavigation}
               onNavigationContext={setNavigationContext}
+              onOpenAction={handleOpenAction}
               onOpenCommand={() => setCmdOpen(true)}
               account={{ name: session.name, email: session.email }}
               onLogout={onLogout}
@@ -1095,17 +1097,7 @@ export default function Terminal({ session, onLogout, onOpenEnvironment, domain,
               }}
             />
           </div>
-          {isProjectsSurface ? null : isExperienceHomeSurface(experienceSurface) ? (
-            <WaveCExperienceShell
-              embedded
-              surface={experienceSurface}
-              onSurfaceChange={handleSurface}
-              activeView={activePane.view}
-              activeSymbol={getTerminalCapability(activePane.view).symbolAware ? activePane.symbol : undefined}
-              onOpen={handleOpenAction}
-              onAskLios={handleAskLios}
-            />
-          ) : (
+          {isProjectsSurface ? null : (
           <div className="flex h-full min-h-0 min-w-0 flex-col overflow-hidden" data-testid="workbench-canvas">
             {chatWorkbenchOriginRef.current && !artifactHandoffRef.current && <button type="button" data-testid="workbench-return-chat-general" disabled={workbenchDirty} onClick={returnFromGeneralWorkbench} className="shrink-0 border-b border-border p-2 text-left text-sm">Return to Chat</button>}
             {isClient && !chatWorkbenchOriginRef.current && !artifactHandoffRef.current && <button type="button" disabled={workbenchDirty} onClick={() => handleAskLios()} className="min-h-10 shrink-0 border-b border-border p-2 text-left text-sm">Return to Chat</button>}

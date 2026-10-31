@@ -48,6 +48,10 @@ interface Props {
   surface?: ExperienceShellSurface;
   onSurfaceChange?: (surface: ExperienceShellSurface) => void;
   onAskLios?: (initialQuestion?: string) => void;
+  /** Hosted inside the Chat shell: its own navigation and account chrome already exist, so the legacy brand/Master-AI header is omitted. */
+  hosted?: boolean;
+  /** Surfaces offered as tabs while embedded; omitted keeps the embedded shell tab-less. */
+  hostedSurfaces?: readonly ExperienceShellSurface[];
 }
 
 const masterAiResponseSchema = z.object({
@@ -61,7 +65,7 @@ const SURFACE_ICONS = { projects: FolderKanban, pulse: Activity, explore: Compas
 
 type PulseChannel = "for_you" | "following" | "markets" | "research";
 
-export default function WaveCExperienceShell({ activeView, activeSymbol, onOpen, onClose, embedded = false, surface: controlledSurface, onSurfaceChange, onAskLios }: Props) {
+export default function WaveCExperienceShell({ activeView, activeSymbol, onOpen, onClose, embedded = false, surface: controlledSurface, onSurfaceChange, onAskLios, hosted = false, hostedSurfaces }: Props) {
   const isClient = useAudience() === "client";
   const [uncontrolledSurface, setUncontrolledSurface] = useState<ExperienceShellSurface>("pulse");
   const surface = controlledSurface ?? uncontrolledSurface;
@@ -339,18 +343,18 @@ export default function WaveCExperienceShell({ activeView, activeSymbol, onOpen,
 
   const shell = (
       <section data-testid="experience-shell" data-visual-system="phase-one" className={`overflow-hidden bg-[#080909] ${embedded ? "flex h-full min-h-0 w-full flex-col" : "w-full max-w-6xl rounded-2xl border border-cyan-400/20 shadow-2xl"}`} onMouseDown={(event) => event.stopPropagation()} aria-label="LiOS experience shell">
-        <header className="flex flex-wrap items-center gap-3 border-b border-border/70 px-4 py-3">
+        {!hosted && <header className="flex flex-wrap items-center gap-3 border-b border-border/70 px-4 py-3">
           <div className="flex h-9 w-9 items-center justify-center rounded-xl border border-cyan-400/25 bg-cyan-400/[0.06] text-cyan-200"><Sparkles className="h-4 w-4" /></div>
           <div className="min-w-0 flex-1"><div className="font-ui text-xs font-semibold tracking-tight text-foreground">LiOS Intelligence Terminal</div></div>
           <FusionActionButton onClick={() => onAskLios ? onAskLios() : onOpen("agent", "current", activeSymbol)} variant="accent" data-testid="ask-lios"><Sparkles className="mr-1 inline h-3 w-3" />ASK LIOS</FusionActionButton>
           {!isClient && <div className="flex items-center gap-2 rounded-lg border border-border/60 px-2 py-1.5"><span className="font-terminal text-xs text-muted-foreground">MASTER AI</span><button disabled={!aiQuery.data || aiQuery.isError || aiWrite.isPending} onClick={() => aiWrite.mutate({ state: aiState === "on" ? "off" : "on", mode: aiMode })} className={`rounded-md border px-2 py-1 font-terminal text-xs ${aiState === "on" ? "border-emerald-400/40 text-emerald-300" : "border-border text-muted-foreground"}`} aria-pressed={aiState === "on"}>{aiQuery.isPending ? "CHECKING" : aiQuery.isError ? "UNAVAILABLE" : aiWrite.isPending ? "SAVING" : aiState.toUpperCase()}</button></div>}
           {!isClient && <select value={aiMode} disabled={!aiQuery.data || aiQuery.isError || aiWrite.isPending} onChange={(event) => aiWrite.mutate({ state: aiState, mode: event.target.value as MasterAiMode })} className="rounded-lg border border-border/60 bg-transparent px-2 py-1.5 font-terminal text-xs text-muted-foreground" aria-label="Master AI mode">{MASTER_AI_MODES.map((mode) => <option key={mode.id} value={mode.id}>{mode.label}</option>)}</select>}
           {!embedded && onClose && <button onClick={onClose} className="rounded-lg p-1.5 text-muted-foreground hover:bg-white/[0.04] hover:text-foreground" aria-label="Close experience shell"><X className="h-4 w-4" /></button>}
-        </header>
-        {!isClient && (aiQuery.isError || aiWrite.isError) && <p role="alert" className="border-b border-border px-4 py-2 text-xs text-red-300">{aiWrite.error?.message ?? aiQuery.error?.message ?? "Master AI settings are unavailable."} Open Connection Center to verify the selected provider and model. No failed change is shown as enabled.</p>}
+        </header>}
+        {!hosted && !isClient && (aiQuery.isError || aiWrite.isError) && <p role="alert" className="border-b border-border px-4 py-2 text-xs text-red-300">{aiWrite.error?.message ?? aiQuery.error?.message ?? "Master AI settings are unavailable."} Open Connection Center to verify the selected provider and model. No failed change is shown as enabled.</p>}
 
-        {!embedded && <nav className="flex gap-1 overflow-x-auto border-b border-border/60 px-3 py-2" aria-label="Experience surfaces">
-          {EXPERIENCE_SHELL_SURFACES.map((item) => { const Icon = SURFACE_ICONS[item.id]; return <button key={item.id} onClick={() => setSurface(item.id)} className={`flex shrink-0 items-center gap-1.5 rounded-lg px-3 py-2 font-terminal text-xs tracking-wider ${surface === item.id ? "bg-cyan-400/[0.09] text-cyan-200" : "text-muted-foreground hover:bg-white/[0.03] hover:text-foreground"}`} aria-current={surface === item.id ? "page" : undefined}><Icon className="h-3 w-3" />{item.label.toUpperCase()}</button>; })}
+        {(!embedded || hostedSurfaces) && <nav className="flex gap-1 overflow-x-auto border-b border-border/60 px-3 py-2" aria-label="Experience surfaces">
+          {EXPERIENCE_SHELL_SURFACES.filter((item) => !hostedSurfaces || hostedSurfaces.includes(item.id)).map((item) => { const Icon = SURFACE_ICONS[item.id]; return <button key={item.id} onClick={() => setSurface(item.id)} className={`flex shrink-0 items-center gap-1.5 rounded-lg px-3 py-2 font-terminal text-xs tracking-wider ${surface === item.id ? "bg-cyan-400/[0.09] text-cyan-200" : "text-muted-foreground hover:bg-white/[0.03] hover:text-foreground"}`} aria-current={surface === item.id ? "page" : undefined}><Icon className="h-3 w-3" />{item.label.toUpperCase()}</button>; })}
         </nav>}
 
         {surface === "pulse" && (

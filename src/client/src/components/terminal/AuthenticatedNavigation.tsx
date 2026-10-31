@@ -1,11 +1,11 @@
 import React, { useState, type ReactNode } from "react";
-import { Plus, Search, FolderKanban, MessageSquare, Clock3, LayoutDashboard, Library, Workflow, Blocks, Plug, Settings2, Palette, Menu, LogOut, ChevronUp, ChevronLeft, PanelLeftOpen, Trash2, Upload } from "lucide-react";
+import { Plus, Search, Compass, FolderKanban, MessageSquare, Clock3, LayoutDashboard, Library, Workflow, Blocks, Plug, Settings2, Palette, Menu, LogOut, ChevronUp, ChevronLeft, PanelLeftOpen, Trash2, Upload } from "lucide-react";
 import { Sheet, SheetContent, SheetTitle, SheetDescription, SheetTrigger } from "@/components/ui/sheet";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger, DropdownMenuSub, DropdownMenuSubTrigger, DropdownMenuSubContent, DropdownMenuRadioGroup, DropdownMenuRadioItem } from "@/components/ui/dropdown-menu";
 
 import { LIOS_PRODUCT_PALETTES, readLiosProductPalette, resolveLiosProductPalette, setLiosProductPalette } from "@/lib/liosProductPalette";
 
-export type NavigationSection = "conversation" | "projects" | "chats" | "library" | "automations" | "plugins";
+export type NavigationSection = "conversation" | "discover" | "projects" | "chats" | "library" | "automations" | "plugins";
 
 interface Props {
   section: NavigationSection;
@@ -26,6 +26,7 @@ interface Props {
 }
 const sections = [
   ["conversation", "Chat", MessageSquare],
+  ["discover", "Discover", Compass],
   ["projects", "Projects", FolderKanban],
   ["chats", "History", Clock3],
   ["library", "Artifacts", Library],
