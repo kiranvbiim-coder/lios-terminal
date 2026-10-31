@@ -2438,6 +2438,16 @@ export default function ProjectExperienceShell({
                   Open artifact
                 </button>
               )}
+              <button
+                type="button"
+                data-testid="chat-open-full-workbench"
+                onClick={onOpenWorkbench}
+                disabled={busy}
+                aria-label={conversationArtifactRef ? "Open the current saved Artifact in the full Workbench" : "Open the full professional Workbench"}
+                className="inline-flex min-h-9 shrink-0 items-center rounded-lg border border-border/60 bg-card/60 px-3 font-ui text-[12px] font-medium text-foreground transition-colors hover:border-amber-300/35 hover:bg-accent/40 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary disabled:opacity-40"
+              >
+                Workbench
+              </button>
             </header>
             <div ref={conversationScrollRef} onScroll={(event) => {
               const viewport = event.currentTarget;
