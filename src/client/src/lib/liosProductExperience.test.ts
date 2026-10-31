@@ -22,7 +22,7 @@ function contrastRatio(a: string, b: string): number {
 }
 
 function color(css: string, theme: string, token: string): string {
-  const start = css.indexOf(`html[data-lios-palette="${theme}"] {`);
+  const start = css.search(new RegExp(`html\\[data-lios-palette="${theme}"\\]\\s*(?:,[^{]*)?\\{`));
   assert.ok(start >= 0, `missing palette: ${theme}`);
   const end = css.indexOf("}", start);
   const block = css.slice(start, end);
