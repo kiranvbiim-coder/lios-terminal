@@ -3,7 +3,7 @@ import { test } from "node:test";
 import { DEFAULT_LIOS_PALETTE, LIOS_PRODUCT_PALETTES, resolveLiosProductPalette, readLiosProductPalette, initializeLiosProductPalette, isLiosLightPalette, setLiosProductPalette, LIOS_PALETTE_STORAGE_KEY } from "./liosProductPalette";
 
 test("palette choices have unique IDs and are parseable", () => {
-  assert.equal(new Set(LIOS_PRODUCT_PALETTES.map((palette) => palette.id)).size, 5);
+  assert.equal(new Set(LIOS_PRODUCT_PALETTES.map((palette) => palette.id)).size, 6);
   for (const palette of LIOS_PRODUCT_PALETTES) {
     assert.equal(resolveLiosProductPalette(palette.id), palette.id);
   }
@@ -16,6 +16,7 @@ test("invalid or missing persisted value fails to a known theme", () => {
 test("light modes are not trapped in the legacy dark selector", () => {
   assert.equal(isLiosLightPalette("chatgpt-light"), true);
   assert.equal(isLiosLightPalette("claude-light"), true);
+  assert.equal(isLiosLightPalette("studio-light"), true);
   assert.equal(isLiosLightPalette("chatgpt-dark"), false);
   assert.equal(isLiosLightPalette("claude-dark"), false);
   assert.equal(isLiosLightPalette("lios-classic"), false);
@@ -84,11 +85,11 @@ test("each appearance sets the correct light/dark native selectors and persists 
 
 test("blocked storage cannot prevent immediate theme selection or make legacy mount reset it", () => {
   withBrowserMock(({ attributes, classes }) => {
-    setLiosProductPalette("claude-light");
+    setLiosProductPalette("studio-light");
     assert.equal(attributes.get("data-theme"), "light");
     assert.equal(classes.has("dark"), false);
     assert.doesNotThrow(() => initializeLiosProductPalette());
-    assert.equal(attributes.get("data-lios-palette"), "claude-light");
+    assert.equal(attributes.get("data-lios-palette"), "studio-light");
     assert.equal(readLiosProductPalette(), DEFAULT_LIOS_PALETTE);
   }, true);
 });
