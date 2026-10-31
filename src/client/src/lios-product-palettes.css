@@ -77,6 +77,82 @@ html[data-lios-palette="chatgpt-dark"] {
   --amber: 0.00 0.00% 100.00%;
 }
 
+/* Studio Clean: a distinct white neutral palette based on the owner's visual reference.
+ * LiOS-owned colors and controls; no Google trademarks, assets or source code. */
+html[data-lios-palette="studio-light"] {
+  color-scheme: light;
+  --lios-bg-app: #FFFFFF;
+  --lios-bg-shell: #F9FAFB;
+  --lios-bg-panel: #FFFFFF;
+  --lios-bg-panel-2: #FAFAFB;
+  --lios-bg-elevated: #F3F4F6;
+  --lios-bg-hover: #F0F1F3;
+  --lios-bg-active: #E9EAED;
+  --lios-bg-selected: #E9EAEE;
+  --lios-border-subtle: #EDEEF0;
+  --lios-border-default: #E3E5E8;
+  --lios-border-strong: #CED2D8;
+  --lios-text-primary: #202124;
+  --lios-text-secondary: #5F6368;
+  --lios-text-muted: #747880;
+  --lios-brand: #202124;
+  --lios-brand-hover: #323438;
+  --lios-brand-muted: #EAF0FD;
+  --background: 225 12% 100%;
+  --foreground: 225 5% 13%;
+  --card: 225 12% 100%;
+  --card-foreground: 225 5% 13%;
+  --card-border: 220 10% 90%;
+  --sidebar: 220 16% 98%;
+  --sidebar-foreground: 225 5% 13%;
+  --sidebar-border: 220 10% 90%;
+  --sidebar-primary: 225 5% 13%;
+  --sidebar-primary-foreground: 0 0% 100%;
+  --sidebar-accent: 220 12% 93%;
+  --sidebar-accent-foreground: 225 5% 13%;
+  --sidebar-ring: 220 5% 22%;
+  --popover: 0 0% 100%;
+  --popover-foreground: 225 5% 13%;
+  --popover-border: 220 10% 90%;
+  --primary: 225 5% 13%;
+  --primary-foreground: 0 0% 100%;
+  --secondary: 220 12% 96%;
+  --secondary-foreground: 225 5% 13%;
+  --muted: 220 12% 95%;
+  --muted-foreground: 220 4% 38%;
+  --accent: 220 12% 94%;
+  --accent-foreground: 225 5% 13%;
+  --input: 220 10% 85%;
+  --ring: 220 5% 22%;
+  --chart-1: 216 88% 52%;
+  --lios-void: 220 16% 98%;
+  --lios-canvas: 0 0% 100%;
+  --lios-raised: 0 0% 100%;
+  --lios-overlay: 220 12% 96%;
+  --lios-hover: 220 12% 94%;
+  --lios-hairline: 220 10% 90%;
+  --lios-hairline-strong: 220 10% 82%;
+  --lios-text: 225 5% 13%;
+  --lios-text-soft: 220 4% 37%;
+  --lios-text-dim: 220 4% 47%;
+  --limuria-ink: 220 16% 98%;
+  --limuria-graphite-0: 0 0% 100%;
+  --limuria-graphite-1: 0 0% 100%;
+  --limuria-graphite-2: 220 12% 96%;
+  --limuria-graphite-3: 220 12% 94%;
+  --limuria-line: 220 10% 90%;
+  --limuria-line-strong: 220 10% 82%;
+  --limuria-text: 225 5% 13%;
+  --limuria-text-soft: 220 4% 37%;
+  --limuria-text-dim: 220 4% 47%;
+  --limuria-amber: 225 5% 13%;
+  --limuria-amber-hot: 225 5% 20%;
+  --limuria-amber-soft: 225 5% 20%;
+  --lios-amber: 225 5% 13%;
+  --amber: 225 5% 13%;
+}
+
+
 html[data-lios-palette="chatgpt-light"] {
   color-scheme: light;
   --lios-bg-app: #FFFFFF;
