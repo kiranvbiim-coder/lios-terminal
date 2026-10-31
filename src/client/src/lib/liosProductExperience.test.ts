@@ -74,3 +74,13 @@ test("light palette status colors meet normal-text contrast on Chat and Project 
     }
   }
 });
+
+const appSource = read("../App.tsx");
+const terminalSource = read("../pages/Terminal.tsx");
+
+test("light mode cannot be silently forced dark on Workbench, onboarding or app chrome", () => {
+  assert.doesNotMatch(paletteCss, /html\\[data-lios-palette\\$="-light"\\]\\s+\\.terminal-root\\[data-surface="workbench"\\]\\s*\\{[^}]*color-scheme:\\s*dark/);
+  assert.doesNotMatch(paletteCss, /html\\[data-lios-palette\\$="-light"\\]\\s+\\.lios-reference-(?:login|entry)/);
+  assert.doesNotMatch(appSource, /className="dark /);
+  assert.doesNotMatch(terminalSource, /bg-\\[#(?:050505|080808)\\]/);
+});
