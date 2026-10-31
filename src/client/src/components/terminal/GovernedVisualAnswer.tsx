@@ -77,10 +77,14 @@ function SavedVisual({request}:{request:GovernedVisualAnswerRequest}){
  const loading=query.isPending||query.isFetching||!query.isFetchedAfterMount;
  const projection=!loading&&!query.isError?query.data?.projection:null;
  return <div data-testid="governed-chat-visual-content" className="mt-3 space-y-3">
-  {!loading&&<button type="button" onClick={()=>void query.refetch()} className="min-h-11 rounded border px-3">Recheck current source permissions</button>}
-  {loading&&<p role="status">Checking exact saved evidence and current source authority…</p>}
-  {!loading&&!projection&&<p role="alert">Authorization, source permission or the exact saved projection is unavailable. No cached visual is displayed.</p>}
-  {projection&&<><p className="text-xs text-muted-foreground">Read-only saved evidence. This presentation creates no source rights, calculation, approval or execution.</p><VisualBoundary><Suspense fallback={<p role="status">Loading saved visual renderer…</p>}><Projection request={request} projection={projection}/></Suspense></VisualBoundary></>}
-  <details className="text-xs"><summary>Recorded source references ({request.sourceRefs.length})</summary><ul className="max-h-32 overflow-auto">{request.sourceRefs.map(ref=><li key={ref} className="break-all">{ref}</li>)}</ul></details>
+  {loading&&<p role="status" className="font-ui text-sm text-muted-foreground">Checking saved evidence and access…</p>}
+  {!loading&&!projection&&<p role="alert" className="font-ui text-sm text-amber-200">This saved visual cannot be displayed with your current access. The stored result is unchanged.</p>}
+  {projection&&<VisualBoundary><Suspense fallback={<p role="status" className="font-ui text-sm text-muted-foreground">Loading visual…</p>}><Projection request={request} projection={projection}/></Suspense></VisualBoundary>}
+  <details className="text-xs text-muted-foreground">
+   <summary className="min-h-9 cursor-pointer py-2">Sources and access ({request.sourceRefs.length})</summary>
+   <p>Saved evidence is read-only. Access is checked against current permissions, with no new calculation or approval.</p>
+   {!loading&&<button type="button" onClick={()=>void query.refetch()} className="my-2 min-h-10 rounded-lg border border-border/60 px-3 font-ui text-sm text-foreground hover:bg-accent/40">Refresh access</button>}
+   <ul className="max-h-32 overflow-auto">{request.sourceRefs.map(ref=><li key={ref} className="break-all">{ref}</li>)}</ul>
+  </details>
  </div>;
 }
