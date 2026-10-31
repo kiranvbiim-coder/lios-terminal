@@ -3033,8 +3033,8 @@ export default function ProjectExperienceShell({
                   {renderTerminalPanel && <ChatTerminalControl audience={audience} selected={terminalContext} onSelect={openTerminalPanel}/>}
                   <DropdownMenu>
                     <DropdownMenuTrigger asChild>
-                      <button ref={composerToolsTrigger} type="button" className="flex h-8 w-8 items-center justify-center rounded-full text-muted-foreground hover:bg-white/[0.06] hover:text-foreground" aria-label="Tools">
-                        <Plus className="h-4 w-4" />
+                      <button ref={composerToolsTrigger} type="button" className="flex h-8 items-center justify-center gap-1.5 rounded-full px-2.5 font-ui text-xs text-muted-foreground hover:bg-white/[0.06] hover:text-foreground" aria-label="Tools">
+                        <Plus className="h-4 w-4" /><span>Tools</span>
                       </button>
                     </DropdownMenuTrigger>
                     <DropdownMenuContent align="start" side="top" className="w-64" onCloseAutoFocus={event => {

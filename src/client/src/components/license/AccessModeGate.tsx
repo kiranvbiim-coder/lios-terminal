@@ -71,7 +71,7 @@ export function ReadOnlyBanner({ access }: { access: LicenseAccess }) {
       <div
         role="status"
         data-testid="read-only-banner"
-        className="fixed inset-x-4 bottom-4 z-[900] mx-auto flex max-w-2xl flex-wrap items-center gap-3 border border-[hsl(38,95%,50%)]/50 bg-[#0b0b0b] p-3 font-terminal text-[10px] text-foreground shadow-xl"
+        className="relative z-40 flex shrink-0 flex-wrap items-center gap-3 border-b border-[hsl(38,95%,50%)]/50 bg-[#0b0b0b] px-4 py-2 font-ui text-xs text-foreground"
       >
         <Lock className="h-3.5 w-3.5 shrink-0 text-[hsl(38,95%,55%)]" aria-hidden="true" />
         <span className="min-w-0 flex-1">
@@ -146,9 +146,11 @@ export default function AccessModeGate({ enabled, onLogout, children }: { enable
     return <StartupCheck text="Getting LiOS ready…" />;
   }
   return (
-    <>
-      {children}
+    <div className="flex h-dvh min-h-0 flex-col overflow-hidden">
       {access && <ReadOnlyBanner access={access} />}
-    </>
+      <div className="min-h-0 flex-1 overflow-hidden [&>[data-lios-workspace]]:h-full [&_.terminal-root]:h-full">
+        {children}
+      </div>
+    </div>
   );
 }
