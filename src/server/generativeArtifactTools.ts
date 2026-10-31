@@ -22,7 +22,11 @@ export class GenerativeArtifactError extends Error {
 export const generativeInputSchema = z.object({ prompt: z.string().trim().min(1).max(4_000), format: z.enum(["report", "table"]).default("report") }).strict();
 export function generativeRequestKind(message: string): "image" | "document" | null {
   if (/^\s*(?:please\s+)?(?:create|generate|draw|make)\s+(?:me\s+)?(?:an?\s+)?(?:image|picture|illustration|poster)\b/i.test(message)) return "image";
-  if (/^\s*(?:please\s+)?(?:write|draft|create|make|generate)\s+(?:me\s+)?(?:an?\s+)?(?:memo|document|report|letter|essay|table|spreadsheet)\b/i.test(message)) return "document";
+  const documentNoun = "(?:memo|memorandum|document|report|letter|essay|brief|summary|proposal|article|outline|plan|table|spreadsheet)";
+  // Up to three descriptive words may sit between the article and the noun ("a short memo", "a 1-page report");
+  // prepositions and code words are excluded so "write a function to compute the plan" is not a document request.
+  const modifier = "(?:(?!(?:to|for|of|on|about|with|that|which|in|from|and|or|code|function|script|program|query|test|class|module)\\b)[\\w-]+\\s+)";
+  if (new RegExp(`^\\s*(?:please\\s+)?(?:write|draft|create|make|generate|prepare)\\s+(?:me\\s+)?(?:(?:an?|the|my)\\s+)?${modifier}{0,3}?${documentNoun}\\b`, "i").test(message)) return "document";
   return null;
 }
 
