@@ -51,7 +51,7 @@ export default function LicenseKeyEntry({ onActivated, submitLabel = "Activate l
         aria-invalid={problem ? true : undefined}
         aria-describedby={problem ? errorId : undefined}
         onChange={(event) => { setText(event.target.value); if (problem) setProblem(null); }}
-        className="w-full resize-y border border-border bg-black/40 px-2 py-1.5 font-mono text-[10px] text-foreground focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary"
+        className="w-full resize-y border border-border bg-muted/40 px-2 py-1.5 font-mono text-[10px] text-foreground focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary"
       />
       {problem && <p id={errorId} role="alert" className="font-terminal text-[9px] text-rose-300">{problem}</p>}
       <button

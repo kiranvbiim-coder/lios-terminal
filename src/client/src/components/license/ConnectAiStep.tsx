@@ -15,7 +15,7 @@ import {
 } from "@/lib/aiConnection";
 
 const focusRing = "focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary";
-const fieldCls = `w-full border border-border bg-black/40 px-3 py-2 font-ui text-sm text-foreground placeholder:text-muted-foreground/60 ${focusRing}`;
+const fieldCls = `w-full border border-border bg-muted/40 px-3 py-2 font-ui text-sm text-foreground placeholder:text-muted-foreground/60 ${focusRing}`;
 
 type LocalSearch = { state: "idle" | "searching" | "found" | "missing"; endpoint?: string; models: string[] };
 
@@ -239,8 +239,8 @@ export function ConnectAiPanel({ setup, onConnected }: { setup: AiSetupStatus | 
 /** Full-screen first-run step: Chat stays closed until an AI is connected. Sign out stays available. */
 export default function ConnectAiStep({ setup, onConnected, onLogout }: { setup: AiSetupStatus | undefined; onConnected: () => void; onLogout: () => void | Promise<void> }) {
   return (
-    <main className="flex min-h-screen w-screen items-center justify-center bg-[#030303] p-4 text-foreground" data-testid="connect-ai-step">
-      <section className="w-full max-w-2xl space-y-6 rounded-lg border border-border bg-[#070707] p-6 sm:p-8" aria-labelledby="connect-ai-title">
+    <main className="flex min-h-screen w-screen items-center justify-center bg-background p-4 text-foreground" data-testid="connect-ai-step">
+      <section className="w-full max-w-2xl space-y-6 rounded-lg border border-border bg-card p-6 sm:p-8" aria-labelledby="connect-ai-title">
         <header className="flex items-start justify-between gap-4">
           <div className="space-y-2">
             <div className="flex items-center gap-2">

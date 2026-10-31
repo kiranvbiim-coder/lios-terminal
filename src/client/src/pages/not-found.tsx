@@ -3,7 +3,7 @@ import { ArrowLeft, Compass } from "lucide-react";
 /** A safe route fallback: never exposes technical router internals to users. */
 export default function NotFound() {
   return (
-    <main className="dark flex min-h-screen w-full items-center justify-center bg-[#050505] px-4 py-10 font-ui text-foreground">
+    <main className="dark flex min-h-screen w-full items-center justify-center bg-background px-4 py-10 font-ui text-foreground">
       <section aria-labelledby="lios-not-found-title" className="w-full max-w-lg rounded-xl border border-border bg-[#090909] p-6 shadow-xl sm:p-8">
         <div className="mb-5 flex items-center gap-3 text-primary">
           <span className="flex h-10 w-10 items-center justify-center rounded-lg border border-primary/25 bg-primary/5">

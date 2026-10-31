@@ -4,7 +4,12 @@
  * Do not add third-party logos, marks or product-specific layout mimics.
  * LiOS Classic inherits the canonical terminal-shell.css defaults.
  */
-html[data-lios-palette="chatgpt-dark"] {
+html[data-lios-palette="chatgpt-dark"],
+html[data-lios-palette="chatgpt-dark"] .dark,
+html[data-lios-palette$="-light"] .terminal-root[data-surface="workbench"],
+html[data-lios-palette$="-light"] .terminal-root[data-surface="workbench"] .dark,
+html[data-lios-palette$="-light"] .lios-reference-login,
+html[data-lios-palette$="-light"] .lios-reference-entry {
   color-scheme: dark;
   --lios-bg-app: #212121;
   --lios-bg-shell: #171717;
@@ -56,6 +61,7 @@ html[data-lios-palette="chatgpt-dark"] {
   --lios-overlay: 0.00 0.00% 18.82%;
   --lios-hover: 0.00 0.00% 20.78%;
   --lios-hairline: 0.00 0.00% 25.49%;
+  --border: 0.00 0.00% 25.49%;
   --lios-hairline-strong: 0.00 0.00% 40.39%;
   --lios-text: 0.00 0.00% 100.00%;
   --lios-text-soft: 0.00 0.00% 80.39%;
@@ -79,7 +85,8 @@ html[data-lios-palette="chatgpt-dark"] {
 
 /* Studio Clean: a distinct white neutral palette based on the owner's visual reference.
  * LiOS-owned colors and controls; no Google trademarks, assets or source code. */
-html[data-lios-palette="studio-light"] {
+html[data-lios-palette="studio-light"],
+html[data-lios-palette="studio-light"] .dark {
   color-scheme: light;
   --lios-bg-app: #FFFFFF;
   --lios-bg-shell: #F9FAFB;
@@ -131,6 +138,7 @@ html[data-lios-palette="studio-light"] {
   --lios-overlay: 220 12% 96%;
   --lios-hover: 220 12% 94%;
   --lios-hairline: 220 10% 90%;
+  --border: 220 10% 90%;
   --lios-hairline-strong: 220 10% 82%;
   --lios-text: 225 5% 13%;
   --lios-text-soft: 220 4% 37%;
@@ -153,7 +161,8 @@ html[data-lios-palette="studio-light"] {
 }
 
 
-html[data-lios-palette="chatgpt-light"] {
+html[data-lios-palette="chatgpt-light"],
+html[data-lios-palette="chatgpt-light"] .dark {
   color-scheme: light;
   --lios-bg-app: #FFFFFF;
   --lios-bg-shell: #F9F9F9;
@@ -205,6 +214,7 @@ html[data-lios-palette="chatgpt-light"] {
   --lios-overlay: 0.00 0.00% 95.69%;
   --lios-hover: 0.00 0.00% 95.69%;
   --lios-hairline: 0.00 0.00% 89.02%;
+  --border: 0.00 0.00% 89.02%;
   --lios-hairline-strong: 0.00 0.00% 80.39%;
   --lios-text: 0.00 0.00% 5.10%;
   --lios-text-soft: 0.00 0.00% 36.47%;
@@ -226,7 +236,8 @@ html[data-lios-palette="chatgpt-light"] {
   --amber: 0.00 0.00% 5.10%;
 }
 
-html[data-lios-palette="claude-light"] {
+html[data-lios-palette="claude-light"],
+html[data-lios-palette="claude-light"] .dark {
   color-scheme: light;
   --lios-bg-app: #FAF9F5;
   --lios-bg-shell: #F0EEE6;
@@ -278,6 +289,7 @@ html[data-lios-palette="claude-light"] {
   --lios-overlay: 48.00 25.00% 92.16%;
   --lios-hover: 50.00 20.69% 88.63%;
   --lios-hairline: 45.00 17.39% 81.96%;
+  --border: 45.00 17.39% 81.96%;
   --lios-hairline-strong: 49.09 6.51% 66.86%;
   --lios-text: 60.00 2.56% 7.65%;
   --lios-text-soft: 45.00 4.82% 32.55%;
@@ -299,7 +311,8 @@ html[data-lios-palette="claude-light"] {
   --amber: 14.77 63.11% 59.61%;
 }
 
-html[data-lios-palette="claude-dark"] {
+html[data-lios-palette="claude-dark"],
+html[data-lios-palette="claude-dark"] .dark {
   color-scheme: dark;
   --lios-bg-app: #262624;
   --lios-bg-shell: #1F1E1D;
@@ -351,6 +364,7 @@ html[data-lios-palette="claude-dark"] {
   --lios-overlay: 60.00 4.35% 18.04%;
   --lios-hover: 60.00 3.64% 21.57%;
   --lios-hairline: 52.50 6.15% 25.49%;
+  --border: 52.50 6.15% 25.49%;
   --lios-hairline-strong: 48.00 5.10% 38.43%;
   --lios-text: 48.00 33.33% 97.06%;
   --lios-text-soft: 42.86 13.21% 79.22%;
@@ -391,3 +405,24 @@ html[data-lios-palette]:not([data-lios-palette="lios-classic"]) .terminal-root .
   background-color: var(--lios-bg-hover);
 }
 /* Screen-reader and keyboard focus retain the canonical LiOS focus contract. */
+
+/* Light palettes: the specialist Workbench is one coherent graphite canvas (tokens above), never a half-light hybrid. */
+html[data-lios-palette$="-light"] .terminal-root[data-surface="workbench"] { color-scheme: dark; }
+
+/* Discover (Pulse/Explore/Signals/Library) uses literal dark fills in index.css; follow the palette instead. */
+html[data-lios-palette$="-light"] .fusion-pulse-board,
+html[data-lios-palette$="-light"] .fusion-section,
+html[data-lios-palette$="-light"] .fusion-section-header,
+html[data-lios-palette$="-light"] .fusion-subheader,
+html[data-lios-palette$="-light"] .fusion-market-canvas,
+html[data-lios-palette$="-light"] .fusion-index-card,
+html[data-lios-palette$="-light"] .fusion-canvas-panel,
+html[data-lios-palette$="-light"] .fusion-pulse-card,
+html[data-lios-palette$="-light"] .fusion-continuity-card,
+html[data-lios-palette$="-light"] .fusion-market-tile { background: var(--lios-bg-panel); }
+html[data-lios-palette$="-light"] .fusion-pulse-card:hover,
+html[data-lios-palette$="-light"] .fusion-table-row:hover,
+html[data-lios-palette$="-light"] .fusion-continuity-card:hover { background: var(--lios-bg-hover); }
+html[data-lios-palette$="-light"] .fusion-breadth-ring::before { background: var(--lios-bg-panel); }
+html[data-lios-palette$="-light"] .fusion-stack-bar { background: var(--lios-border-default); }
+html[data-lios-palette$="-light"] .terminal-root[data-surface="workbench"] .lios-visual-canvas { background: var(--lios-bg-app); }

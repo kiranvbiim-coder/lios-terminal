@@ -87,7 +87,7 @@ export default function FirstRunAdminSetup({ onComplete, requiresToken }: FirstR
   return (
     <div className="lios-reference-login min-h-screen w-screen flex items-center justify-center p-4">
 
-      <Card className="lios-reference-login-card w-full max-w-md bg-[#070707] border-border text-foreground font-ui relative overflow-hidden shadow-[0_0_20px_rgba(38,38,38,0.15)]">
+      <Card className="lios-reference-login-card w-full max-w-md bg-card border-border text-foreground font-ui relative overflow-hidden shadow-[0_0_20px_rgba(38,38,38,0.15)]">
         <div className="absolute top-0 left-0 right-0 h-[2px] bg-primary" />
         <CardHeader className="text-center pt-8 pb-4">
           <div className="flex justify-center mb-4"><ReferenceBrand /></div>
@@ -100,7 +100,7 @@ export default function FirstRunAdminSetup({ onComplete, requiresToken }: FirstR
         </CardHeader>
 
         <CardContent className="space-y-4">
-          <div className="p-3 border border-border bg-[#0b0b0b] text-[9px] leading-relaxed text-muted-foreground">
+          <div className="p-3 border border-border bg-muted/40 text-[9px] leading-relaxed text-muted-foreground">
             {requiresToken
               ? "The first owner of this user-operated LiOS Home must enter the one-time token from the server console or its private owner-setup.token file. Use HTTPS, or connect directly on the server’s loopback address."
               : "No default administrator password is shipped with LiOS. This one-time screen is available only on the local desktop installation and closes after the first administrator is created."}
@@ -113,7 +113,7 @@ export default function FirstRunAdminSetup({ onComplete, requiresToken }: FirstR
                 value={setupToken}
                 onChange={(event) => setSetupToken(event.target.value)}
                 placeholder="Paste the token from your LiOS Home server"
-                className="w-full bg-[#0d0d0d] border-border text-xs rounded-none pl-9 h-9"
+                className="w-full bg-background border-border text-xs rounded-none pl-9 h-9"
               />
             </Field>
           )}
@@ -123,7 +123,7 @@ export default function FirstRunAdminSetup({ onComplete, requiresToken }: FirstR
               value={name}
               onChange={(event) => setName(event.target.value)}
               placeholder="Full name"
-              className="w-full bg-[#0d0d0d] border-border text-xs rounded-none pl-9 h-9"
+              className="w-full bg-background border-border text-xs rounded-none pl-9 h-9"
             />
           </Field>
 
@@ -134,7 +134,7 @@ export default function FirstRunAdminSetup({ onComplete, requiresToken }: FirstR
               value={email}
               onChange={(event) => setEmail(event.target.value)}
               placeholder="name@company.com"
-              className="w-full bg-[#0d0d0d] border-border text-xs rounded-none pl-9 h-9"
+              className="w-full bg-background border-border text-xs rounded-none pl-9 h-9"
             />
           </Field>
 
@@ -145,7 +145,7 @@ export default function FirstRunAdminSetup({ onComplete, requiresToken }: FirstR
               value={password}
               onChange={(event) => setPassword(event.target.value)}
               placeholder="12+ characters"
-              className="w-full bg-[#0d0d0d] border-border text-xs rounded-none pl-9 h-9"
+              className="w-full bg-background border-border text-xs rounded-none pl-9 h-9"
             />
           </Field>
 
@@ -161,7 +161,7 @@ export default function FirstRunAdminSetup({ onComplete, requiresToken }: FirstR
               onChange={(event) => setConfirmPassword(event.target.value)}
               onKeyDown={(event) => { if (event.key === "Enter" && !loading) void handleCreate(); }}
               placeholder="Repeat password"
-              className="w-full bg-[#0d0d0d] border-border text-xs rounded-none pl-9 h-9"
+              className="w-full bg-background border-border text-xs rounded-none pl-9 h-9"
             />
           </Field>
 

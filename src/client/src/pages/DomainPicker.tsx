@@ -38,7 +38,7 @@ export default function DomainPicker({ session, onChoose, onLogout, onCancel }: 
   }, [isClient, attempt]);
 
   return (
-    <div className="dark min-h-screen bg-[#030303] flex flex-col items-center justify-center px-6">
+    <div className="dark min-h-screen bg-background flex flex-col items-center justify-center px-6">
       <button type="button" onClick={onCancel} className="mb-6 min-h-11 rounded border border-border px-4 py-2 font-ui text-sm text-foreground focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary">Back to Chat</button>
       <div className="flex items-center gap-2 mb-2">
         <TerminalIcon className="w-4 h-4 text-[hsl(38,95%,55%)]" />

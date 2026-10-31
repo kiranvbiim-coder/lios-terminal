@@ -995,6 +995,7 @@ export default function Terminal({ session, onLogout, onOpenEnvironment, domain,
       className="terminal-root flex h-screen flex-col overflow-hidden bg-background"
       data-density={uxPreferences.density}
       data-experience-mode={uxPreferences.experienceMode}
+      data-surface={experienceSurface}
       data-intelligent-calm={intelligentCalm ? "true" : "false"}
       data-comfort-mode={uxPreferences.comfortMode ? "true" : "false"}
       data-focus-mode={focusMode ? "true" : "false"}

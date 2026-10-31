@@ -2165,7 +2165,7 @@ export default function DataConnectionCenter({ session, onComplete, onLogout, em
 function Shell({ session, onLogout, embedded, children }: { session: { name: string }; onLogout: () => void; embedded: boolean; children: React.ReactNode }) {
   if (embedded) return <div className="dark mx-auto w-full min-w-0 max-w-5xl px-4 py-4 sm:px-6">{children}</div>;
   return (
-    <div className="dark min-h-screen bg-[#030303] flex flex-col items-center px-6 py-8">
+    <div className="dark min-h-screen bg-background flex flex-col items-center px-6 py-8">
       <div className="w-full max-w-5xl flex items-center justify-between mb-5">
         <div className="font-terminal text-[9px] text-muted-foreground uppercase tracking-widest">Welcome, {session.name}</div>
         <button type="button" onClick={onLogout} className="font-terminal text-[9px] text-muted-foreground hover:text-rose-400 uppercase tracking-widest">Sign out</button>

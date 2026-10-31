@@ -24,8 +24,8 @@ export function FirstRunLicenseChoice({ canImportLicense = true }: { canImportLi
   });
 
   return (
-    <main className="min-h-screen w-screen bg-[#030303] flex items-center justify-center p-4 text-foreground" data-testid="first-run-license-choice">
-      <section className="w-full max-w-md space-y-4 border border-border bg-[#070707] p-6 font-terminal" aria-labelledby="first-run-license-title">
+    <main className="min-h-screen w-screen bg-background flex items-center justify-center p-4 text-foreground" data-testid="first-run-license-choice">
+      <section className="w-full max-w-md space-y-4 border border-border bg-card p-6 font-terminal" aria-labelledby="first-run-license-title">
         <div className="flex items-center gap-2">
           <KeyRound className="h-4 w-4 text-[hsl(38,95%,55%)]" aria-hidden="true" />
           <h1 id="first-run-license-title" className="text-sm font-bold uppercase tracking-widest">Get started with LiOS</h1>
@@ -71,7 +71,7 @@ export function ReadOnlyBanner({ access }: { access: LicenseAccess }) {
       <div
         role="status"
         data-testid="read-only-banner"
-        className="relative z-40 flex shrink-0 flex-wrap items-center gap-3 border-b border-[hsl(38,95%,50%)]/50 bg-[#0b0b0b] px-4 py-2 font-ui text-xs text-foreground"
+        className="relative z-40 flex shrink-0 flex-wrap items-center gap-3 border-b border-[hsl(38,95%,50%)]/50 bg-card px-4 py-2 font-ui text-xs text-foreground"
       >
         <Lock className="h-3.5 w-3.5 shrink-0 text-[hsl(38,95%,55%)]" aria-hidden="true" />
         <span className="min-w-0 flex-1">
@@ -90,7 +90,7 @@ export function ReadOnlyBanner({ access }: { access: LicenseAccess }) {
       </div>
       {access.isOwner && (
         <Dialog open={open} onOpenChange={setOpen}>
-          <DialogContent className="dark max-w-md border-border bg-[#070707] text-foreground">
+          <DialogContent className="dark max-w-md border-border bg-card text-foreground">
             <DialogHeader>
               <DialogTitle className="font-terminal text-sm uppercase tracking-widest">Enter license key</DialogTitle>
               <DialogDescription className="font-terminal text-[10px] text-muted-foreground">
@@ -107,7 +107,7 @@ export function ReadOnlyBanner({ access }: { access: LicenseAccess }) {
 
 function StartupCheck({ text }: { text: string }) {
   return (
-    <main className="flex min-h-screen w-screen items-center justify-center bg-[#030303] p-4 text-foreground" data-testid="startup-check">
+    <main className="flex min-h-screen w-screen items-center justify-center bg-background p-4 text-foreground" data-testid="startup-check">
       <p role="status" className="flex items-center gap-2 font-ui text-sm text-muted-foreground">
         <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" /> {text}
       </p>
