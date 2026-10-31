@@ -118,3 +118,28 @@ html[data-lios-palette]:not([data-lios-palette="lios-classic"])
 }
 
 /* Honor user-installed fonts only; no remote fetch or font copying required. */
+
+
+/* Studio Clean: spacious Inter typography on light surfaces, without affecting
+ * the unchanged Classic terminal density or numerical data formatting. */
+html[data-lios-palette="studio-light"] {
+  --lios-chat-font: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Arial, sans-serif;
+  --lios-chat-display-font: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Arial, sans-serif;
+  --lios-chat-body-size: 1rem;
+  --lios-chat-body-leading: 1.7;
+  --lios-chat-heading-tracking: -0.035em;
+}
+html[data-lios-palette="studio-light"] :is(
+  .lios-project-experience-shell, .lios-navigation-sheet, .lios-authenticated-navigation
+) {
+  font-family: var(--lios-chat-font);
+  font-synthesis: none;
+}
+html[data-lios-palette="studio-light"] .terminal-root :is(
+  #lios-chat-empty-title, .lios-project-home-surface h1
+) {
+  font-family: var(--lios-chat-display-font) !important;
+  font-weight: 600;
+  letter-spacing: var(--lios-chat-heading-tracking);
+  line-height: 1.24;
+}
