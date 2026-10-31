@@ -1,4 +1,4 @@
-import { resolveSaveBase } from "@/lib/artifactSaveBase";
+import { latestOwnSave, recordOwnSave, resolveSaveBase, runSerializedSave } from "@/lib/artifactSaveBase";
 import { resolveArtifactPaneRequestedVersion } from "@/lib/artifactWorkbenchHandoff";
 import AsyncSurfaceNotice from "./AsyncSurfaceNotice";
 import { ArtifactTimeline } from "./ArtifactTimeline";
@@ -799,7 +799,6 @@ function ArtifactPaneWorkspace({
   useEffect(()=>{if(data)setLeft(Math.max(1,data.artifact.headVersion-1))},[artifactId, data?.artifact.headVersion]);
   useEffect(() => { setSpreadsheetPendingRevision(false); }, [data?.version.version, data?.version.contentHash]);
   const displayedVersionCallback = useRef(onDisplayedVersionChange);
-  const ownSave = useRef<{ artifactId: string; version: number } | null>(null);
   displayedVersionCallback.current = onDisplayedVersionChange;
   useEffect(() => { if (data && !detail.isPlaceholderData && (version == null || data.version.version === version)) displayedVersionCallback.current?.(data.version.version, artifactId, version ?? null); }, [artifactId, version, data?.version.version, detail.isPlaceholderData]);
   exportRevision.current = data ? { artifactId, version: data.version.version, contentHash: data.version.contentHash } : null;
@@ -993,15 +992,21 @@ function ArtifactPaneWorkspace({
     if(next.kind==="research" || next.kind==="report" || next.kind==="decision" || next.kind==="screen" || next.kind==="thesis" || next.kind==="strategy") {
       setError(null);
       try {
-        const base = resolveSaveBase({ viewedVersion: data.version.version, headVersion: data.artifact.headVersion, ownLatestVersion: ownSave.current?.artifactId === artifactId ? ownSave.current.version : null });
-        if(!base.ok) throw new Error("This Artifact is not the current revision. Reload before saving.");
-        const saved = await createArtifactVersion(artifactId,{
-          baseVersion:base.baseVersion,content:next,actorType:"user",
-          dependencyRefs:data.version.dependencyRefs,refreshSpec:data.version.refreshSpec,
+        const contentKey = JSON.stringify(next);
+        await runSerializedSave(artifactId, async () => {
+          const own = latestOwnSave(artifactId);
+          // A sibling pane showing this Artifact already stored exactly this state; writing it again would only add a revision.
+          if (own && own.contentKey === contentKey && own.version > data.version.version) { onVersionChange?.(own.version); invalidate(projectId,artifactId); return; }
+          const base = resolveSaveBase({ viewedVersion: data.version.version, headVersion: data.artifact.headVersion, ownLatestVersion: own?.version ?? null });
+          if(!base.ok) throw new Error("This Artifact is not the current revision. Reload before saving.");
+          const saved = await createArtifactVersion(artifactId,{
+            baseVersion:base.baseVersion,content:next,actorType:"user",
+            dependencyRefs:data.version.dependencyRefs,refreshSpec:data.version.refreshSpec,
+          });
+          recordOwnSave(artifactId, saved.version, contentKey);
+          onVersionChange?.(saved.version);
+          invalidate(projectId,artifactId);
         });
-        ownSave.current = { artifactId, version: saved.version };
-        onVersionChange?.(saved.version);
-        invalidate(projectId,artifactId);
       } catch(cause) {
         setError(cause instanceof Error?cause.message:"Artifact revision could not be saved.");
         throw cause;
