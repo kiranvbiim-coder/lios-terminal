@@ -13,6 +13,9 @@ export interface RecordedActionRecovery {
   needsReconciliation: boolean;
 }
 
+/** Runtime step id of the read-only AI explanation (server/conversationRuntime.ts "ai-synthesis"). */
+const AI_EXPLANATION_STEP_ID = "ai-synthesis";
+
 /**
  * C08: a read-only view of recorded action outcomes for ONE exact Chat run.
  * A run-level "completed" cannot override missing, denied or failed tool
@@ -66,7 +69,10 @@ export function inspectRecordedActionRecovery(
   let skippedToolReports = 0;
   let unconfirmedToolReports = 0;
   let unfinishedToolStarts = 0;
-  for (const last of latest.values()) {
+  for (const [stepId, last] of latest.entries()) {
+    // The AI explanation only restates deterministic results and writes nothing. When it is withheld or unavailable the
+    // runtime keeps the deterministic output authoritative, so it can never leave an unreconciled side effect.
+    if (stepId === AI_EXPLANATION_STEP_ID && last.type === "result" && last.outcome === "failed") continue;
     if (last.type === "start") {
       unfinishedToolStarts++;
     } else if (last.outcome === "failed") {

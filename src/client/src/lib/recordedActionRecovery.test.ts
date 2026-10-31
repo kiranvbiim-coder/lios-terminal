@@ -66,3 +66,23 @@ test("C08 only completed individual outcomes are quiet; overall completed alone 
   assert.equal(complete.needsReconciliation, false);
   assert.equal(inspectRecordedActionRecovery([event("done", { status: "completed" })], R).needsReconciliation, false);
 });
+
+test("a withheld AI explanation is not an unreconciled action, but any other failed step still is", () => {
+  const withheld = inspectRecordedActionRecovery([
+    event("tool_result", { stepId: "calc", outcome: "completed", label: "calc", summary: "", deterministic: true }),
+    event("tool_result", { stepId: "ai-synthesis", outcome: "failed", label: "AI explanation withheld", summary: "", deterministic: false }),
+    event("done", { status: "completed" }),
+  ], R);
+  assert.equal(withheld.failedToolReports, 0);
+  assert.equal(withheld.needsReconciliation, false);
+
+  const otherFailure = inspectRecordedActionRecovery([
+    event("tool_result", { stepId: "ai-synthesis", outcome: "failed", label: "AI explanation withheld", summary: "", deterministic: false }),
+    event("tool_result", { stepId: "write", outcome: "failed", label: "write", summary: "", deterministic: false }),
+  ], R);
+  assert.equal(otherFailure.failedToolReports, 1);
+  assert.equal(otherFailure.needsReconciliation, true);
+
+  const stillRunning = inspectRecordedActionRecovery([event("tool_start", { stepId: "ai-synthesis", label: "ai", componentId: "lios.byoai" })], R);
+  assert.equal(stillRunning.unfinishedToolStarts, 1, "an explanation that never finished is still unsettled");
+});
